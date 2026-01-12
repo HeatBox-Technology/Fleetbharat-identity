@@ -26,7 +26,7 @@ public class AuthService : IAuthService
         if (user == null)
             throw new UnauthorizedAccessException("Invalid email or password");
 
-        if (!BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
+        if (!BCrypt.Net.BCrypt.Verify(req.Password, user.Password_hash))
             throw new UnauthorizedAccessException("Invalid email or password");
 
         return await GenerateTokens(user);
@@ -63,10 +63,16 @@ public class AuthService : IAuthService
 
         var user = new User
         {
-            Id = Guid.NewGuid(),
             Email = email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password),
-            Role = "User"
+            FirstName = req.FirstName,
+            LastName = req.LastName,
+            MobileNo = req.MobileNo,
+            CountryCode = req.CountryCode,
+            Password_hash = BCrypt.Net.BCrypt.HashPassword(req.Password),
+            ReferralCode = req.RefferalCode,
+            CreatedAt = DateTime.UtcNow,
+            Status = true,
+            roleId = 1, // default role
         };
 
         _db.Users.Add(user);
@@ -98,7 +104,7 @@ public class AuthService : IAuthService
             !BCrypt.Net.BCrypt.Verify(token, user.PasswordResetTokenHash))
             throw new UnauthorizedAccessException();
 
-        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        user.Password_hash = BCrypt.Net.BCrypt.HashPassword(newPassword);
         user.PasswordResetTokenHash = null;
         user.PasswordResetExpiry = null;
 
