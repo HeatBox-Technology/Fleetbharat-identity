@@ -48,11 +48,11 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 // Auto EF Core migration (Code-First)
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-    db.Database.Migrate();
-}
+// using (var scope = app.Services.CreateScope())
+// {
+//     var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+//     db.Database.Migrate();
+// }
 
 app.UseSwagger();
 app.UseSwaggerUI();
