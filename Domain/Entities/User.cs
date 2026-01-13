@@ -1,8 +1,5 @@
 
 using System;
-
-namespace FleetRobo.IdentityService.Domain.Entities;
-
 public class User
 {
     public Guid UserId { get; set; }                 // UUID

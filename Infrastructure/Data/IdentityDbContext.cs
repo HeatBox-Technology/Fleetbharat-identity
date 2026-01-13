@@ -1,6 +1,5 @@
 
 using Microsoft.EntityFrameworkCore;
-using FleetRobo.IdentityService.Domain.Entities;
 
 public class IdentityDbContext : DbContext
 {
