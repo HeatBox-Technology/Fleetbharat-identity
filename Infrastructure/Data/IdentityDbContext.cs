@@ -6,12 +6,12 @@ public class IdentityDbContext : DbContext
     public IdentityDbContext(DbContextOptions<IdentityDbContext> opt) : base(opt) { }
     public DbSet<User> Users => Set<User>();
     public DbSet<mst_account> Accounts => Set<mst_account>();
-    public DbSet<mst_role> Roles { get; set; }
-    public DbSet<mst_form> Forms { get; set; }
-    public DbSet<mst_country> Countries { get; set; }
-    public DbSet<mst_state> States { get; set; }
-    public DbSet<mst_city> Cities { get; set; }
-    public DbSet<map_FormRole_right> FormRoleRights { get; set; }
+    public DbSet<mst_role> Roles => Set<mst_role>();
+    public DbSet<mst_form> Forms => Set<mst_form>();
+    public DbSet<mst_country> Countries => Set<mst_country>();
+    public DbSet<mst_state> States => Set<mst_state>();
+    public DbSet<mst_city> Cities => Set<mst_city>();
+    public DbSet<map_FormRole_right> FormRoleRights => Set<map_FormRole_right>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
 
