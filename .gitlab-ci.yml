@@ -34,7 +34,7 @@ deploy_to_ec2:
     - ssh-keyscan -H $EC2_HOST >> ~/.ssh/known_hosts
   script:
     - ssh $EC2_USER@$EC2_HOST "
-      docker pull $DOCKER_IMAGE_NAME:latest &&
+      docker pull worknggupta/fleetbharat-identity:latest &&
       docker rm -f fleetbharat-identity || true &&
       docker run -d \
       --name fleetbharat-identity \
@@ -44,5 +44,5 @@ deploy_to_ec2:
       -e ASPNETCORE_URLS=http://+:8080 \
       -e ConnectionStrings__Default='$PROD_CONN' \
       --restart always \
-      $DOCKER_IMAGE_NAME:latest
+      worknggupta/fleetbharat-identity:latest
       "
