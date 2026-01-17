@@ -23,7 +23,7 @@ builder.Services.AddScoped<IFormRoleRightService, FormRoleRightService>();
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("DynamicCors", policy =>
+    options.AddPolicy("AllowAll", policy =>
         policy.SetIsOriginAllowed(_ => true)
               .AllowAnyHeader()
               .AllowAnyMethod()
