@@ -13,13 +13,24 @@ builder.Services.AddDbContext<IdentityDbContext>(opt =>
     opt.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 
 builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<IAccountProvisionService, AccountProvisionService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IFormService, FormService>();
+builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ICountryService, CountryService>();
 builder.Services.AddScoped<IStateService, StateService>();
 builder.Services.AddScoped<ICityService, CityService>();
 builder.Services.AddScoped<IFormRoleRightService, FormRoleRightService>();
+builder.Services.AddScoped<IPlanService, PlanService>();
+builder.Services.AddScoped<IPlanService, PlanService>();
+builder.Services.AddScoped<IFeatureService, FeatureService>();
+builder.Services.AddScoped<IAddonService, AddonService>();
+builder.Services.AddScoped<IPlanEntitlementService, PlanEntitlementService>();
+builder.Services.AddScoped<IPlanAddonService, PlanAddonService>();
+builder.Services.AddScoped<ICustomerPlanService, CustomerPlanService>();
+builder.Services.AddScoped<IEmailService, SmtpEmailService>();
+builder.Services.AddScoped<ICategoryService, CategoryService>();
+
 
 builder.Services.AddCors(options =>
 {
@@ -59,6 +70,7 @@ var app = builder.Build();
 
 app.UseSwagger();
 app.UseSwaggerUI();
+app.UseMiddleware<ExceptionMiddleware>();
 app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();

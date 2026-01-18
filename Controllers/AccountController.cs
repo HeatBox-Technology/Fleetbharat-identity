@@ -1,4 +1,3 @@
-
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 
@@ -6,58 +5,79 @@ using Microsoft.AspNetCore.Mvc;
 [Route("api/accounts")]
 public class AccountController : ControllerBase
 {
-    private readonly IAccountService _service;
+    private readonly IAccountProvisionService _service;
 
-    public AccountController(IAccountService service)
+    public AccountController(IAccountProvisionService service)
     {
         _service = service;
     }
 
-    // POST
     [HttpPost]
-    public async Task<IActionResult> Create(mst_account account)
+    public async Task<IActionResult> Create(CreateAccountRequest req)
     {
-        var result = await _service.CreateAsync(account);
-        return Ok(result);
+        var id = await _service.CreateAsync(req);
+        return Ok(ApiResponse<object>.Ok(new { accountId = id }, "Account created", 200));
     }
 
-    // GET ALL
+    // ✅ Pagination + Search + Filter
+    // GET /api/accounts?page=1&pageSize=10&search=alpha&status=true
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null,
+        [FromQuery] bool? status = null)
     {
-        return Ok(await _service.GetAllAsync());
+        var result = await _service.GetAllAsync(page, pageSize, search, status);
+        return Ok(ApiResponse<object>.Ok(result, "Success", 200));
     }
 
-    // GET BY ID
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetById(int id)
+    // ✅ Get by id
+    [HttpGet("{accountId}")]
+    public async Task<IActionResult> GetById(int accountId)
     {
-        var account = await _service.GetByIdAsync(id);
-        if (account == null) return NotFound();
-        return Ok(account);
+        var result = await _service.GetByIdAsync(accountId);
+
+        if (result == null)
+            return NotFound(ApiResponse<object>.Fail("Account not found", 404));
+
+        return Ok(ApiResponse<object>.Ok(result, "Success", 200));
     }
 
-    // PUT (FULL UPDATE)
-    [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, mst_account account)
+    // ✅ Update full
+    [HttpPut("{accountId}")]
+    public async Task<IActionResult> Update(int accountId, UpdateAccountRequest req)
     {
-        await _service.UpdateAsync(id, account);
-        return NoContent();
+        var ok = await _service.UpdateAsync(accountId, req);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("Account not found", 404));
+
+        return Ok(ApiResponse<string>.Ok("Updated", "Account updated", 200));
     }
 
-    // PATCH (STATUS UPDATE)
-    [HttpPatch("{id}/status")]
-    public async Task<IActionResult> UpdateStatus(int id, [FromQuery] string status)
+    // ✅ Update only status (toggle)
+    // PATCH /api/accounts/10/status?status=false
+    [HttpPatch("{accountId}/status")]
+    public async Task<IActionResult> UpdateStatus(int accountId, [FromQuery] bool status)
     {
-        await _service.UpdateStatusAsync(id, status);
-        return NoContent();
+        var ok = await _service.UpdateStatusAsync(accountId, status);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("Account not found", 404));
+
+        return Ok(ApiResponse<string>.Ok("Updated", "Status updated", 200));
     }
 
-    // DELETE
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(int id)
+
+    [HttpDelete("{accountId}")]
+    public async Task<IActionResult> Delete(int accountId)
     {
-        await _service.DeleteAsync(id);
-        return NoContent();
+        var ok = await _service.DeleteAsync(accountId);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("Account not found", 404));
+
+        return Ok(ApiResponse<string>.Ok("Deleted", "Account deleted", 200));
     }
 }

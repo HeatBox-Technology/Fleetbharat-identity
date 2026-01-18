@@ -1,62 +1,60 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
 [Route("api/roles")]
-public class RoleController : ControllerBase
+public class RolesController : ControllerBase
 {
     private readonly IRoleService _service;
 
-    public RoleController(IRoleService service)
+    public RolesController(IRoleService service)
     {
         _service = service;
     }
 
-    // POST – Add
     [HttpPost]
-    public async Task<IActionResult> Create(mst_role role)
+    public async Task<IActionResult> Create(CreateRoleRequest req)
     {
-        var result = await _service.CreateAsync(role);
-        return Ok(result);
+        var id = await _service.CreateAsync(req);
+        return Ok(ApiResponse<object>.Ok(new { roleId = id }, "Role created", 200));
     }
 
-    // GET – Fetch all
-    [HttpGet]
-    public async Task<IActionResult> GetAll()
+    [HttpGet("by-account/{accountId}")]
+    public async Task<IActionResult> GetByAccount(int accountId)
     {
-        return Ok(await _service.GetAllAsync());
+        var list = await _service.GetByAccountAsync(accountId);
+        return Ok(ApiResponse<object>.Ok(list, "Success", 200));
     }
 
-    // GET – Fetch by id
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetById(int id)
+    [HttpGet("{roleId}/rights")]
+    public async Task<IActionResult> GetRights(int roleId)
     {
-        var role = await _service.GetByIdAsync(id);
-        if (role == null) return NotFound();
-        return Ok(role);
+        var rights = await _service.GetRoleRightsAsync(roleId);
+        return Ok(ApiResponse<object>.Ok(rights, "Success", 200));
     }
 
-    // PUT – Full update
-    [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, mst_role role)
+    [HttpPut("{roleId}")]
+    public async Task<IActionResult> Update(int roleId, UpdateRoleRequest req)
     {
-        await _service.UpdateAsync(id, role);
-        return NoContent();
+        var ok = await _service.UpdateAsync(roleId, req);
+        if (!ok) return NotFound(ApiResponse<object>.Fail("Role not found", 404));
+        return Ok(ApiResponse<string>.Ok("Updated", "Role updated", 200));
     }
 
-    // PATCH – Update status only
-    [HttpPatch("{id}/status")]
-    public async Task<IActionResult> UpdateStatus(int id, [FromQuery] bool isActive)
+    [HttpPut("{roleId}/rights")]
+    public async Task<IActionResult> UpdateRights(int roleId, List<RoleFormRightDto> rights)
     {
-        await _service.UpdateStatusAsync(id, isActive);
-        return NoContent();
+        var ok = await _service.UpdateRightsAsync(roleId, rights);
+        if (!ok) return NotFound(ApiResponse<object>.Fail("Role not found", 404));
+        return Ok(ApiResponse<string>.Ok("Updated", "Role rights updated", 200));
     }
 
-    // DELETE
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(int id)
+    [HttpDelete("{roleId}")]
+    public async Task<IActionResult> Delete(int roleId)
     {
-        await _service.DeleteAsync(id);
-        return NoContent();
+        var ok = await _service.DeleteAsync(roleId);
+        if (!ok) return NotFound(ApiResponse<object>.Fail("Role not found", 404));
+        return Ok(ApiResponse<string>.Ok("Deleted", "Role deleted", 200));
     }
 }

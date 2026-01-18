@@ -3,9 +3,11 @@ using System.Threading.Tasks;
 
 public interface IAuthService
 {
-    Task<LoginResponse> LoginAsync(LoginRequest request);
+    Task<LoginWithAccessResponse> LoginAsync(LoginRequest req);
     Task<LoginResponse> RefreshAsync(RefreshTokenRequest request);
     Task RegisterAsync(RegisterRequest req);
     Task ForgotPasswordAsync(string email);
-    Task ResetPasswordAsync(string email, string token, string newPassword);
+    Task<LoginResponse> ResetPasswordAsync(ResetPasswordRequest req);
+    Task<LoginResponse> Verify2FAAsync(Verify2FARequest req);
+
 }
