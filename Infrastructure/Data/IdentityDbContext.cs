@@ -21,6 +21,9 @@ public class IdentityDbContext : DbContext
     public DbSet<PlanAddon> PlanAddons => Set<PlanAddon>();
     public DbSet<CustomerPlanAssignment> CustomerPlanAssignments => Set<CustomerPlanAssignment>();
     public DbSet<mst_category> Categories => Set<mst_category>();
+    public DbSet<mst_account_configuration> AccountConfigurations => Set<mst_account_configuration>();
+    public DbSet<mst_white_label> WhiteLabels => Set<mst_white_label>();
+
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -34,15 +37,15 @@ public class IdentityDbContext : DbContext
                entity.Property(x => x.TaxTypeName).HasMaxLength(100).IsRequired();
            });
 
-            modelBuilder.Entity<mst_account>(entity =>
-            {
-                entity.ToTable("mst_account");
-                entity.HasKey(x => x.AccountId);
+        modelBuilder.Entity<mst_account>(entity =>
+        {
+            entity.ToTable("mst_account");
+            entity.HasKey(x => x.AccountId);
 
-                entity.Property(x => x.AccountCode).HasMaxLength(50).IsRequired();
-                entity.Property(x => x.AccountName).HasMaxLength(150).IsRequired();
-                entity.Property(x => x.PrimaryDomain).HasMaxLength(200).IsRequired();
-            });
+            entity.Property(x => x.AccountCode).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.AccountName).HasMaxLength(150).IsRequired();
+            entity.Property(x => x.PrimaryDomain).HasMaxLength(200).IsRequired();
+        });
         modelBuilder.Entity<mst_role>()
           .ToTable("mst_role")
           .HasKey(x => x.RoleId);
@@ -94,6 +97,48 @@ public class IdentityDbContext : DbContext
              entity.ToTable("mst_category");
              entity.HasKey(x => x.CategoryId); // ✅ PK
          });
+        modelBuilder.Entity<mst_account_configuration>(entity =>
+{
+    entity.ToTable("mst_account_configuration");
+    entity.HasKey(x => x.AccountConfigurationId);
+
+    entity.Property(x => x.MapProvider).HasMaxLength(50).IsRequired();
+    entity.Property(x => x.DateFormat).HasMaxLength(30).IsRequired();
+    entity.Property(x => x.TimeFormat).HasMaxLength(10).IsRequired();
+
+    entity.Property(x => x.DistanceUnit).HasMaxLength(10).IsRequired();
+    entity.Property(x => x.SpeedUnit).HasMaxLength(10).IsRequired();
+    entity.Property(x => x.FuelUnit).HasMaxLength(15).IsRequired();
+    entity.Property(x => x.TemperatureUnit).HasMaxLength(15).IsRequired();
+    entity.Property(x => x.AddressDisplay).HasMaxLength(10).IsRequired();
+
+    entity.Property(x => x.DefaultLanguage).HasMaxLength(10).IsRequired();
+    entity.Property(x => x.AllowedLanguagesCsv).HasMaxLength(200);
+    entity.HasIndex(x => x.AccountId).IsUnique();
+});
+        modelBuilder.Entity<mst_white_label>(entity =>
+        {
+            entity.ToTable("mst_white_label");
+            entity.HasKey(x => x.WhiteLabelId);
+
+            entity.Property(x => x.CustomEntryFqdn)
+                  .HasMaxLength(200)
+                  .IsRequired();
+
+            entity.Property(x => x.LogoUrl)
+                  .HasMaxLength(500);
+
+            entity.Property(x => x.PrimaryColorHex)
+                  .HasMaxLength(10)
+                  .HasDefaultValue("#4F46E5");
+
+            entity.Property(x => x.IsActive)
+                  .HasDefaultValue(true);
+
+            entity.HasIndex(x => x.AccountId).IsUnique();
+        });
+
+
     }
 
 
