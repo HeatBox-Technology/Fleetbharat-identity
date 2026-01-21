@@ -1,18 +1,18 @@
 public class ApiResponse<T>
 {
-    public bool Success { get; set; }
-    public int StatusCode { get; set; }   // ✅ Added
-    public string Message { get; set; } = "";
-    public T? Data { get; set; }
+    public bool success { get; set; }
+    public int statusCode { get; set; }   // ✅ Added
+    public string message { get; set; } = "";
+    public T? data { get; set; }
 
     public static ApiResponse<T> Ok(T data, string message = "Success", int statusCode = 200)
     {
         return new ApiResponse<T>
         {
-            Success = true,
-            StatusCode = statusCode,
-            Message = message,
-            Data = data
+            success = true,
+            statusCode = statusCode,
+            message = message,
+            data = data
         };
     }
 
@@ -20,10 +20,10 @@ public class ApiResponse<T>
     {
         return new ApiResponse<T>
         {
-            Success = false,
-            StatusCode = statusCode,
-            Message = message,
-            Data = default
+            success = false,
+            statusCode = statusCode,
+            message = message,
+            data = default
         };
     }
 }
