@@ -46,6 +46,10 @@ public class AccountProvisionService : IAccountProvisionService
             HierarchyPath = req.HierarchyPath,
             Fk_userid = req.userId,
             Status = req.Status,
+            fullname = req.fullname,
+            email = req.email,
+            phone = req.phone,
+            address = req.address,
             CreatedOn = DateTime.UtcNow,
             UpdatedOn = DateTime.UtcNow
         };
@@ -101,6 +105,10 @@ public class AccountProvisionService : IAccountProvisionService
                 CountryId = x.c.CountryId,
                 CountryName = x.c.CountryName,
                 CategoryName = x.cat.LabelName,
+                fullname = x.a.fullname,
+                email = x.a.email,
+                phone = x.a.phone,
+                address = x.a.address,
                 TaxTypeId = x.a.TaxTypeId,
                 Status = x.a.Status,
                 CreatedOn = x.a.CreatedOn
@@ -139,6 +147,10 @@ public class AccountProvisionService : IAccountProvisionService
                 PrimaryDomain = x.a.PrimaryDomain,
                 CountryId = x.c.CountryId,
                 CountryName = x.c.CountryName,
+                fullname = x.a.fullname,
+                email = x.a.email,
+                phone = x.a.phone,
+                address = x.a.address,
                 TaxTypeId = x.a.TaxTypeId,
                 Status = x.a.Status,
                 CreatedOn = x.a.CreatedOn
@@ -176,6 +188,10 @@ public class AccountProvisionService : IAccountProvisionService
         account.ParentAccountId = req.ParentAccountId;
         account.HierarchyPath = req.HierarchyPath;
         account.Fk_userid = req.userId;
+        account.fullname = req.fullname;
+        account.email = req.email;
+        account.phone = req.phone;
+        account.address = req.address;
         account.Status = req.Status;
         account.UpdatedOn = DateTime.UtcNow;
 

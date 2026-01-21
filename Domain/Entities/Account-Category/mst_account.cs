@@ -12,7 +12,10 @@ public class mst_account
     public int TaxTypeId { get; set; }   // ✅ country wise tax type
     public string HierarchyPath { get; set; }
     public bool Status { get; set; }              // ACTIVE / INACTIVE
-
+    public string fullname { get; set; } = "";
+    public string email { get; set; } = "";
+    public string phone { get; set; } = "";
+    public string address { get; set; } = "";
     public DateTime CreatedOn { get; set; }
     public DateTime? UpdatedOn { get; set; }
     public DateTime? DeletedOn { get; set; }

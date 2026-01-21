@@ -11,7 +11,11 @@ public record CreateAccountRequest(
     int userId,
     string HierarchyPath,
      int TaxTypeId,
-    bool Status
+    bool Status,
+    string fullname = "",
+     string email = "",
+     string phone = "",
+     string address = ""
 );
 
 public record UpdateAccountRequest(
@@ -24,7 +28,11 @@ public record UpdateAccountRequest(
     int userId,
     string HierarchyPath,
      int TaxTypeId,
-    bool Status
+    bool Status,
+     string fullname = "",
+     string email = "",
+     string phone = "",
+     string address = ""
 );
 
 public class AccountResponseDto
@@ -40,7 +48,12 @@ public class AccountResponseDto
     public string PrimaryDomain { get; set; } = "";
     public int CountryId { get; set; }
     public string CountryName { get; set; } = "";
+    public string fullname { get; set; } = "";
+    public string email { get; set; } = "";
+    public string phone { get; set; } = "";
+    public string address { get; set; } = "";
     public int TaxTypeId { get; set; }
     public bool Status { get; set; }
+
     public DateTime CreatedOn { get; set; }
 }
