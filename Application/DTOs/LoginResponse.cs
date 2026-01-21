@@ -13,6 +13,7 @@ public class FormRightResponseDto
 
     public bool CanRead { get; set; }
     public bool CanWrite { get; set; }
+    public bool CanUpdate { get; set; }
     public bool CanDelete { get; set; }
     public bool CanExport { get; set; }
     public bool CanAll { get; set; }

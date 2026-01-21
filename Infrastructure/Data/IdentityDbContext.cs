@@ -34,15 +34,15 @@ public class IdentityDbContext : DbContext
                entity.Property(x => x.TaxTypeName).HasMaxLength(100).IsRequired();
            });
 
-        modelBuilder.Entity<mst_account>(entity =>
-        {
-            entity.ToTable("mst_account");
-            entity.HasKey(x => x.AccountId);
+            modelBuilder.Entity<mst_account>(entity =>
+            {
+                entity.ToTable("mst_account");
+                entity.HasKey(x => x.AccountId);
 
-            entity.Property(x => x.AccountCode).HasMaxLength(50).IsRequired();
-            entity.Property(x => x.AccountName).HasMaxLength(150).IsRequired();
-            entity.Property(x => x.PrimaryDomain).HasMaxLength(200).IsRequired();
-        });
+                entity.Property(x => x.AccountCode).HasMaxLength(50).IsRequired();
+                entity.Property(x => x.AccountName).HasMaxLength(150).IsRequired();
+                entity.Property(x => x.PrimaryDomain).HasMaxLength(200).IsRequired();
+            });
         modelBuilder.Entity<mst_role>()
           .ToTable("mst_role")
           .HasKey(x => x.RoleId);
@@ -89,6 +89,11 @@ public class IdentityDbContext : DbContext
             .HasOne(x => x.Plan)
             .WithMany(x => x.PlanAddons)
             .HasForeignKey(x => x.PlanId);
+        modelBuilder.Entity<mst_category>(entity =>
+         {
+             entity.ToTable("mst_category");
+             entity.HasKey(x => x.CategoryId); // ✅ PK
+         });
     }
 
 

@@ -20,6 +20,7 @@ public class RoleService : IRoleService
             AccountId = req.AccountId,
             RoleName = req.RoleName.Trim(),
             Description = req.Description?.Trim(),
+            RoleCode = req.RoleCode.Trim(),
             IsActive = true,
             CreatedOn = DateTime.UtcNow,
             UpdatedOn = DateTime.UtcNow
@@ -36,6 +37,7 @@ public class RoleService : IRoleService
                 FormId = x.FormId,
                 CanRead = x.CanRead,
                 CanWrite = x.CanWrite,
+                CanUpdate = x.CanUpdate,
                 CanDelete = x.CanDelete,
                 CanExport = x.CanExport,
                 CanAll = x.CanAll
@@ -68,6 +70,7 @@ public class RoleService : IRoleService
                           FormName = f.FormName,
                           CanRead = r.CanRead,
                           CanWrite = r.CanWrite,
+                          CanUpdate = r.CanUpdate,
                           CanDelete = r.CanDelete,
                           CanExport = r.CanExport,
                           CanAll = r.CanAll
@@ -88,6 +91,7 @@ public class RoleService : IRoleService
             FormId = x.FormId,
             CanRead = x.CanRead,
             CanWrite = x.CanWrite,
+            CanUpdate = x.CanUpdate,
             CanDelete = x.CanDelete,
             CanExport = x.CanExport,
             CanAll = x.CanAll
@@ -106,6 +110,7 @@ public class RoleService : IRoleService
 
         role.RoleName = req.RoleName.Trim();
         role.Description = req.Description?.Trim();
+        role.RoleCode = req.RoleCode.Trim();
         role.IsActive = req.IsActive;
         role.UpdatedOn = DateTime.UtcNow;
 

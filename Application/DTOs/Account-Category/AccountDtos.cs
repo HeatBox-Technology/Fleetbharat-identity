@@ -7,6 +7,9 @@ public record CreateAccountRequest(
     [Required] int CategoryId,
     [Required, MaxLength(200)] string PrimaryDomain,
     [Required] int CountryId,
+    int ParentAccountId,
+    int userId,
+    string HierarchyPath,
      int TaxTypeId,
     bool Status
 );
@@ -17,6 +20,9 @@ public record UpdateAccountRequest(
     [Required] int CategoryId,
     [Required, MaxLength(200)] string PrimaryDomain,
     [Required] int CountryId,
+     int ParentAccountId,
+    int userId,
+    string HierarchyPath,
      int TaxTypeId,
     bool Status
 );
@@ -26,6 +32,9 @@ public class AccountResponseDto
     public int AccountId { get; set; }
     public string AccountCode { get; set; } = "";
     public string AccountName { get; set; } = "";
+    public int? ParentAccountId { get; set; }
+    public string HierarchyPath { get; set; } = "";
+    public int Fk_userid { get; set; }
     public int CategoryId { get; set; }
     public string PrimaryDomain { get; set; } = "";
     public int CountryId { get; set; }

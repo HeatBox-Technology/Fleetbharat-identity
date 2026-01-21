@@ -30,6 +30,7 @@ builder.Services.AddScoped<IPlanAddonService, PlanAddonService>();
 builder.Services.AddScoped<ICustomerPlanService, CustomerPlanService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
+builder.Services.AddScoped<ITaxTypeService, TaxTypeService>();
 
 
 builder.Services.AddCors(options =>

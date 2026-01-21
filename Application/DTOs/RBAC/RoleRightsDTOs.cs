@@ -17,6 +17,8 @@ public class CreateRoleRequest
     [Required] public int AccountId { get; set; }
     [Required, MaxLength(100)] public string RoleName { get; set; } = "";
     [MaxLength(200)] public string? Description { get; set; }
+    public string RoleCode { get; set; } = "";
+    public bool IsActive { get; set; } = true;
 
     public List<RoleFormRightDto> Rights { get; set; } = new();
 }
@@ -25,5 +27,6 @@ public class UpdateRoleRequest
 {
     [Required, MaxLength(100)] public string RoleName { get; set; } = "";
     [MaxLength(200)] public string? Description { get; set; }
+    public string RoleCode { get; set; } = "";
     public bool IsActive { get; set; }
 }

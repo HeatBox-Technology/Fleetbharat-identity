@@ -42,6 +42,9 @@ public class AccountProvisionService : IAccountProvisionService
             PrimaryDomain = req.PrimaryDomain.Trim(),
             CountryId = req.CountryId,
             TaxTypeId = req.TaxTypeId,
+            ParentAccountId = req.ParentAccountId,
+            HierarchyPath = req.HierarchyPath,
+            Fk_userid = req.userId,
             Status = req.Status,
             CreatedOn = DateTime.UtcNow,
             UpdatedOn = DateTime.UtcNow
@@ -87,6 +90,9 @@ public class AccountProvisionService : IAccountProvisionService
                 AccountId = x.AccountId,
                 AccountCode = x.AccountCode,
                 AccountName = x.AccountName,
+                ParentAccountId = x.ParentAccountId,
+                HierarchyPath = x.HierarchyPath,
+                Fk_userid = x.Fk_userid,
                 CategoryId = x.CategoryId,
                 PrimaryDomain = x.PrimaryDomain,
                 CountryId = x.CountryId,
@@ -114,6 +120,9 @@ public class AccountProvisionService : IAccountProvisionService
                 AccountId = x.AccountId,
                 AccountCode = x.AccountCode,
                 AccountName = x.AccountName,
+                ParentAccountId = x.ParentAccountId,
+                HierarchyPath = x.HierarchyPath,
+                Fk_userid = x.Fk_userid,
                 CategoryId = x.CategoryId,
                 PrimaryDomain = x.PrimaryDomain,
                 CountryId = x.CountryId,
@@ -151,6 +160,9 @@ public class AccountProvisionService : IAccountProvisionService
         account.PrimaryDomain = req.PrimaryDomain.Trim();
         account.CountryId = req.CountryId;
         account.TaxTypeId = req.TaxTypeId;
+        account.ParentAccountId = req.ParentAccountId;
+        account.HierarchyPath = req.HierarchyPath;
+        account.Fk_userid = req.userId;
         account.Status = req.Status;
         account.UpdatedOn = DateTime.UtcNow;
 

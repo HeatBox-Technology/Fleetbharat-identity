@@ -12,7 +12,7 @@ public class mst_form
 
     public string PageUrl { get; set; }            // /admin/users
 
-    public string PageComponent { get; set; }      // users/page.tsx
+    public string PageComponent { get; set; } = "";      // users/page.tsx
 
     public string IconName { get; set; }            // lucide icon name
 
@@ -23,8 +23,8 @@ public class mst_form
     public bool IsActive { get; set; }
 
     public int? ParentFormId { get; set; }          // Self reference
-    public string pageType { get; set; }          // Menu / SubMenu / Button
-    public string PermissionType { get; set; }   // Read / Write / Delete
+    public string pageType { get; set; } = "";         // Menu / SubMenu / Button
+    public string PermissionType { get; set; } = "";   // Read / Write / Delete
     public enum PageUseType
     {
         Mobile,
