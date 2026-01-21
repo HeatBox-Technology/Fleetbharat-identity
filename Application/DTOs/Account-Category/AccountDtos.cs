@@ -36,8 +36,10 @@ public class AccountResponseDto
     public string HierarchyPath { get; set; } = "";
     public int Fk_userid { get; set; }
     public int CategoryId { get; set; }
+    public string CategoryName { get; set; } = "";
     public string PrimaryDomain { get; set; } = "";
     public int CountryId { get; set; }
+    public string CountryName { get; set; } = "";
     public int TaxTypeId { get; set; }
     public bool Status { get; set; }
     public DateTime CreatedOn { get; set; }

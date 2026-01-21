@@ -65,40 +65,45 @@ public class AccountProvisionService : IAccountProvisionService
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 10;
 
-        var query = _db.Accounts.AsQueryable();
+        var query = from a in _db.Accounts
+                    join c in _db.Countries on a.CountryId equals c.CountryId
+                    join cat in _db.Categories on a.CategoryId equals cat.CategoryId
+                    select new { a, c, cat };
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
             query = query.Where(x =>
-                x.AccountName.ToLower().Contains(s) ||
-                x.AccountCode.ToLower().Contains(s) ||
-                x.PrimaryDomain.ToLower().Contains(s));
+                x.a.AccountName.ToLower().Contains(s) ||
+                x.a.AccountCode.ToLower().Contains(s) ||
+                x.a.PrimaryDomain.ToLower().Contains(s));
         }
 
         if (status.HasValue)
-            query = query.Where(x => x.Status == status.Value);
+            query = query.Where(x => x.a.Status == status.Value);
 
         var totalCount = await query.CountAsync();
 
         var items = await query
-            .OrderByDescending(x => x.CreatedOn)
+            .OrderByDescending(x => x.a.CreatedOn)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(x => new AccountResponseDto
             {
-                AccountId = x.AccountId,
-                AccountCode = x.AccountCode,
-                AccountName = x.AccountName,
-                ParentAccountId = x.ParentAccountId,
-                HierarchyPath = x.HierarchyPath,
-                Fk_userid = x.Fk_userid,
-                CategoryId = x.CategoryId,
-                PrimaryDomain = x.PrimaryDomain,
-                CountryId = x.CountryId,
-                TaxTypeId = x.TaxTypeId,
-                Status = x.Status,
-                CreatedOn = x.CreatedOn
+                AccountId = x.a.AccountId,
+                AccountCode = x.a.AccountCode,
+                AccountName = x.a.AccountName,
+                ParentAccountId = x.a.ParentAccountId,
+                HierarchyPath = x.a.HierarchyPath,
+                Fk_userid = x.a.Fk_userid,
+                CategoryId = x.cat.CategoryId,
+                PrimaryDomain = x.a.PrimaryDomain,
+                CountryId = x.c.CountryId,
+                CountryName = x.c.CountryName,
+                CategoryName = x.cat.LabelName,
+                TaxTypeId = x.a.TaxTypeId,
+                Status = x.a.Status,
+                CreatedOn = x.a.CreatedOn
             })
             .ToListAsync();
 
@@ -113,22 +118,30 @@ public class AccountProvisionService : IAccountProvisionService
 
     public async Task<AccountResponseDto?> GetByIdAsync(int accountId)
     {
-        return await _db.Accounts
-            .Where(x => x.AccountId == accountId)
+
+        var query = from a in _db.Accounts
+                    join c in _db.Countries on a.CountryId equals c.CountryId
+                    join cat in _db.Categories on a.CategoryId equals cat.CategoryId
+                    select new { a, c, cat };
+
+        return await query
+            .Where(x => x.a.AccountId == accountId)
             .Select(x => new AccountResponseDto
             {
-                AccountId = x.AccountId,
-                AccountCode = x.AccountCode,
-                AccountName = x.AccountName,
-                ParentAccountId = x.ParentAccountId,
-                HierarchyPath = x.HierarchyPath,
-                Fk_userid = x.Fk_userid,
-                CategoryId = x.CategoryId,
-                PrimaryDomain = x.PrimaryDomain,
-                CountryId = x.CountryId,
-                TaxTypeId = x.TaxTypeId,
-                Status = x.Status,
-                CreatedOn = x.CreatedOn
+                AccountId = x.a.AccountId,
+                AccountCode = x.a.AccountCode,
+                AccountName = x.a.AccountName,
+                ParentAccountId = x.a.ParentAccountId,
+                HierarchyPath = x.a.HierarchyPath,
+                Fk_userid = x.a.Fk_userid,
+                CategoryId = x.cat.CategoryId,
+                CategoryName = x.cat.LabelName,
+                PrimaryDomain = x.a.PrimaryDomain,
+                CountryId = x.c.CountryId,
+                CountryName = x.c.CountryName,
+                TaxTypeId = x.a.TaxTypeId,
+                Status = x.a.Status,
+                CreatedOn = x.a.CreatedOn
             })
             .FirstOrDefaultAsync();
     }
