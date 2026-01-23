@@ -1,0 +1,114 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+
+public class CommonDropdownService : ICommonDropdownService
+{
+    private readonly IdentityDbContext _db;
+
+    public CommonDropdownService(IdentityDbContext db)
+    {
+        _db = db;
+    }
+
+    public async Task<List<DropdownDto>> GetAccountsAsync(string? search, int limit)
+    {
+        if (limit <= 0) limit = 20;
+
+        var query = _db.Accounts.AsNoTracking().Where(x => !x.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                x.AccountName.ToLower().Contains(s) ||
+                x.AccountCode.ToLower().Contains(s));
+        }
+
+        return await query
+            .OrderBy(x => x.AccountName)
+            .Take(limit)
+            .Select(x => new DropdownDto
+            {
+                Id = x.AccountId,
+                Value = $"{x.AccountName} ({x.AccountCode})"
+            })
+            .ToListAsync();
+    }
+
+    public async Task<List<DropdownDto>> GetCategoriesAsync(string? search, int limit)
+    {
+        if (limit <= 0) limit = 20;
+
+        var query = _db.Categories.AsNoTracking().Where(x => !x.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                x.LabelName.ToLower().Contains(s));
+        }
+
+        return await query
+            .OrderBy(x => x.LabelName)
+            .Take(limit)
+            .Select(x => new DropdownDto
+            {
+                Id = x.CategoryId,
+                Value = x.LabelName
+            })
+            .ToListAsync();
+    }
+
+    public async Task<List<DropdownDto>> GetRolesAsync(int accountId, string? search, int limit)
+    {
+        if (limit <= 0) limit = 20;
+
+        var query = _db.Roles.AsNoTracking()
+            .Where(x => x.AccountId == accountId);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x => x.RoleName.ToLower().Contains(s));
+        }
+
+        return await query
+            .OrderBy(x => x.RoleName)
+            .Take(limit)
+            .Select(x => new DropdownDto
+            {
+                Id = x.RoleId,
+                Value = x.RoleName
+            })
+            .ToListAsync();
+    }
+
+    public async Task<List<DropdownGuidDto>> GetUsersAsync(int accountId, string? search, int limit)
+    {
+        if (limit <= 0) limit = 20;
+
+        var query = _db.Users.AsNoTracking()
+            .Where(x => x.AccountId == accountId && !x.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                x.FirstName.ToLower().Contains(s) ||
+                x.LastName.ToLower().Contains(s) ||
+                x.Email.ToLower().Contains(s));
+        }
+
+        return await query
+            .OrderBy(x => x.FirstName)
+            .Take(limit)
+            .Select(x => new DropdownGuidDto
+            {
+                Id = x.UserId,
+                Value = $"{x.FirstName} {x.LastName} ({x.Email})"
+            })
+            .ToListAsync();
+    }
+}

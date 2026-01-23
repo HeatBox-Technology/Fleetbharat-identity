@@ -33,6 +33,8 @@ builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ITaxTypeService, TaxTypeService>();
 builder.Services.AddScoped<IAccountConfigurationService, AccountConfigurationService>();
 builder.Services.AddScoped<IWhiteLabelService, WhiteLabelService>();
+builder.Services.AddScoped<ICommonDropdownService, CommonDropdownService>();
+
 
 
 
