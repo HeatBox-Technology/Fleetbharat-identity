@@ -130,4 +130,123 @@ public class RoleService : IRoleService
         await _db.SaveChangesAsync();
         return true;
     }
+
+    public async Task<RoleListUiResponseDto> GetRoles(
+        int page,
+        int pageSize,
+        int? accountId,
+        string? search)
+    {
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 10;
+
+        var roleQuery = _db.Roles.AsNoTracking().AsQueryable();
+
+        if (accountId.HasValue)
+            roleQuery = roleQuery.Where(x => x.AccountId == accountId.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            roleQuery = roleQuery.Where(x =>
+                x.RoleName.ToLower().Contains(s) ||
+                (x.Description != null && x.Description.ToLower().Contains(s)));
+        }
+
+        // ✅ Cards count (Summary)
+        var totalRoles = await roleQuery.CountAsync();
+        var systemRoles = await roleQuery.CountAsync(x => x.IsSystemRole);
+        var customRoles = totalRoles - systemRoles;
+
+        var summary = new RoleCardSummaryDto
+        {
+            TotalRoles = totalRoles,
+            SystemRoles = systemRoles,
+            CustomRoles = customRoles
+        };
+
+        // ✅ Table data + AssignedUsers Count + AccountName
+        var tableQuery =
+            from r in roleQuery
+            join a in _db.Accounts.AsNoTracking() on r.AccountId equals a.AccountId
+            select new
+            {
+                Role = r,
+                AccountName = a.AccountName
+            };
+
+        var totalRecords = await tableQuery.CountAsync();
+
+        var items = await tableQuery
+            .OrderByDescending(x => x.Role.UpdatedOn)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new RoleListItemDto
+            {
+                RoleId = x.Role.RoleId,
+                AccountId = x.Role.AccountId,
+                AccountName = x.AccountName,
+
+                RoleName = x.Role.RoleName,
+                Description = x.Role.Description,
+                IsSystemRole = x.Role.IsSystemRole,
+
+                AssignedUsers = _db.Users.Count(u => u.roleId == x.Role.RoleId && !u.IsDeleted),
+                CreatedOn = x.Role.CreatedOn
+            })
+            .ToListAsync();
+
+        return new RoleListUiResponseDto
+        {
+            Summary = summary,
+            Roles = new PagedResultDto<RoleListItemDto>
+            {
+                Page = page,
+                PageSize = pageSize,
+                TotalRecords = totalRecords,
+                Items = items
+            }
+        };
+    }
+    public async Task<byte[]> ExportRolesCsvAsync(int? accountId, string? search)
+    {
+        var query =
+            from r in _db.Roles.AsNoTracking()
+            join a in _db.Accounts.AsNoTracking() on r.AccountId equals a.AccountId
+            select new
+            {
+                a.AccountName,
+                r.RoleName,
+                r.Description,
+                r.IsSystemRole,
+                r.CreatedOn,
+                AssignedUsers = _db.Users.Count(u => u.roleId == r.RoleId && !u.IsDeleted)
+            };
+
+        if (accountId.HasValue)
+            query = query.Where(x => x.AccountName != null && _db.Roles.Any(r => r.AccountId == accountId.Value));
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                x.RoleName.ToLower().Contains(s) ||
+                (x.Description != null && x.Description.ToLower().Contains(s)) ||
+                x.AccountName.ToLower().Contains(s));
+        }
+
+        var rows = await query.ToListAsync();
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Account,RoleName,Description,AssignedUsers,IsSystemRole,CreatedOn");
+
+        foreach (var r in rows)
+        {
+            sb.AppendLine($"{r.AccountName},{r.RoleName},{r.Description},{r.AssignedUsers},{r.IsSystemRole},{r.CreatedOn:yyyy-MM-dd}");
+        }
+
+        return System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+    }
+
+
 }

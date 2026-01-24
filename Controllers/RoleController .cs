@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -57,4 +58,26 @@ public class RolesController : ControllerBase
         if (!ok) return NotFound(ApiResponse<object>.Fail("Role not found", 404));
         return Ok(ApiResponse<string>.Ok("Deleted", "Role deleted", 200));
     }
+    [HttpGet("GetAllRole")]
+    public async Task<IActionResult> GetAllRole(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] int? accountId = null,
+        [FromQuery] string? search = null)
+    {
+        var data = await _service.GetRoles(page, pageSize, accountId, search);
+        return Ok(ApiResponse<object>.Ok(data, "Success", 200));
+    }
+
+    [HttpGet("export")]
+    public async Task<IActionResult> ExportRoles(
+        [FromQuery] int? accountId = null,
+        [FromQuery] string? search = null)
+    {
+        var bytes = await _service.ExportRolesCsvAsync(accountId, search);
+
+        return File(bytes, "text/csv", $"roles_export_{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
+    }
+
+
 }

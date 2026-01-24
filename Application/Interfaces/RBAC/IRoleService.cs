@@ -12,4 +12,10 @@ public interface IRoleService
     Task<bool> UpdateRightsAsync(int roleId, List<RoleFormRightDto> rights);
 
     Task<List<FormRightResponseDto>> GetRoleRightsAsync(int roleId);
+    Task<RoleListUiResponseDto> GetRoles(
+           int page,
+           int pageSize,
+           int? accountId,
+           string? search);
+    Task<byte[]> ExportRolesCsvAsync(int? accountId, string? search);
 }
