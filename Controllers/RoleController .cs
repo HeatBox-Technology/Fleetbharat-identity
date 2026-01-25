@@ -68,6 +68,19 @@ public class RolesController : ControllerBase
         var data = await _service.GetRoles(page, pageSize, accountId, search);
         return Ok(ApiResponse<object>.Ok(data, "Success", 200));
     }
+    [HttpGet("{roleId}")]
+    public async Task<IActionResult> GetByRoleId(
+        int roleId,
+        [FromQuery] int accountId)
+    {
+        var data = await _service.GetByRoleIdAsync(roleId, accountId);
+
+        if (data == null)
+            return NotFound(ApiResponse<object>.Fail("Role not found for this account", 404));
+
+        return Ok(ApiResponse<object>.Ok(data, "Success", 200));
+    }
+
 
     [HttpGet("export")]
     public async Task<IActionResult> ExportRoles(

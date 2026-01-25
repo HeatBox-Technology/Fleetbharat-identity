@@ -208,6 +208,46 @@ public class RoleService : IRoleService
             }
         };
     }
+    public async Task<RoleDetailResponseDto?> GetByRoleIdAsync(int roleId, int accountId)
+    {
+        var role = await _db.Roles.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.RoleId == roleId && x.AccountId == accountId);
+
+        if (role == null) return null;
+
+        var rights = await (
+            from rr in _db.FormRoleRights.AsNoTracking()
+            join f in _db.Forms.AsNoTracking() on rr.FormId equals f.FormId
+            where rr.RoleId == roleId
+            orderby f.SortOrder
+            select new FormRightResponseDto
+            {
+                FormId = f.FormId,
+                FormCode = f.FormCode,
+                FormName = f.FormName,
+                CanRead = rr.CanRead,
+                CanWrite = rr.CanWrite,
+                CanUpdate = rr.CanUpdate,
+                CanDelete = rr.CanDelete,
+                CanExport = rr.CanExport,
+                CanAll = rr.CanAll
+            }
+        ).ToListAsync();
+
+        return new RoleDetailResponseDto
+        {
+            RoleId = role.RoleId,
+            AccountId = role.AccountId,
+            RoleName = role.RoleName,
+            Description = role.Description,
+            IsActive = role.IsActive,
+            IsSystemRole = role.IsSystemRole,
+            CreatedOn = role.CreatedOn,
+            UpdatedOn = role.UpdatedOn,
+            Rights = rights
+        };
+    }
+
     public async Task<byte[]> ExportRolesCsvAsync(int? accountId, string? search)
     {
         var query =
