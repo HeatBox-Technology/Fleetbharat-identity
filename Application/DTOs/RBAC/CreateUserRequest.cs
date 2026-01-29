@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
 
 public class CreateUserRequest
 {
@@ -11,6 +13,11 @@ public class CreateUserRequest
 
     [Required] public int AccountId { get; set; }
     [Required] public int RoleId { get; set; }
+    public string MobileNo { get; set; } = "";
+    public bool Status { get; set; }
+    public bool TwoFactorEnabled { get; set; }
+    public IFormFile? ProfileImage { get; set; } = null;
+    public List<UserFormRightDto>? AdditionalPermissions { get; set; }
 }
 public class UserCardSummaryDto
 {
@@ -75,6 +82,23 @@ public class UpdateUserRequest
 
     public bool Status { get; set; }
     public bool TwoFactorEnabled { get; set; }
+}
+public class UserFormRightDto
+{
+    [Required]
+    public int AccountId { get; set; }
+    public int FormId { get; set; }
+
+    public bool CanRead { get; set; }
+    public bool CanWrite { get; set; }
+    public bool CanUpdate { get; set; }
+    public bool CanDelete { get; set; }
+    public bool CanExport { get; set; }
+
+    /// <summary>
+    /// If true → overrides all individual permissions
+    /// </summary>
+    public bool CanAll { get; set; }
 }
 
 

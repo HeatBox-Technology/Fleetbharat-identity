@@ -19,6 +19,7 @@ public class User
     public int UserStatusLkpId { get; set; }          // Lookup status
     public bool EmailVerified { get; set; }
     public bool MobileVerified { get; set; }
+    public string? ProfileImagePath { get; set; }
     public bool TwoFactorEnabled { get; set; } = false;
     public string? TwoFactorCodeHash { get; set; }
     public DateTime? TwoFactorExpiry { get; set; }

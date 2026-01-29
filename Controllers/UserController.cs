@@ -14,11 +14,14 @@ public class UsersController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create(CreateUserRequest req)
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> CreateUser(
+     [FromForm] CreateUserRequest req)
     {
-        var id = await _service.CreateAsync(req);
-        return Ok(ApiResponse<object>.Ok(new { userId = id }, "User created", 200));
+        var userId = await _service.CreateAsync(req);
+        return Ok(ApiResponse<object>.Ok(new { userId }, "User created"));
     }
+
 
     // ✅ 1) GET ALL USER LIST (UI)
     [HttpGet("GetAllUser")]

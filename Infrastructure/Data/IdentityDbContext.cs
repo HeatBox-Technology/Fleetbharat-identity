@@ -23,7 +23,7 @@ public class IdentityDbContext : DbContext
     public DbSet<mst_category> Categories => Set<mst_category>();
     public DbSet<mst_account_configuration> AccountConfigurations => Set<mst_account_configuration>();
     public DbSet<mst_white_label> WhiteLabels => Set<mst_white_label>();
-
+    public DbSet<map_UserFormRight> UserFormRights => Set<map_UserFormRight>();
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -138,6 +138,27 @@ public class IdentityDbContext : DbContext
             entity.HasIndex(x => x.AccountId).IsUnique();
         });
 
+        modelBuilder.Entity<map_UserFormRight>(entity =>
+{
+    entity.ToTable("map_user_form_right");
+
+    entity.HasKey(x => x.UserFormRightId);
+
+    entity.HasIndex(x => new { x.AccountId, x.UserId, x.FormId })
+          .IsUnique(); // 🚀 Prevent duplicate overrides
+
+    entity.Property(x => x.CanRead).HasDefaultValue(false);
+    entity.Property(x => x.CanWrite).HasDefaultValue(false);
+    entity.Property(x => x.CanUpdate).HasDefaultValue(false);
+    entity.Property(x => x.CanDelete).HasDefaultValue(false);
+    entity.Property(x => x.CanExport).HasDefaultValue(false);
+    entity.Property(x => x.CanAll).HasDefaultValue(false);
+});
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.Property(x => x.ProfileImagePath)
+                  .HasMaxLength(500);
+        });
 
     }
 
