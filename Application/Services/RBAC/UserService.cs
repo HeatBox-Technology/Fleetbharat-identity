@@ -216,10 +216,27 @@ public class UserService : IUserService
     // ✅ 2) GET USER BY ID
     public async Task<UserDetailResponseDto?> GetByIdAsync(Guid userId)
     {
-        var u = await _db.Users.AsNoTracking()
+        var u = await _db.Users
+            .AsNoTracking()
             .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
 
-        if (u == null) return null;
+        if (u == null)
+            return null;
+
+        var permissions = await _db.UserFormRights
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && x.AccountId == u.AccountId)
+            .Select(x => new UserFormRightDto
+            {
+                FormId = x.FormId,
+                CanRead = x.CanRead,
+                CanWrite = x.CanWrite,
+                CanUpdate = x.CanUpdate,
+                CanDelete = x.CanDelete,
+                CanExport = x.CanExport,
+                CanAll = x.CanAll
+            })
+            .ToListAsync();
 
         return new UserDetailResponseDto
         {
@@ -235,44 +252,127 @@ public class UserService : IUserService
             TwoFactorEnabled = u.TwoFactorEnabled,
             profileImagePath = u.ProfileImagePath,
             CreatedAt = u.CreatedAt,
-            UpdatedAt = u.UpdatedAt
+            UpdatedAt = u.UpdatedAt,
+
+            // ✅ added
+            AdditionalPermissions = permissions
         };
     }
+
 
     // ✅ 3) UPDATE USER
     public async Task<bool> UpdateAsync(Guid userId, UpdateUserRequest req)
     {
-        var user = await _db.Users
-            .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
+        using var tx = await _db.Database.BeginTransactionAsync();
 
-        if (user == null) return false;
+        try
+        {
+            var user = await _db.Users
+                .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
 
-        // ✅ validate account exists
-        var accountExists = await _db.Accounts.AnyAsync(x => x.AccountId == req.AccountId);
-        if (!accountExists) throw new KeyNotFoundException("Account not found");
+            if (user == null)
+                return false;
 
-        // ✅ validate role belongs to account
-        var roleExists = await _db.Roles.AnyAsync(x =>
-            x.RoleId == req.RoleId && x.AccountId == req.AccountId);
+            // ✅ validate account exists
+            if (!await _db.Accounts.AnyAsync(x => x.AccountId == req.AccountId && !x.IsDeleted))
+                throw new KeyNotFoundException("Account not found");
 
-        if (!roleExists) throw new InvalidOperationException("Role is not valid for this account");
+            // ✅ validate role belongs to account
+            if (!await _db.Roles.AnyAsync(x =>
+                x.RoleId == req.RoleId && x.AccountId == req.AccountId))
+                throw new InvalidOperationException("Role is not valid for this account");
 
-        user.FirstName = req.FirstName.Trim();
-        user.LastName = req.LastName.Trim();
-        user.MobileNo = req.MobileNo.Trim();
-        user.CountryCode = req.CountryCode.Trim();
 
-        user.AccountId = req.AccountId;
-        user.roleId = req.RoleId;
+            // -------------------------
+            // ✅ profile image handling
+            // -------------------------
+            if (req.ProfileImage != null && req.ProfileImage.Length > 0)
+            {
+                var allowedTypes = new[] { "image/jpeg", "image/png" };
 
-        user.Status = req.Status;
-        user.TwoFactorEnabled = req.TwoFactorEnabled;
+                if (!allowedTypes.Contains(req.ProfileImage.ContentType))
+                    throw new InvalidOperationException("Only JPG and PNG images are allowed");
 
-        user.UpdatedAt = DateTime.UtcNow;
+                if (req.ProfileImage.Length > 2 * 1024 * 1024)
+                    throw new InvalidOperationException("Image size must be less than 2MB");
 
-        await _db.SaveChangesAsync();
-        return true;
+                var uploadsRoot = Path.Combine("uploads", "users", user.UserId.ToString());
+                Directory.CreateDirectory(uploadsRoot);
+
+                var filePath = Path.Combine(uploadsRoot, "profile.jpg");
+
+                using var stream = new FileStream(filePath, FileMode.Create);
+                await req.ProfileImage.CopyToAsync(stream);
+
+                user.ProfileImagePath = "/" + filePath.Replace("\\", "/");
+            }
+
+
+            // -------------------------
+            // ✅ user basic fields
+            // -------------------------
+            user.FirstName = req.FirstName.Trim();
+            user.LastName = req.LastName.Trim();
+            user.MobileNo = req.MobileNo.Trim();
+            user.CountryCode = req.CountryCode.Trim();
+
+            user.AccountId = req.AccountId;
+            user.roleId = req.RoleId;
+
+            user.Status = req.Status;
+            user.TwoFactorEnabled = req.TwoFactorEnabled;
+
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+
+            // -------------------------
+            // ✅ update additional permissions
+            // -------------------------
+            if (req.AdditionalPermissions != null)
+            {
+                // remove old permissions
+                var existing = await _db.UserFormRights
+                    .Where(x => x.UserId == userId && x.AccountId == req.AccountId)
+                    .ToListAsync();
+
+                if (existing.Any())
+                    _db.UserFormRights.RemoveRange(existing);
+
+                // add new permissions
+                if (req.AdditionalPermissions.Any())
+                {
+                    foreach (var p in req.AdditionalPermissions)
+                    {
+                        _db.UserFormRights.Add(new map_UserFormRight
+                        {
+                            UserId = userId,
+                            AccountId = req.AccountId,
+                            FormId = p.FormId,
+                            CanRead = p.CanRead,
+                            CanWrite = p.CanWrite,
+                            CanUpdate = p.CanUpdate,
+                            CanDelete = p.CanDelete,
+                            CanExport = p.CanExport,
+                            CanAll = p.CanAll
+                        });
+                    }
+
+                    await _db.SaveChangesAsync();
+                }
+            }
+
+            await tx.CommitAsync();
+            return true;
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
     }
+
 
     // 4) split updates into small PATCH APIs as needed
     public async Task<bool> UpdateBasicAsync(Guid userId, UpdateUserBasicRequest req)

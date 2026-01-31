@@ -1,38 +1,106 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-public record CreateAccountRequest(
+public record CreateAccountRequest
+(
     [Required, MaxLength(150)] string AccountName,
+
     [MaxLength(50)] string? AccountCode,
+
     [Required] int CategoryId,
+
     [Required, MaxLength(200)] string PrimaryDomain,
+
     [Required] int CountryId,
-    int ParentAccountId,
-    int userId,
-    string HierarchyPath,
-     int TaxTypeId,
+
+    string StateId,
+    string CityId,
+    string Zipcode,
+
+    int? ParentAccountId,
+
+    string RefferCode,
+
+    [Required] int TaxTypeId,
+
     bool Status,
-    string fullname = "",
-     string email = "",
-     string phone = "",
-     string address = ""
+
+    // contact person
+    string fullname,
+    string email,
+    string phone,
+    string Position,
+
+    // address
+    string address,
+
+    // business profile
+    string BusinessPhone,
+    string BusinessEmail,
+    string BusinessAddress,
+    string BusinessHours,
+    string BusinessTimeZone,
+
+    // user access
+    string UserName,
+    string Password,
+
+    string share,
+
+    int userId,
+
+    string HierarchyPath
 );
 
-public record UpdateAccountRequest(
+public record UpdateAccountRequest
+(
     [Required, MaxLength(150)] string AccountName,
-    [MaxLength(50)] string AccountCode,
+
+    [MaxLength(50)] string? AccountCode,
+
     [Required] int CategoryId,
+
     [Required, MaxLength(200)] string PrimaryDomain,
+
     [Required] int CountryId,
-     int ParentAccountId,
-    int userId,
-    string HierarchyPath,
-     int TaxTypeId,
+
+    string StateId,
+    string CityId,
+    string Zipcode,
+
+    int? ParentAccountId,
+
+    string RefferCode,
+
+    [Required] int TaxTypeId,
+
     bool Status,
-     string fullname = "",
-     string email = "",
-     string phone = "",
-     string address = ""
+
+    // contact person
+    string fullname,
+    string email,
+    string phone,
+    string Position,
+
+    // address
+    string address,
+
+    // business profile
+    string BusinessPhone,
+    string BusinessEmail,
+    string BusinessAddress,
+    string BusinessHours,
+    string BusinessTimeZone,
+
+    // user access
+    string UserName,
+    string? Password,
+
+    string share,
+
+    int userId,
+
+    string HierarchyPath
 );
 
 public class AccountResponseDto
@@ -45,9 +113,21 @@ public class AccountResponseDto
     public int Fk_userid { get; set; }
     public int CategoryId { get; set; }
     public string CategoryName { get; set; } = "";
+    public string UserName { get; set; } = "";
+    public string ContactPersonName { get; set; } = "";
+    public string ContactPersonEmail { get; set; } = "";
+    public string ContactPersonPhone { get; set; } = "";
+    public string SuperiorName { get; set; } = "";
+    public string Reffer { get; set; } = "";
     public string PrimaryDomain { get; set; } = "";
-    public int CountryId { get; set; }
+
     public string CountryName { get; set; } = "";
+    public string StateName { get; set; } = "";
+    public string CityName { get; set; } = "";
+    public int CountryId { get; set; } = 0;
+    public string StateId { get; set; } = "";
+    public string CityId { get; set; } = "";
+
     public string fullname { get; set; } = "";
     public string email { get; set; } = "";
     public string phone { get; set; } = "";

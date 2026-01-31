@@ -70,6 +70,7 @@ public class UserDetailResponseDto
 
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public List<UserFormRightDto>? AdditionalPermissions { get; set; }
 }
 public class UpdateUserRequest
 {
@@ -84,6 +85,12 @@ public class UpdateUserRequest
 
     public bool Status { get; set; }
     public bool TwoFactorEnabled { get; set; }
+
+    // ✅ same as Create
+    public IFormFile? ProfileImage { get; set; }
+
+    // ✅ same as Create
+    public List<UserFormRightDto>? AdditionalPermissions { get; set; }
 }
 public class UserFormRightDto
 {
