@@ -72,7 +72,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
-app.Logger.LogInformation("Running Environment : {env}", app.Environment.EnvironmentName);
+//app.Logger.LogInformation("Running Environment : {env}", app.Environment.EnvironmentName);
 
 //Auto EF Core migration (Code-First)
 
