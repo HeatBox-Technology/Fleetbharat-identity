@@ -185,6 +185,7 @@ public class UserService : IUserService
 
                 AccountId = a.AccountId,
                 AccountName = a.AccountName,
+                profileImagePath = u.ProfileImagePath,
 
                 Status = u.Status,
                 TwoFactorEnabled = u.TwoFactorEnabled,
@@ -232,6 +233,7 @@ public class UserService : IUserService
             RoleId = u.roleId,
             Status = u.Status,
             TwoFactorEnabled = u.TwoFactorEnabled,
+            profileImagePath = u.ProfileImagePath,
             CreatedAt = u.CreatedAt,
             UpdatedAt = u.UpdatedAt
         };
@@ -272,7 +274,159 @@ public class UserService : IUserService
         return true;
     }
 
-    // ✅ 4) SOFT DELETE
+    // 4) split updates into small PATCH APIs as needed
+    public async Task<bool> UpdateBasicAsync(Guid userId, UpdateUserBasicRequest req)
+    {
+        var user = await _db.Users
+            .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
+
+        if (user == null) return false;
+
+        user.FirstName = req.FirstName.Trim();
+        user.LastName = req.LastName.Trim();
+        user.MobileNo = req.MobileNo.Trim();
+        user.CountryCode = req.CountryCode.Trim();
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+    public async Task<bool> UpdateRoleAsync(Guid userId, UpdateUserRoleRequest req)
+    {
+        var user = await _db.Users
+            .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
+
+        if (user == null) return false;
+
+        var roleExists = await _db.Roles
+            .AnyAsync(x => x.RoleId == req.RoleId && x.AccountId == req.AccountId);
+
+        if (!roleExists)
+            throw new InvalidOperationException("Role not valid for this account");
+
+        user.AccountId = req.AccountId;
+        user.roleId = req.RoleId;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+    public async Task<bool> UpdatePermissionsAsync(Guid userId, int accountId,
+        List<UserFormRightDto> permissions)
+    {
+        using var tx = await _db.Database.BeginTransactionAsync();
+
+        var user = await _db.Users
+            .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
+
+        if (user == null) return false;
+
+        var existing = await _db.UserFormRights
+            .Where(x => x.UserId == userId)
+            .ToListAsync();
+
+        _db.UserFormRights.RemoveRange(existing);
+
+        foreach (var p in permissions)
+        {
+            _db.UserFormRights.Add(new map_UserFormRight
+            {
+                UserId = userId,
+                AccountId = accountId,
+                FormId = p.FormId,
+                CanRead = p.CanRead,
+                CanWrite = p.CanWrite,
+                CanUpdate = p.CanUpdate,
+                CanDelete = p.CanDelete,
+                CanExport = p.CanExport,
+                CanAll = p.CanAll
+            });
+        }
+
+        await _db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return true;
+    }
+    public async Task<bool> UpdateStatusAsync(Guid userId, bool status)
+    {
+        var user = await _db.Users
+            .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
+
+        if (user == null) return false;
+
+        user.Status = status;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+    public async Task<bool> UpdateTwoFactorAsync(Guid userId, bool enabled)
+    {
+        var user = await _db.Users
+            .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
+
+        if (user == null) return false;
+
+        user.TwoFactorEnabled = enabled;
+
+        if (!enabled)
+        {
+            user.TwoFactorCodeHash = null;
+            user.TwoFactorExpiry = null;
+        }
+
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+    public async Task<bool> UpdateProfileImageAsync(Guid userId, IFormFile file)
+    {
+        var user = await _db.Users
+            .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
+
+        if (user == null) return false;
+
+        var allowed = new[] { "image/jpeg", "image/png" };
+
+        if (!allowed.Contains(file.ContentType))
+            throw new InvalidOperationException("Invalid image type");
+
+        if (file.Length > 2 * 1024 * 1024)
+            throw new InvalidOperationException("Image too large");
+
+        var root = Path.Combine("uploads", "users", userId.ToString());
+        Directory.CreateDirectory(root);
+
+        var filePath = Path.Combine(root, "profile.jpg");
+
+        using var fs = new FileStream(filePath, FileMode.Create);
+        await file.CopyToAsync(fs);
+
+        user.ProfileImagePath = "/" + filePath.Replace("\\", "/");
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+    public async Task<bool> SendResetPasswordAsync(Guid userId)
+    {
+        var user = await _db.Users
+            .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
+
+        if (user == null) return false;
+
+        // Generate reset token
+        var token = Guid.NewGuid().ToString();
+        user.PasswordResetTokenHash = BCrypt.Net.BCrypt.HashPassword(token);
+        user.PasswordResetExpiry = DateTime.UtcNow.AddHours(1);
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    // 5) SOFT DELETE
     public async Task<bool> SoftDeleteAsync(Guid userId)
     {
         var user = await _db.Users.FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);

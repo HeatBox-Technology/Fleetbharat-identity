@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,7 +22,6 @@ builder.Services.AddScoped<ICountryService, CountryService>();
 builder.Services.AddScoped<IStateService, StateService>();
 builder.Services.AddScoped<ICityService, CityService>();
 builder.Services.AddScoped<IFormRoleRightService, FormRoleRightService>();
-builder.Services.AddScoped<IPlanService, PlanService>();
 builder.Services.AddScoped<IPlanService, PlanService>();
 builder.Services.AddScoped<IFeatureService, FeatureService>();
 builder.Services.AddScoped<IAddonService, AddonService>();
@@ -72,6 +72,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+app.Logger.LogInformation("Running Environment : {env}", app.Environment.EnvironmentName);
+
 //Auto EF Core migration (Code-First)
 
 app.UseSwagger();

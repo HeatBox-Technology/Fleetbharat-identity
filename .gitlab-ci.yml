@@ -41,6 +41,7 @@ deploy_to_ec2:
           --name fleetbharat-identity \
           --network fleetbharat-net \
           -p 8080:8080 \
+          -v /var/www/fleetbharat/uploads:/app/uploads \
           -e ASPNETCORE_ENVIRONMENT=Production \
           -e ASPNETCORE_URLS=http://+:8080 \
           -e ConnectionStrings__Default='$PROD_CONN' \

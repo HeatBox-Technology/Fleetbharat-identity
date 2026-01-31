@@ -38,6 +38,7 @@ public class UserListItemDto
 
     public int AccountId { get; set; }
     public string AccountName { get; set; } = "";
+    public string? profileImagePath { get; set; } = "";
 
     public bool Status { get; set; }              // Active / Inactive
 
@@ -59,6 +60,7 @@ public class UserDetailResponseDto
     public string Email { get; set; } = "";
     public string MobileNo { get; set; } = "";
     public string CountryCode { get; set; } = "";
+    public string? profileImagePath { get; set; } = "";
 
     public int AccountId { get; set; }
     public int RoleId { get; set; }
@@ -101,4 +103,28 @@ public class UserFormRightDto
     public bool CanAll { get; set; }
 }
 
+public class UpdateUserBasicRequest
+{
+    public string FirstName { get; set; } = "";
+    public string LastName { get; set; } = "";
+    public string MobileNo { get; set; } = "";
+    public string CountryCode { get; set; } = "";
+}
+public class UpdateUserRoleRequest
+{
+    public int AccountId { get; set; }
+    public int RoleId { get; set; }
+}
+public class UpdateUserPermissionsRequest
+{
+    public List<UserFormRightDto> Permissions { get; set; } = new();
+}
+public class UpdateUserStatusRequest
+{
+    public bool Status { get; set; }
+}
+public class UpdateUserTwoFactorRequest
+{
+    public bool TwoFactorEnabled { get; set; }
+}
 

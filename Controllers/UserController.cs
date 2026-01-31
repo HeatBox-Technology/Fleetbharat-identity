@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
@@ -14,7 +15,7 @@ public class UsersController : ControllerBase
     }
 
     [HttpPost]
-    [Consumes("multipart/form-data")]
+    [Consumes("users")]
     public async Task<IActionResult> CreateUser(
      [FromForm] CreateUserRequest req)
     {
@@ -59,6 +60,124 @@ public class UsersController : ControllerBase
             return NotFound(ApiResponse<object>.Fail("User not found", 404));
 
         return Ok(ApiResponse<object>.Ok(new { userId }, "User updated successfully", 200));
+    }
+
+
+    // ----------------------------------------------------
+    // PATCH : BASIC DETAILS
+    // ----------------------------------------------------
+    [HttpPatch("{id:guid}/basic")]
+    public async Task<IActionResult> UpdateBasic(
+        Guid id,
+        [FromBody] UpdateUserBasicRequest request)
+    {
+        var ok = await _service.UpdateBasicAsync(id, request);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("User not found", 404));
+
+        return Ok(ApiResponse<object>.Ok(null, "Basic details updated"));
+    }
+
+    // ----------------------------------------------------
+    // PATCH : ROLE / ACCOUNT
+    // ----------------------------------------------------
+    [HttpPatch("{id:guid}/role")]
+    public async Task<IActionResult> UpdateRole(
+        Guid id,
+        [FromBody] UpdateUserRoleRequest request)
+    {
+        var ok = await _service.UpdateRoleAsync(id, request);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("User not found", 404));
+
+        return Ok(ApiResponse<object>.Ok(null, "Role updated"));
+    }
+
+    // ----------------------------------------------------
+    // PATCH : USER LEVEL PERMISSIONS
+    // ----------------------------------------------------
+    [HttpPatch("{id:guid}/permissions")]
+    public async Task<IActionResult> UpdatePermissions(
+        Guid id,
+        [FromQuery] int accountId,
+        [FromBody] UpdateUserPermissionsRequest request)
+    {
+        var ok = await _service.UpdatePermissionsAsync(
+            id,
+            accountId,
+            request.Permissions);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("User not found", 404));
+
+        return Ok(ApiResponse<object>.Ok(null, "Permissions updated"));
+    }
+
+    // ----------------------------------------------------
+    // PATCH : STATUS
+    // ----------------------------------------------------
+    [HttpPatch("{id:guid}/status")]
+    public async Task<IActionResult> UpdateStatus(
+        Guid id,
+        [FromBody] UpdateUserStatusRequest request)
+    {
+        var ok = await _service.UpdateStatusAsync(id, request.Status);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("User not found", 404));
+
+        return Ok(ApiResponse<object>.Ok(null, "Status updated"));
+    }
+
+    // ----------------------------------------------------
+    // PATCH : 2FA TOGGLE
+    // ----------------------------------------------------
+    [HttpPatch("{id:guid}/two-factor")]
+    public async Task<IActionResult> UpdateTwoFactor(
+        Guid id,
+        [FromBody] UpdateUserTwoFactorRequest request)
+    {
+        var ok = await _service.UpdateTwoFactorAsync(id, request.TwoFactorEnabled);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("User not found", 404));
+
+        return Ok(ApiResponse<object>.Ok(null, "Two factor updated"));
+    }
+
+    // ----------------------------------------------------
+    // PATCH : PROFILE IMAGE
+    // ----------------------------------------------------
+    [HttpPatch("{id:guid}/profile-image")]
+    public async Task<IActionResult> UpdateProfileImage(
+        Guid id,
+        IFormFile file)
+    {
+        if (file == null)
+            return BadRequest(ApiResponse<object>.Fail("File is required"));
+
+        var ok = await _service.UpdateProfileImageAsync(id, file);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("User not found", 404));
+
+        return Ok(ApiResponse<object>.Ok(null, "Profile image updated"));
+    }
+
+    // ----------------------------------------------------
+    // PATCH : SEND RESET PASSWORD LINK
+    // ----------------------------------------------------
+    [HttpPatch("{id:guid}/reset-password")]
+    public async Task<IActionResult> SendResetPassword(Guid id)
+    {
+        var ok = await _service.SendResetPasswordAsync(id);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("User not found", 404));
+
+        return Ok(ApiResponse<object>.Ok(null, "Password reset link sent"));
     }
 
     // ✅ 4) DELETE USER (SOFT DELETE)
