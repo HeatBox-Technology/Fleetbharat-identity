@@ -27,7 +27,8 @@ public class AuthService : IAuthService
     {
         var email = req.Email.Trim().ToLower();
 
-        var user = await _db.Users.FirstOrDefaultAsync(x => x.Email.ToLower() == email);
+        var user = await _db.Users
+            .FirstOrDefaultAsync(x => x.Email.ToLower() == email && !x.IsDeleted);
 
         if (user == null)
             throw new UnauthorizedAccessException("Invalid email or password");
@@ -35,7 +36,9 @@ public class AuthService : IAuthService
         if (!BCrypt.Net.BCrypt.Verify(req.Password, user.Password_hash))
             throw new UnauthorizedAccessException("Invalid email or password");
 
-        // ✅ If 2FA enabled: send OTP, no token yet
+        // -------------------------------------------------
+        // ✅ 2FA handling
+        // -------------------------------------------------
         if (user.TwoFactorEnabled)
         {
             var code = new Random().Next(100000, 999999).ToString();
@@ -55,6 +58,7 @@ public class AuthService : IAuthService
                 UserId = user.UserId,
                 Email = user.Email,
                 FullName = $"{user.FirstName} {user.LastName}".Trim(),
+                ProfileImagePath = user.ProfileImagePath ?? "",
 
                 Token = new LoginResponse(
                     AccessToken: null,
@@ -64,20 +68,34 @@ public class AuthService : IAuthService
                     Message: "2FA code sent to your email"
                 ),
 
-                FormRights = new List<FormRightResponseDto>()
+                FormRights = new List<FormRightResponseDto>(),
+                WhiteLabel = new WhiteLabelInfoDto()
             };
         }
 
-        // ✅ normal login tokens
+        // -------------------------------------------------
+        // ✅ Generate tokens
+        // -------------------------------------------------
         var tokens = await GenerateTokens(user);
 
-        // ✅ get role info
-        var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleId == user.roleId);
+        // -------------------------------------------------
+        // ✅ Fetch role, account, white-label
+        // -------------------------------------------------
+        var role = await _db.Roles
+            .FirstOrDefaultAsync(r => r.RoleId == user.roleId);
 
-        // ✅ get account info
-        var account = await _db.Accounts.FirstOrDefaultAsync(a => a.AccountId == user.AccountId);
+        var account = await _db.Accounts
+            .FirstOrDefaultAsync(a => a.AccountId == user.AccountId && !a.IsDeleted);
 
-        // ✅ fetch form rights of role
+        var whiteLabel = await _db.WhiteLabels
+            .AsNoTracking()
+            .FirstOrDefaultAsync(w =>
+                w.AccountId == user.AccountId &&
+                w.IsActive);
+
+        // -------------------------------------------------
+        // ✅ Fetch role-based form rights
+        // -------------------------------------------------
         var rights = await (
             from rr in _db.FormRoleRights
             join f in _db.Forms on rr.FormId equals f.FormId
@@ -95,11 +113,15 @@ public class AuthService : IAuthService
             }
         ).ToListAsync();
 
+        // -------------------------------------------------
+        // ✅ Final response
+        // -------------------------------------------------
         return new LoginWithAccessResponse
         {
             UserId = user.UserId,
             Email = user.Email,
             FullName = $"{user.FirstName} {user.LastName}".Trim(),
+            ProfileImagePath = user.ProfileImagePath ?? "",
 
             AccountId = user.AccountId,
             AccountName = account?.AccountName ?? "",
@@ -116,9 +138,21 @@ public class AuthService : IAuthService
                 Message: "Login successful"
             ),
 
+            WhiteLabel = whiteLabel == null
+                ? new WhiteLabelInfoDto()
+                : new WhiteLabelInfoDto
+                {
+                    WhiteLabelId = whiteLabel.WhiteLabelId,
+                    CustomEntryFqdn = whiteLabel.CustomEntryFqdn,
+                    LogoUrl = whiteLabel.LogoUrl,
+                    PrimaryColorHex = whiteLabel.PrimaryColorHex,
+                    SecondaryColorHex = whiteLabel.SecondaryColorHex
+                },
+
             FormRights = rights
         };
     }
+
 
 
     public async Task<LoginResponse> RefreshAsync(RefreshTokenRequest req)
@@ -161,7 +195,7 @@ public class AuthService : IAuthService
             ReferralCode = req.RefferalCode,
             CreatedAt = DateTime.UtcNow,
             Status = true,
-            roleId = 1
+            roleId = 0 // Default role, e.g., 'User'
         };
 
         _db.Users.Add(user);
