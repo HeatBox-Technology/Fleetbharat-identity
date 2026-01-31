@@ -15,7 +15,7 @@ public class UsersController : ControllerBase
     }
 
     [HttpPost]
-    [Consumes("users")]
+    [Consumes("multipart/form-data")]
     public async Task<IActionResult> CreateUser(
      [FromForm] CreateUserRequest req)
     {
