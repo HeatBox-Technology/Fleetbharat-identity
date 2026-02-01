@@ -17,24 +17,61 @@ public class CategoryService : ICategoryService
     {
         var name = req.LabelName.Trim();
 
-        var exists = await _db.Categories.AnyAsync(x => x.LabelName.ToLower() == name.ToLower());
+        var exists = await _db.Categories
+            .AnyAsync(x => x.LabelName == name);
+
         if (exists)
             throw new InvalidOperationException("Category already exists");
 
-        var entity = new mst_category
+        using var tx = await _db.Database.BeginTransactionAsync();
+
+        try
         {
-            LabelName = name,
-            Description = req.Description?.Trim(),
-            IsActive = req.IsActive,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
+            var category = new mst_category
+            {
+                LabelName = name,
+                Description = req.Description?.Trim(),
+                IsActive = req.IsActive,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
 
-        _db.Categories.Add(entity);
-        await _db.SaveChangesAsync();
+            _db.Categories.Add(category);
+            await _db.SaveChangesAsync();
 
-        return entity.CategoryId;
+            var role = new mst_role
+            {
+                // 👉 category name is role name
+                RoleName = category.LabelName,
+                AccountId = 0, // system role
+                IsSystemRole = true,
+
+                // 👉 auto generated role code
+                RoleCode = GenerateRoleCode(category.LabelName),
+
+                Description = $"Auto role for category {category.LabelName}",
+                IsActive = true,
+                CreatedOn = DateTime.UtcNow,
+                UpdatedOn = DateTime.UtcNow
+
+                // CategoryId = category.CategoryId   // only if relation exists
+            };
+
+            _db.Roles.Add(role);
+            await _db.SaveChangesAsync();
+
+            await tx.CommitAsync();
+
+            return category.CategoryId;
+        }
+        catch (Exception ex)
+        {
+            var ex1 = ex.InnerException.Message.ToString();
+            await tx.RollbackAsync();
+            throw;
+        }
     }
+
 
     public async Task<List<CategoryResponseDto>> GetAllAsync(string? search, bool? isActive)
     {
@@ -114,4 +151,16 @@ public class CategoryService : ICategoryService
         await _db.SaveChangesAsync();
         return true;
     }
+    private static string GenerateRoleCode(string categoryName)
+    {
+        var baseCode = categoryName
+            .Trim()
+            .ToUpper()
+            .Replace(" ", "_");
+
+        var suffix = Guid.NewGuid().ToString("N")[..6].ToUpper();
+
+        return $"{baseCode}_{suffix}";
+    }
+
 }
