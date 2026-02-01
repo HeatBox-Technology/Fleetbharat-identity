@@ -49,7 +49,7 @@ public class AuthService : IAuthService
 
             await _emailService.SendAsync(
                 user.Email,
-                "Your FleetBharat Login Verification Code",
+                "Your Login Verification Code",
                 $"<h2>{code}</h2><p>Expires in 5 minutes</p>"
             );
 

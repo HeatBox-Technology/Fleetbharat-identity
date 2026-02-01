@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 
-namespace FleetBharat.AccountService.Controller;
+
 
 [ApiController]
 [Route("api/states")]
