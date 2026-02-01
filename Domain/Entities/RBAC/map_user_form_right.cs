@@ -1,6 +1,6 @@
 using System;
 
-public class map_UserFormRight
+public class map_user_form_right
 {
     public int UserFormRightId { get; set; }
     public Guid UserId { get; set; }

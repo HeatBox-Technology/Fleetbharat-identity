@@ -23,7 +23,7 @@ public class IdentityDbContext : DbContext
     public DbSet<mst_category> Categories => Set<mst_category>();
     public DbSet<mst_account_configuration> AccountConfigurations => Set<mst_account_configuration>();
     public DbSet<mst_white_label> WhiteLabels => Set<mst_white_label>();
-    public DbSet<map_UserFormRight> UserFormRights => Set<map_UserFormRight>();
+    public DbSet<map_user_form_right> UserFormRights => Set<map_user_form_right>();
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -138,7 +138,7 @@ public class IdentityDbContext : DbContext
             entity.HasIndex(x => x.AccountId).IsUnique();
         });
 
-        modelBuilder.Entity<map_UserFormRight>(entity =>
+        modelBuilder.Entity<map_user_form_right>(entity =>
 {
     entity.ToTable("map_user_form_right");
 

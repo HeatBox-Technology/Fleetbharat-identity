@@ -89,7 +89,7 @@ public class UserService : IUserService
             {
                 foreach (var p in req.AdditionalPermissions)
                 {
-                    _db.UserFormRights.Add(new map_UserFormRight
+                    _db.UserFormRights.Add(new map_user_form_right
                     {
                         UserId = userId,
                         AccountId = req.AccountId,
@@ -345,7 +345,7 @@ public class UserService : IUserService
                 {
                     foreach (var p in req.AdditionalPermissions)
                     {
-                        _db.UserFormRights.Add(new map_UserFormRight
+                        _db.UserFormRights.Add(new map_user_form_right
                         {
                             UserId = userId,
                             AccountId = req.AccountId,
@@ -429,7 +429,7 @@ public class UserService : IUserService
 
         foreach (var p in permissions)
         {
-            _db.UserFormRights.Add(new map_UserFormRight
+            _db.UserFormRights.Add(new map_user_form_right
             {
                 UserId = userId,
                 AccountId = accountId,
