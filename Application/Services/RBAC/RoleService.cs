@@ -225,6 +225,8 @@ public class RoleService : IRoleService
                 FormId = f.FormId,
                 FormCode = f.FormCode,
                 FormName = f.FormName,
+                PageUrl = f.PageUrl,// ✅ count
+                icon = f.IconName,// ✅ coun
                 CanRead = rr.CanRead,
                 CanWrite = rr.CanWrite,
                 CanUpdate = rr.CanUpdate,

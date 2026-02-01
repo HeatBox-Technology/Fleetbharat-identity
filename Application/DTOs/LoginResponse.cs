@@ -11,6 +11,9 @@ public class FormRightResponseDto
     public string FormCode { get; set; } = "";
     public string FormName { get; set; } = "";
 
+    public string PageUrl { get; set; } = "";// ✅ count
+    public string icon { get; set; } = "";// ✅ count
+
     public bool CanRead { get; set; }
     public bool CanWrite { get; set; }
     public bool CanUpdate { get; set; }
