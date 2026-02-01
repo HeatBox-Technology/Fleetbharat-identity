@@ -220,7 +220,7 @@ public class AuthService : IAuthService
         var resetBaseUrl = _config["Frontend:ResetPasswordUrl"]!;
         var resetLink = $"{resetBaseUrl}?token={token}&email={email}";
 
-        var subject = "Reset your FleetBharat password";
+        var subject = "Reset your password";
         var htmlBody = $@"
         <h3>Password Reset Request</h3>
         <p>Hello {user.FirstName},</p>
