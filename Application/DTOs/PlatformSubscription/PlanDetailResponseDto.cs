@@ -11,8 +11,9 @@ public class PlanDetailResponseDto
     public PlanHardwareBindingDto HardwareBinding { get; set; } = new();
     public PlanUserLimitDto UserLimits { get; set; } = new();
     public PlanSupportLineDto Support { get; set; } = new();
-    public PlanPricingDto Pricing { get; set; } = new();
+    //public PlanPricingDto Pricing { get; set; } = new();
     public PlanAdminGuardDto AdminGuard { get; set; } = new();
+    public List<PlanUnitLicenseDto>? UnitLicenses { get; set; }
 
     public List<Guid> FeatureIds { get; set; } = new();
     public List<Guid> AddonIds { get; set; } = new();

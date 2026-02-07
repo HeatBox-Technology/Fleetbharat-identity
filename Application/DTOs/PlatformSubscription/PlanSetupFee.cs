@@ -1,4 +1,4 @@
 public class PlanSetupFeeDto
 {
-    public decimal InitialBasePrice { get; set; }
+    public decimal? InitialBasePrice { get; set; }
 }

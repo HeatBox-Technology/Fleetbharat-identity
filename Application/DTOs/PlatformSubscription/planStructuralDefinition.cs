@@ -5,5 +5,5 @@ public class PlanStructuralDefinitionDto
     public string SettlementCurrency { get; set; }
     public string BillingInterval { get; set; } // Monthly, Quarterly, Yearly
     public string ContractValidity { get; set; } // e.g., "1 Year"
-    public string PricingModel { get; set; } // Fixed / Consumption / Hybrid
+    public PricingModelType PricingModel { get; set; }
 }

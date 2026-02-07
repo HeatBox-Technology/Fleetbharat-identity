@@ -45,8 +45,6 @@ public class PlansController : ControllerBase
         {
             Search = search,
             TenantCategory = tenantCategory,
-            BillingCycle = billingCycle,
-            PricingModel = pricingModel,
             IsActive = isActive
         };
 

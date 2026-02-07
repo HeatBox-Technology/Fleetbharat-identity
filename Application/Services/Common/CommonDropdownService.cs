@@ -1,15 +1,21 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 
 public class CommonDropdownService : ICommonDropdownService
 {
     private readonly IdentityDbContext _db;
+    private readonly IWebHostEnvironment _env;
+    private List<DropdownDto>? _cache;
 
-    public CommonDropdownService(IdentityDbContext db)
+    public CommonDropdownService(IdentityDbContext db, IWebHostEnvironment env)
     {
         _db = db;
+        _env = env;
     }
 
     public async Task<List<DropdownDto>> GetAccountsAsync(string? search, int limit)
@@ -111,4 +117,18 @@ public class CommonDropdownService : ICommonDropdownService
             })
             .ToListAsync();
     }
+    public async Task<List<DropdownDto>> GetCurrencyDropdownAsync()
+    {
+        return await _db.Currencies
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.Code)
+            .Select(x => new DropdownDto
+            {
+                Id = x.CurrencyId,
+                Value = x.Code + " - " + x.Name + " (" + x.Symbol + ")"
+            })
+            .ToListAsync();
+    }
 }
+
+

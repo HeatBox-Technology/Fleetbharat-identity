@@ -45,4 +45,13 @@ public class CommonDropdownController : ControllerBase
         var data = await _service.GetUsersAsync(accountId, search, limit);
         return Ok(ApiResponse<object>.Ok(data, "Success"));
     }
+
+    [HttpGet("Currency")]
+    public async Task<IActionResult> GetCurrency()
+    {
+        var result = await _service.GetCurrencyDropdownAsync();
+        return Ok(ApiResponse<object>.Ok(result, "Success"));
+    }
+
+
 }

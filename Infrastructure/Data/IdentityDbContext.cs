@@ -24,6 +24,11 @@ public class IdentityDbContext : DbContext
     public DbSet<mst_account_configuration> AccountConfigurations => Set<mst_account_configuration>();
     public DbSet<mst_white_label> WhiteLabels => Set<mst_white_label>();
     public DbSet<map_user_form_right> UserFormRights => Set<map_user_form_right>();
+    public DbSet<PlanUnitLicense> PlanUnitLicenses => Set<PlanUnitLicense>();
+    public DbSet<Currency> Currencies => Set<Currency>();
+
+
+
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -159,6 +164,24 @@ public class IdentityDbContext : DbContext
             entity.Property(x => x.ProfileImagePath)
                   .HasMaxLength(500);
         });
+        modelBuilder.Entity<Currency>(entity =>
+    {
+        entity.ToTable("mst_currency");
+
+        entity.HasKey(e => e.CurrencyId);
+
+        entity.Property(e => e.CurrencyId).HasColumnName("CurrencyId");
+        entity.Property(e => e.Code).HasColumnName("Code");
+        entity.Property(e => e.Name).HasColumnName("Name");
+        entity.Property(e => e.Symbol).HasColumnName("Symbol");
+        entity.Property(e => e.Country).HasColumnName("Country");
+        entity.Property(e => e.IsActive).HasColumnName("IsActive");
+        entity.Property(e => e.CreatedAt).HasColumnName("CreatedAt");
+        entity.Property(e => e.UpdatedAt).HasColumnName("UpdatedAt");
+    });
+
+
+
 
     }
 
