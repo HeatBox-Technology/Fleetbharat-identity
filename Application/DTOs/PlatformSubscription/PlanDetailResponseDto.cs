@@ -14,6 +14,10 @@ public class PlanDetailResponseDto
     //public PlanPricingDto Pricing { get; set; } = new();
     public PlanAdminGuardDto AdminGuard { get; set; } = new();
     public List<PlanUnitLicenseDto>? UnitLicenses { get; set; }
+    public List<PlanEntitlementDto>? Entitlements { get; set; }
+    public List<int> EntitlementModuleIds { get; set; } = new();
+
+    public List<PlanAddonDto>? Addons { get; set; }
 
     public List<Guid> FeatureIds { get; set; } = new();
     public List<Guid> AddonIds { get; set; } = new();

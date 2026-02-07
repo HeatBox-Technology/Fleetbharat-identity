@@ -7,4 +7,5 @@ public class PlanFilterDto
     public PricingModelType? PricingModel { get; set; }
 
     public bool? IsActive { get; set; }
+    public int? FormModuleId { get; set; }
 }

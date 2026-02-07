@@ -5,6 +5,7 @@ public class PlanListItemResponseDto
     public Guid PlanId { get; set; }
 
     public string PlanName { get; set; } = "";
+    public int CategoryID { get; set; }
     public string TenantCategory { get; set; } = "";
 
     public PricingModelType PricingModel { get; set; }

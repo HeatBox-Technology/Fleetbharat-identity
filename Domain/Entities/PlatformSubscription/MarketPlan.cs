@@ -7,7 +7,10 @@ public class MarketPlan
     public Guid PlanId { get; set; } = Guid.NewGuid();
 
     public string PlanName { get; set; } = "";
+    public int Fk_CategoryID { get; set; }
+
     public string TenantCategory { get; set; } = "";
+    public int Fk_CurrencyId { get; set; }
     public string SettlementCurrency { get; set; } = "INR";
     public string BillingInterval { get; set; } = "Monthly";
     public string ContractValidity { get; set; } = "1 Year";
@@ -40,4 +43,5 @@ public class MarketPlan
     public List<PlanUnitLicense> UnitLicenses { get; set; } = new();
     public List<PlanEntitlement> Entitlements { get; set; } = new();
     public List<PlanAddon> PlanAddons { get; set; } = new();
+    public List<PlanEntitlementModule> EntitlementModules { get; set; } = new();
 }

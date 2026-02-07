@@ -27,6 +27,8 @@ public class IdentityDbContext : DbContext
     public DbSet<PlanUnitLicense> PlanUnitLicenses => Set<PlanUnitLicense>();
     public DbSet<Currency> Currencies => Set<Currency>();
     public DbSet<FormModule> FormModules => Set<FormModule>();
+    public DbSet<PlanEntitlementModule> EntitlementModules => Set<PlanEntitlementModule>();
+
 
 
 
@@ -197,6 +199,16 @@ public class IdentityDbContext : DbContext
             e.Property(x => x.CreatedBy).HasColumnName("CreatedBy");
             e.Property(x => x.UpdatedBy).HasColumnName("UpdatedBy");
         });
+        modelBuilder.Entity<PlanEntitlementModule>()
+        .ToTable("plan_entitlement_module");
+
+        modelBuilder.Entity<PlanEntitlementModule>()
+            .HasKey(x => new { x.PlanId, x.FormModuleId });
+
+        modelBuilder.Entity<PlanEntitlementModule>()
+            .HasOne(x => x.MarketPlan)
+            .WithMany(x => x.EntitlementModules)
+            .HasForeignKey(x => x.PlanId);
 
 
 
