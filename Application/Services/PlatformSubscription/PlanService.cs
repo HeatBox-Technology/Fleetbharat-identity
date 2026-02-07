@@ -18,6 +18,9 @@ public class PlanService : IPlanService
         if (dto == null)
             throw new ArgumentNullException(nameof(dto));
 
+        if (!Enum.IsDefined(typeof(PricingModelType), dto.Structure.PricingModel))
+            throw new Exception("Invalid pricing model.");
+
         // --------------------
         // Validation
         // --------------------
@@ -40,125 +43,178 @@ public class PlanService : IPlanService
                 throw new Exception("Setup fee is not allowed for License based pricing.");
         }
 
-        // --------------------
-        // Market plan
-        // --------------------
-
-        var plan = new MarketPlan
-        {
-            PlanName = dto.Structure.PlanName,
-            Fk_CategoryID = dto.Structure.CategoryID,
-            TenantCategory = dto.Structure.TenantCategory,
-            Fk_CurrencyId = dto.Structure.CurrencyId,
-            SettlementCurrency = dto.Structure.SettlementCurrency,
-            BillingInterval = dto.Structure.BillingInterval,
-            ContractValidity = dto.Structure.ContractValidity,
-            PricingModel = dto.Structure.PricingModel,
-            InitialBasePrice = dto.Structure.PricingModel == PricingModelType.Fixed
-                                    ? dto.SetupFee!.InitialBasePrice
-                                    : null,
-
-            AnnualMaintenanceCharge = dto.RecurringFee?.AnnualMaintenanceCharge ?? 0,
-            PlatformSubscriptionCharge = dto.RecurringFee?.PlatformSubscriptionCharge ?? 0,
-
-            IsHardwareLocked = dto.HardwareBinding?.IsHardwareLocked ?? false,
-            UserCreationLimit = dto.UserLimits?.UserCreationLimit ?? 0,
-
-            SupportNumber = dto.Support?.SupportNumber ?? "",
-            SupportEmail = dto.Support?.SupportEmail ?? "",
-            InternalInstructions = dto.Support?.InternalInstructions ?? "",
-
-            AllowPriceChange = dto.AdminGuard?.AllowPriceChange ?? false,
-            ForceSyncOnChange = dto.AdminGuard?.ForceSyncOnChange ?? false
-        };
-
-        _db.MarketPlans.Add(plan);
-        try
-        {
-            await _db.SaveChangesAsync();
-        }
-        catch (DbUpdateException ex)
-        {
-            var msg = ex.InnerException?.Message;
-            throw new Exception(msg, ex);
-        }
-
-        // --------------------
-        // Unit licenses
-        // --------------------
-
-        if (dto.Structure.PricingModel == PricingModelType.LicenseBased)
-        {
-            foreach (var item in dto.UnitLicenses!)
-            {
-                _db.PlanUnitLicenses.Add(new PlanUnitLicense
-                {
-                    PlanId = plan.PlanId,
-                    FeatureId = item.FeatureId,
-                    UnitPrice = item.UnitPrice
-                });
-            }
-        }
-
-        // --------------------
-        // Entitlement Matrix (modules)
-        // --------------------
-
-        if (dto.EntitlementModuleIds != null && dto.EntitlementModuleIds.Any())
-        {
-            foreach (var moduleId in dto.EntitlementModuleIds)
-            {
-                _db.EntitlementModules.Add(new PlanEntitlementModule
-                {
-                    PlanId = plan.PlanId,
-                    FormModuleId = moduleId
-                });
-            }
-        }
-
-        // --------------------
-        // Features
-        // --------------------
-
-        if (dto.FeatureIds != null && dto.FeatureIds.Any())
-        {
-            foreach (var featureId in dto.FeatureIds)
-            {
-                _db.PlanEntitlements.Add(new PlanEntitlement
-                {
-                    PlanId = plan.PlanId,
-                    FeatureId = featureId
-                });
-            }
-        }
-
-        // --------------------
-        // Addons
-        // --------------------
-
-        if (dto.AddonIds != null && dto.AddonIds.Any())
-        {
-            foreach (var addonId in dto.AddonIds)
-            {
-                _db.PlanAddons.Add(new PlanAddon
-                {
-                    PlanId = plan.PlanId,
-                    AddonId = addonId
-                });
-            }
-        }
+        using var trx = await _db.Database.BeginTransactionAsync();
 
         try
         {
-            await _db.SaveChangesAsync();
-        }
-        catch (DbUpdateException ex)
-        {
-            var msg = ex.InnerException?.Message;
-            throw new Exception(msg, ex);
-        }
+            // ----------------------------------------------------
+            // Auto create missing Feature masters
+            // ----------------------------------------------------
+            if (dto.FeatureIds != null && dto.FeatureIds.Any())
+            {
+                var existingFeatureIds = await _db.Features
+                    .Where(x => dto.FeatureIds.Contains(x.FeatureId))
+                    .Select(x => x.FeatureId)
+                    .ToListAsync();
 
-        return plan.PlanId;
+                var missingFeatureIds = dto.FeatureIds
+                    .Except(existingFeatureIds)
+                    .Distinct()
+                    .ToList();
+
+                foreach (var id in missingFeatureIds)
+                {
+                    _db.Features.Add(new FeatureMaster
+                    {
+                        FeatureId = id,
+                        FeatureCode = $"AUTO_{id.ToString().Substring(0, 8)}",
+                        FeatureName = "Auto created feature",
+                        IsActive = true
+                    });
+                }
+
+                if (missingFeatureIds.Any())
+                    await _db.SaveChangesAsync();
+            }
+
+            // ----------------------------------------------------
+            // Auto create missing Addon masters
+            // ----------------------------------------------------
+            if (dto.AddonIds != null && dto.AddonIds.Any())
+            {
+                var existingAddonIds = await _db.Addons
+                    .Where(x => dto.AddonIds.Contains(x.AddonId))
+                    .Select(x => x.AddonId)
+                    .ToListAsync();
+
+                var missingAddonIds = dto.AddonIds
+                    .Except(existingAddonIds)
+                    .Distinct()
+                    .ToList();
+
+                foreach (var id in missingAddonIds)
+                {
+                    _db.Addons.Add(new AddonMaster
+                    {
+                        AddonId = id,
+                        AddonName = "Auto created addon",
+                        Category = "Default",
+                        BillingType = "Flat",
+                        IsActive = true
+                    });
+                }
+
+                if (missingAddonIds.Any())
+                    await _db.SaveChangesAsync();
+            }
+
+            // ----------------------------------------------------
+            // Market plan
+            // ----------------------------------------------------
+            var plan = new MarketPlan
+            {
+                PlanName = dto.Structure.PlanName,
+                Fk_CategoryID = dto.Structure.CategoryID,
+                TenantCategory = dto.Structure.TenantCategory,
+                Fk_CurrencyId = dto.Structure.CurrencyId,
+                SettlementCurrency = dto.Structure.SettlementCurrency,
+                BillingInterval = dto.Structure.BillingInterval,
+                ContractValidity = dto.Structure.ContractValidity,
+                PricingModel = dto.Structure.PricingModel,
+
+                InitialBasePrice =
+                    dto.Structure.PricingModel == PricingModelType.Fixed
+                        ? dto.SetupFee!.InitialBasePrice
+                        : null,
+
+                AnnualMaintenanceCharge = dto.RecurringFee?.AnnualMaintenanceCharge ?? 0,
+                PlatformSubscriptionCharge = dto.RecurringFee?.PlatformSubscriptionCharge ?? 0,
+
+                IsHardwareLocked = dto.HardwareBinding?.IsHardwareLocked ?? false,
+                UserCreationLimit = dto.UserLimits?.UserCreationLimit ?? 0,
+
+                SupportNumber = dto.Support?.SupportNumber ?? "",
+                SupportEmail = dto.Support?.SupportEmail ?? "",
+                InternalInstructions = dto.Support?.InternalInstructions ?? "",
+
+                AllowPriceChange = dto.AdminGuard?.AllowPriceChange ?? false,
+                ForceSyncOnChange = dto.AdminGuard?.ForceSyncOnChange ?? false
+            };
+
+            _db.MarketPlans.Add(plan);
+            await _db.SaveChangesAsync();
+
+            // ----------------------------------------------------
+            // Unit licenses
+            // ----------------------------------------------------
+            if (dto.Structure.PricingModel == PricingModelType.LicenseBased)
+            {
+                foreach (var item in dto.UnitLicenses!)
+                {
+                    _db.PlanUnitLicenses.Add(new PlanUnitLicense
+                    {
+                        PlanId = plan.PlanId,
+                        FeatureId = item.FeatureId,
+                        UnitPrice = item.UnitPrice
+                    });
+                }
+            }
+
+            // ----------------------------------------------------
+            // Entitlement matrix (Form modules)
+            // ----------------------------------------------------
+            if (dto.EntitlementModuleIds != null && dto.EntitlementModuleIds.Any())
+            {
+                foreach (var moduleId in dto.EntitlementModuleIds.Distinct())
+                {
+                    _db.EntitlementModules.Add(new PlanEntitlementModule
+                    {
+                        PlanId = plan.PlanId,
+                        FormModuleId = moduleId
+                    });
+                }
+            }
+
+            // ----------------------------------------------------
+            // Feature mappings
+            // ----------------------------------------------------
+            if (dto.FeatureIds != null && dto.FeatureIds.Any())
+            {
+                foreach (var featureId in dto.FeatureIds.Distinct())
+                {
+                    _db.PlanEntitlements.Add(new PlanEntitlement
+                    {
+                        PlanId = plan.PlanId,
+                        FeatureId = featureId
+                    });
+                }
+            }
+
+            // ----------------------------------------------------
+            // Addon mappings
+            // ----------------------------------------------------
+            if (dto.AddonIds != null && dto.AddonIds.Any())
+            {
+                foreach (var addonId in dto.AddonIds.Distinct())
+                {
+                    _db.PlanAddons.Add(new PlanAddon
+                    {
+                        PlanId = plan.PlanId,
+                        AddonId = addonId
+                    });
+                }
+            }
+
+            await _db.SaveChangesAsync();
+            await trx.CommitAsync();
+
+            return plan.PlanId;
+        }
+        catch
+        {
+            await trx.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<PlanDetailResponseDto?> GetByIdAsync(Guid planId)
@@ -180,18 +236,18 @@ public class PlanService : IPlanService
             .Select(x => x.AddonId)
             .ToListAsync();
 
-        // ✅ Entitlement Matrix (Form modules)
+        // Entitlement matrix (form modules)
         var entitlementModuleIds = await _db.EntitlementModules
             .Where(x => x.PlanId == planId)
             .Select(x => x.FormModuleId)
             .ToListAsync();
 
-        List<PlanUnitLicenseDto>? unitLicenses = null;
+        List<PlanUnitLicenseDto> unitLicenses = new();
 
         if (plan.PricingModel == PricingModelType.LicenseBased)
         {
             unitLicenses = await _db.PlanUnitLicenses
-                .Where(x => x.PlanId == planId && x.IsActive)
+                .Where(x => x.PlanId == planId)
                 .Select(x => new PlanUnitLicenseDto
                 {
                     FeatureId = x.FeatureId,
@@ -249,56 +305,69 @@ public class PlanService : IPlanService
                 AllowPriceChange = plan.AllowPriceChange,
                 ForceSyncOnChange = plan.ForceSyncOnChange
             },
-
             UnitLicenses = unitLicenses,
-
-            // existing
             FeatureIds = featureIds,
             AddonIds = addonIds,
-
-            // ✅ new
             EntitlementModuleIds = entitlementModuleIds,
-
             IsActive = plan.IsActive,
             CreatedAt = plan.CreatedAt
         };
     }
 
     public async Task<PagedResultDto<PlanListItemResponseDto>> GetPagedAsync(
-     PagedRequestDto page, PlanFilterDto filter)
+     PagedRequestDto page,
+     PlanFilterDto filter)
     {
-        var query = _db.MarketPlans.AsNoTracking();
+        IQueryable<MarketPlan> query = _db.MarketPlans
+            .AsNoTracking();
 
+        // -------------------------
+        // Search
+        // -------------------------
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             var search = filter.Search.Trim();
+
             query = query.Where(x =>
                 EF.Functions.ILike(x.PlanName, $"%{search}%"));
         }
 
+        // -------------------------
+        // Tenant category
+        // -------------------------
         if (!string.IsNullOrWhiteSpace(filter.TenantCategory))
         {
             query = query.Where(x => x.TenantCategory == filter.TenantCategory);
         }
 
+        // -------------------------
+        // Pricing model
+        // -------------------------
         if (filter.PricingModel.HasValue)
         {
-            query = query.Where(x => x.PricingModel == filter.PricingModel.Value);
+            query = query.Where(x =>
+                x.PricingModel == filter.PricingModel.Value);
         }
 
+        // -------------------------
+        // Is active
+        // -------------------------
         if (filter.IsActive.HasValue)
         {
-            query = query.Where(x => x.IsActive == filter.IsActive.Value);
+            query = query.Where(x =>
+                x.IsActive == filter.IsActive.Value);
         }
 
-        // ✅ filter by entitlement module
+        // -------------------------
+        // Entitlement module filter
+        // (use navigation instead of DbSet subquery)
+        // -------------------------
         if (filter.FormModuleId.HasValue)
         {
             var moduleId = filter.FormModuleId.Value;
 
             query = query.Where(p =>
-                _db.EntitlementModules.Any(m =>
-                    m.PlanId == p.PlanId &&
+                p.EntitlementModules.Any(m =>
                     m.FormModuleId == moduleId));
         }
 
@@ -316,9 +385,10 @@ public class PlanService : IPlanService
                 TenantCategory = x.TenantCategory,
                 PricingModel = x.PricingModel,
 
-                InitialBasePrice = x.PricingModel == PricingModelType.Fixed
-                                    ? x.InitialBasePrice
-                                    : null,
+                InitialBasePrice =
+                    x.PricingModel == PricingModelType.Fixed
+                        ? x.InitialBasePrice
+                        : null,
 
                 IsActive = x.IsActive,
                 CreatedAt = x.CreatedAt
@@ -338,6 +408,9 @@ public class PlanService : IPlanService
 
     public async Task<bool> UpdateAsync(Guid planId, CreateMarketPlanDto dto)
     {
+        if (dto == null)
+            throw new ArgumentNullException(nameof(dto));
+
         var plan = await _db.MarketPlans
             .FirstOrDefaultAsync(x => x.PlanId == planId);
 
@@ -373,9 +446,7 @@ public class PlanService : IPlanService
         plan.PlanName = dto.Structure.PlanName;
         plan.Fk_CategoryID = dto.Structure.CategoryID;
         plan.TenantCategory = dto.Structure.TenantCategory;
-
-        // remove this if you don't really have it in entity
-        // plan.Fk_CurrencyId = dto.Structure.CurrencyId;
+        plan.Fk_CurrencyId = dto.Structure.CurrencyId;
 
         plan.SettlementCurrency = dto.Structure.SettlementCurrency;
         plan.BillingInterval = dto.Structure.BillingInterval;
@@ -387,18 +458,32 @@ public class PlanService : IPlanService
                 ? dto.SetupFee!.InitialBasePrice
                 : null;
 
-        plan.AnnualMaintenanceCharge = dto.RecurringFee?.AnnualMaintenanceCharge ?? 0;
-        plan.PlatformSubscriptionCharge = dto.RecurringFee?.PlatformSubscriptionCharge ?? 0;
+        plan.AnnualMaintenanceCharge =
+            dto.RecurringFee?.AnnualMaintenanceCharge ?? 0;
 
-        plan.IsHardwareLocked = dto.HardwareBinding?.IsHardwareLocked ?? false;
-        plan.UserCreationLimit = dto.UserLimits?.UserCreationLimit ?? 0;
+        plan.PlatformSubscriptionCharge =
+            dto.RecurringFee?.PlatformSubscriptionCharge ?? 0;
 
-        plan.SupportNumber = dto.Support?.SupportNumber ?? "";
-        plan.SupportEmail = dto.Support?.SupportEmail ?? "";
-        plan.InternalInstructions = dto.Support?.InternalInstructions ?? "";
+        plan.IsHardwareLocked =
+            dto.HardwareBinding?.IsHardwareLocked ?? false;
 
-        plan.AllowPriceChange = dto.AdminGuard?.AllowPriceChange ?? false;
-        plan.ForceSyncOnChange = dto.AdminGuard?.ForceSyncOnChange ?? false;
+        plan.UserCreationLimit =
+            dto.UserLimits?.UserCreationLimit ?? 0;
+
+        plan.SupportNumber =
+            dto.Support?.SupportNumber ?? "";
+
+        plan.SupportEmail =
+            dto.Support?.SupportEmail ?? "";
+
+        plan.InternalInstructions =
+            dto.Support?.InternalInstructions ?? "";
+
+        plan.AllowPriceChange =
+            dto.AdminGuard?.AllowPriceChange ?? false;
+
+        plan.ForceSyncOnChange =
+            dto.AdminGuard?.ForceSyncOnChange ?? false;
 
         plan.UpdatedAt = DateTime.UtcNow;
 
@@ -437,7 +522,7 @@ public class PlanService : IPlanService
 
         if (dto.EntitlementModuleIds != null && dto.EntitlementModuleIds.Any())
         {
-            foreach (var moduleId in dto.EntitlementModuleIds)
+            foreach (var moduleId in dto.EntitlementModuleIds.Distinct())
             {
                 _db.EntitlementModules.Add(new PlanEntitlementModule
                 {
@@ -445,6 +530,37 @@ public class PlanService : IPlanService
                     FormModuleId = moduleId
                 });
             }
+        }
+
+        // ---------------------------
+        // auto create missing Features
+        // ---------------------------
+
+        if (dto.FeatureIds != null && dto.FeatureIds.Any())
+        {
+            var existingFeatureIds = await _db.Features
+                .Where(x => dto.FeatureIds.Contains(x.FeatureId))
+                .Select(x => x.FeatureId)
+                .ToListAsync();
+
+            var missingFeatureIds = dto.FeatureIds
+                .Except(existingFeatureIds)
+                .Distinct()
+                .ToList();
+
+            foreach (var id in missingFeatureIds)
+            {
+                _db.Features.Add(new FeatureMaster
+                {
+                    FeatureId = id,
+                    FeatureCode = $"AUTO_{id.ToString()[..8]}",
+                    FeatureName = "Auto created feature",
+                    IsActive = true
+                });
+            }
+
+            if (missingFeatureIds.Any())
+                await _db.SaveChangesAsync();
         }
 
         // ---------------------------
@@ -459,7 +575,7 @@ public class PlanService : IPlanService
 
         if (dto.FeatureIds != null)
         {
-            foreach (var fid in dto.FeatureIds)
+            foreach (var fid in dto.FeatureIds.Distinct())
             {
                 _db.PlanEntitlements.Add(new PlanEntitlement
                 {
@@ -467,6 +583,38 @@ public class PlanService : IPlanService
                     FeatureId = fid
                 });
             }
+        }
+
+        // ---------------------------
+        // auto create missing Addons
+        // ---------------------------
+
+        if (dto.AddonIds != null && dto.AddonIds.Any())
+        {
+            var existingAddonIds = await _db.Addons
+                .Where(x => dto.AddonIds.Contains(x.AddonId))
+                .Select(x => x.AddonId)
+                .ToListAsync();
+
+            var missingAddonIds = dto.AddonIds
+                .Except(existingAddonIds)
+                .Distinct()
+                .ToList();
+
+            foreach (var id in missingAddonIds)
+            {
+                _db.Addons.Add(new AddonMaster
+                {
+                    AddonId = id,
+                    AddonName = "Auto created addon",
+                    Category = "Default",
+                    BillingType = "Flat",
+                    IsActive = true
+                });
+            }
+
+            if (missingAddonIds.Any())
+                await _db.SaveChangesAsync();
         }
 
         // ---------------------------
@@ -481,7 +629,7 @@ public class PlanService : IPlanService
 
         if (dto.AddonIds != null)
         {
-            foreach (var aid in dto.AddonIds)
+            foreach (var aid in dto.AddonIds.Distinct())
             {
                 _db.PlanAddons.Add(new PlanAddon
                 {

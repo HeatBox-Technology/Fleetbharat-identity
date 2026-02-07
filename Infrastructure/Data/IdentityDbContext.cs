@@ -200,7 +200,7 @@ public class IdentityDbContext : DbContext
             e.Property(x => x.UpdatedBy).HasColumnName("UpdatedBy");
         });
         modelBuilder.Entity<PlanEntitlementModule>()
-        .ToTable("plan_entitlement_module");
+     .ToTable("plan_entitlement_module", "public");
 
         modelBuilder.Entity<PlanEntitlementModule>()
             .HasKey(x => new { x.PlanId, x.FormModuleId });

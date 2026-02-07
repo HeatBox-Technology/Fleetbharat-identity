@@ -26,7 +26,8 @@ public class MarketPlan
 
     public bool IsHardwareLocked { get; set; }
 
-    public int UserCreationLimit { get; set; } = 0;
+    public int UserCreationLimit { get; set; }
+
 
     public string SupportNumber { get; set; } = "";
     public string SupportEmail { get; set; } = "";
