@@ -52,6 +52,12 @@ public class CommonDropdownController : ControllerBase
         var result = await _service.GetCurrencyDropdownAsync();
         return Ok(ApiResponse<object>.Ok(result, "Success"));
     }
+    [HttpGet("form-modules/dropdown")]
+    public async Task<IActionResult> GetFormModulesDropdown()
+    {
+        var data = await _service.GetFormModuleDropdownAsync();
+        return Ok(ApiResponse<object>.Ok(data, "Success"));
+    }
 
 
 }

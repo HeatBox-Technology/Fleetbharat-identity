@@ -26,6 +26,8 @@ public class IdentityDbContext : DbContext
     public DbSet<map_user_form_right> UserFormRights => Set<map_user_form_right>();
     public DbSet<PlanUnitLicense> PlanUnitLicenses => Set<PlanUnitLicense>();
     public DbSet<Currency> Currencies => Set<Currency>();
+    public DbSet<FormModule> FormModules => Set<FormModule>();
+
 
 
 
@@ -179,7 +181,22 @@ public class IdentityDbContext : DbContext
         entity.Property(e => e.CreatedAt).HasColumnName("CreatedAt");
         entity.Property(e => e.UpdatedAt).HasColumnName("UpdatedAt");
     });
+        modelBuilder.Entity<FormModule>(e =>
+        {
+            e.ToTable("mst_form_module");
 
+            e.HasKey(x => x.FormModuleId);
+
+            e.Property(x => x.FormModuleId).HasColumnName("FormModuleId");
+            e.Property(x => x.ModuleCode).HasColumnName("ModuleCode");
+            e.Property(x => x.ModuleName).HasColumnName("ModuleName");
+            e.Property(x => x.Description).HasColumnName("Description");
+            e.Property(x => x.IsActive).HasColumnName("IsActive");
+            e.Property(x => x.CreatedAt).HasColumnName("CreatedAt");
+            e.Property(x => x.UpdatedAt).HasColumnName("UpdatedAt");
+            e.Property(x => x.CreatedBy).HasColumnName("CreatedBy");
+            e.Property(x => x.UpdatedBy).HasColumnName("UpdatedBy");
+        });
 
 
 

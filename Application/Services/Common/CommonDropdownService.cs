@@ -129,6 +129,18 @@ public class CommonDropdownService : ICommonDropdownService
             })
             .ToListAsync();
     }
+    public async Task<List<DropdownDto>> GetFormModuleDropdownAsync()
+    {
+        return await _db.FormModules
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.ModuleName)
+            .Select(x => new DropdownDto
+            {
+                Id = x.FormModuleId,
+                Value = x.ModuleName
+            })
+            .ToListAsync();
+    }
 }
 
 

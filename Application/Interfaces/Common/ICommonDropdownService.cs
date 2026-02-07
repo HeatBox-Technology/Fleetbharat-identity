@@ -8,6 +8,7 @@ public interface ICommonDropdownService
     Task<List<DropdownDto>> GetRolesAsync(int accountId, string? search, int limit);
     Task<List<DropdownGuidDto>> GetUsersAsync(int accountId, string? search, int limit);
     Task<List<DropdownDto>> GetCurrencyDropdownAsync();
+    Task<List<DropdownDto>> GetFormModuleDropdownAsync();
 
 
 }
