@@ -4,11 +4,11 @@ public interface IAccountProvisionService
 {
     Task<int> CreateAsync(CreateAccountRequest req);
 
-    Task<PagedResultDto<AccountResponseDto>> GetAllAsync(
-        int page,
-        int pageSize,
-        string? search,
-        bool? status);
+    Task<AccountListWithCardDto> GetAllAsync(
+      int page,
+      int pageSize,
+      string? search,
+      bool? status);
 
     Task<AccountResponseDto?> GetByIdAsync(int accountId);
 

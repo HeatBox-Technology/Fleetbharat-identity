@@ -137,3 +137,17 @@ public class AccountResponseDto
 
     public DateTime CreatedOn { get; set; }
 }
+
+public class AccountCardCountDto
+{
+    public int Total { get; set; }
+    public int Active { get; set; }
+    public int Pending { get; set; }
+    public int Inactive { get; set; }
+}
+
+public class AccountListWithCardDto
+{
+    public PagedResultDto<AccountResponseDto> PageData { get; set; } = new();
+    public AccountCardCountDto CardCounts { get; set; } = new();
+}

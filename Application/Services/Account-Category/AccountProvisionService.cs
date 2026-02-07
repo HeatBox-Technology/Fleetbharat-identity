@@ -160,25 +160,44 @@ public class AccountProvisionService : IAccountProvisionService
         }
     }
 
-    public async Task<PagedResultDto<AccountResponseDto>> GetAllAsync(
-      int page,
-      int pageSize,
-      string? search,
-      bool? status)
+    public async Task<AccountListWithCardDto> GetAllAsync(
+     int page,
+     int pageSize,
+     string? search,
+     bool? status)
     {
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 10;
 
+        // -----------------------------
+        // Base query only for cards
+        // -----------------------------
+        var baseAccountQuery = _db.Accounts
+            .Where(x => !x.IsDeleted);
+
+        var cardCounts = await baseAccountQuery
+            .GroupBy(x => 1)
+            .Select(g => new AccountCardCountDto
+            {
+                Total = g.Count(),
+                Active = g.Count(x => x.Status == true),
+                Inactive = g.Count(x => x.Status == false),
+                Pending = g.Count(x => x.Status == null)
+            })
+            .FirstOrDefaultAsync()
+            ?? new AccountCardCountDto();
+
+        // -----------------------------
+        // Main grid query
+        // -----------------------------
         var query =
             from a in _db.Accounts
             join c in _db.Countries on a.CountryId equals c.CountryId
 
-            // ✅ LEFT JOIN State (string -> int key)
             join st0 in _db.States
                 on a.StateId equals st0.StateId.ToString() into stGroup
             from st in stGroup.DefaultIfEmpty()
 
-                // ✅ LEFT JOIN City (string -> int key)
             join ct0 in _db.Cities
                 on a.CityId equals ct0.CityId.ToString() into ctGroup
             from ct in ctGroup.DefaultIfEmpty()
@@ -188,6 +207,9 @@ public class AccountProvisionService : IAccountProvisionService
             where !a.IsDeleted
             select new { a, c, cat, st, ct };
 
+        // -----------------------------
+        // Search filter
+        // -----------------------------
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
@@ -200,8 +222,13 @@ public class AccountProvisionService : IAccountProvisionService
                 ((x.ct != null ? x.ct.CityName : "")).ToLower().Contains(s));
         }
 
+        // -----------------------------
+        // Status filter only for grid
+        // -----------------------------
         if (status.HasValue)
+        {
             query = query.Where(x => x.a.Status == status.Value);
+        }
 
         var totalCount = await query.CountAsync();
 
@@ -228,11 +255,9 @@ public class AccountProvisionService : IAccountProvisionService
                 CountryId = x.c.CountryId,
                 CountryName = x.c.CountryName,
 
-                // ✅ state
                 StateId = x.a.StateId,
                 StateName = x.st != null ? x.st.StateName : "",
 
-                // ✅ city
                 CityId = x.a.CityId,
                 CityName = x.ct != null ? x.ct.CityName : "",
 
@@ -249,12 +274,16 @@ public class AccountProvisionService : IAccountProvisionService
             .AsNoTracking()
             .ToListAsync();
 
-        return new PagedResultDto<AccountResponseDto>
+        return new AccountListWithCardDto
         {
-            Page = page,
-            PageSize = pageSize,
-            TotalRecords = totalCount,
-            Items = items
+            PageData = new PagedResultDto<AccountResponseDto>
+            {
+                Page = page,
+                PageSize = pageSize,
+                TotalRecords = totalCount,
+                Items = items
+            },
+            CardCounts = cardCounts
         };
     }
 
