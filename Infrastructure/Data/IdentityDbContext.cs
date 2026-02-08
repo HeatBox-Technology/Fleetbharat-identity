@@ -77,13 +77,18 @@ public class IdentityDbContext : DbContext
         modelBuilder.Entity<mst_city>()
             .HasIndex(x => new { x.StateId, x.CityName })
             .IsUnique(); // optional but recommended
-        modelBuilder.Entity<map_FormRole_right>()
-        .ToTable("map_FormRole_right")
-        .HasKey(x => x.RoleFormRightId);
+        modelBuilder.Entity<map_FormRole_right>(entity =>
+ {
+     entity.ToTable("map_FormRole_right");
 
-        modelBuilder.Entity<map_FormRole_right>()
-            .HasIndex(x => new { x.RoleId, x.FormId })
-            .IsUnique(); // one role–form mapping
+     entity.HasKey(x => x.RoleFormRightId);
+
+     entity.Property(x => x.RoleFormRightId)
+           .ValueGeneratedOnAdd();   // <-- important
+
+     entity.HasIndex(x => new { x.RoleId, x.FormId })
+           .IsUnique();
+ });
         modelBuilder.Entity<MarketPlan>().HasKey(x => x.PlanId);
         modelBuilder.Entity<FeatureMaster>().HasKey(x => x.FeatureId);
         modelBuilder.Entity<AddonMaster>().HasKey(x => x.AddonId);
