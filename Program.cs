@@ -1,4 +1,5 @@
 using Infrastructure.Data;
+using Infrastructure.Redis;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
@@ -123,6 +124,12 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// ✅ Live tracking simulator for animation demo
+builder.Services.AddHostedService<Infrastructure.LiveTracking.LiveTrackingSimulatorService>();
+// ✅ Redis subscriber -> SignalR broadcaster (must be resilient too)
+builder.Services.AddHostedService<RedisGpsSubscriberHostedService>();
+
+
 var app = builder.Build();
 
 //
@@ -141,7 +148,10 @@ app.UseCors("AppCors");
 app.UseAuthentication();
 app.UseAuthorization();
 
+
 app.MapControllers();
+app.MapHub<TrackingHub>("/hubs/tracking");
+
 
 app.Run();
 
