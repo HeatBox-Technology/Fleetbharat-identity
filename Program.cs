@@ -135,12 +135,8 @@ var app = builder.Build();
 //
 // ✅ FIXED: enable swagger in Docker (Staging) also
 //
-if (app.Environment.IsDevelopment() || app.Environment.IsStaging())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
+app.UseSwagger();
+app.UseSwaggerUI();
 app.UseMiddleware<ExceptionMiddleware>();
 
 app.UseCors("AppCors");
