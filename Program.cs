@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using StackExchange.Redis;
 using System;
 using System.Text;
+
 var builder = WebApplication.CreateBuilder(args);
 
 var defaultConnection = builder.Configuration.GetConnectionString("Default")
@@ -25,6 +26,7 @@ var jwtKey = builder.Configuration["Jwt:Key"]
 
 builder.Services.AddDbContext<IdentityDbContext>(opt =>
     opt.UseNpgsql(defaultConnection));
+
 builder.Services.AddVtsServices(builder.Configuration, defaultConnection);
 
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -116,25 +118,31 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+//
+// ✅ FIXED: enable swagger in Docker (Staging) also
+//
+if (app.Environment.IsDevelopment() || app.Environment.IsStaging())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
 app.UseMiddleware<ExceptionMiddleware>();
+
 app.UseCors("AppCors");
+
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
+
 app.Run();
 
 public partial class Program { }
-
-
