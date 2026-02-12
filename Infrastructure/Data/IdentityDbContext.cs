@@ -1,4 +1,5 @@
 
+using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 public class IdentityDbContext : DbContext
@@ -29,7 +30,28 @@ public class IdentityDbContext : DbContext
     public DbSet<FormModule> FormModules => Set<FormModule>();
     public DbSet<PlanEntitlementModule> EntitlementModules => Set<PlanEntitlementModule>();
 
+    /// <summary>
+    /// VTS DBSET
+    /// </summary>
+    /// <param name="modelBuilder"></param>
+    public DbSet<mst_device> Devices { get; set; }
+    public DbSet<mst_device_type> DeviceTypes { get; set; }
+    public DbSet<mst_vehicle> Vehicles { get; set; }
+    public DbSet<mst_vehicle_type> VehicleTypes { get; set; }
+    public DbSet<mst_sim> Sims { get; set; }
+    public DbSet<lkp_sensor_type> SensorTypes { get; set; }
+    public DbSet<mst_sensor> Sensors { get; set; }
+    public DbSet<map_user_vehicle> UserVehicleMaps { get; set; }
+    public DbSet<map_vehicle_device> VehicleDeviceMaps { get; set; }
+    public DbSet<map_device_sim> DeviceSimMaps { get; set; }
+    public DbSet<map_vehicle_sensor> VehicleSensorMaps { get; set; }
+    public DbSet<mst_driver> Drivers { get; set; }
 
+    public DbSet<OemManufacturer> OemManufacturers { get; set; }
+    public DbSet<DeviceCategory> DeviceCategories { get; set; }
+    public DbSet<NetworkProvider> NetworkProviders { get; set; }
+    public DbSet<VehicleBrandOem> VehicleBrandOems { get; set; }
+    public DbSet<LeasedVendor> LeasedVendors { get; set; }
 
 
 

@@ -1,17 +1,31 @@
-
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
+using Infrastructure.Data;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-
+using Microsoft.IdentityModel.Tokens;
+using StackExchange.Redis;
+using System;
+using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
+var defaultConnection = builder.Configuration.GetConnectionString("Default")
+    ?? throw new InvalidOperationException("ConnectionStrings:Default is missing.");
+
+var jwtIssuer = builder.Configuration["Jwt:Issuer"]
+    ?? throw new InvalidOperationException("Jwt:Issuer is missing.");
+
+var jwtAudience = builder.Configuration["Jwt:Audience"]
+    ?? throw new InvalidOperationException("Jwt:Audience is missing.");
+
+var jwtKey = builder.Configuration["Jwt:Key"]
+    ?? throw new InvalidOperationException("Jwt:Key is missing.");
+
 builder.Services.AddDbContext<IdentityDbContext>(opt =>
-    opt.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+    opt.UseNpgsql(defaultConnection));
+builder.Services.AddVtsServices(builder.Configuration, defaultConnection);
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAccountProvisionService, AccountProvisionService>();
@@ -35,36 +49,71 @@ builder.Services.AddScoped<IAccountConfigurationService, AccountConfigurationSer
 builder.Services.AddScoped<IWhiteLabelService, WhiteLabelService>();
 builder.Services.AddScoped<ICommonDropdownService, CommonDropdownService>();
 
-
-
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
-        policy.SetIsOriginAllowed(_ => true)
+    options.AddPolicy("AppCors", policy =>
+    {
+        if (allowedOrigins is { Length: > 0 })
+        {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+            return;
+        }
+
+        if (builder.Environment.IsDevelopment())
+        {
+            policy.SetIsOriginAllowed(_ => true)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+            return;
+        }
+
+        policy.AllowAnyOrigin()
               .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials());
+              .AllowAnyMethod();
+    });
 });
 
+builder.Services.AddSignalR();
 
+var redisConn = builder.Configuration["Redis:ConnectionString"];
+if (string.IsNullOrWhiteSpace(redisConn))
+    throw new InvalidOperationException("Redis:ConnectionString is missing.");
 
-//Token Service registeration
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+{
+    var options = ConfigurationOptions.Parse(redisConn);
+
+    options.AbortOnConnectFail = false;
+    options.ConnectRetry = 5;
+    options.ConnectTimeout = 5000;
+    options.SyncTimeout = 5000;
+    options.KeepAlive = 15;
+
+    return ConnectionMultiplexer.Connect(options);
+});
+
 builder.Services.AddScoped<JwtTokenService>();
 
-builder.Services.AddAuthentication("Bearer")
-.AddJwtBearer("Bearer", options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
     {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
-    };
-});
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateIssuerSigningKey = true,
+            ValidateLifetime = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+        };
+    });
 
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();
@@ -72,17 +121,20 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
-//app.Logger.LogInformation("Running Environment : {env}", app.Environment.EnvironmentName);
 
-//Auto EF Core migration (Code-First)
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
-app.UseSwagger();
-app.UseSwaggerUI();
 app.UseMiddleware<ExceptionMiddleware>();
-app.UseCors("AllowAll");
+app.UseCors("AppCors");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.Run();
 
 public partial class Program { }
+
+

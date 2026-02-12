@@ -1,0 +1,25 @@
+{
+  "sqltools.connections": [
+    {
+      "ssh": "Disabled",
+      "previewLimit": 50,
+      "server": "13.60.242.137",
+      "port": 5432,
+      "askForPassword": true,
+      "driver": "PostgreSQL",
+      "name": "FleetBharat-EC2",
+      "database": "fleetbharat_identity",
+      "username": "postgres"
+    },
+    {
+      "ssh": "Disabled",
+      "previewLimit": 50,
+      "server": "47.128.76.211",
+      "port": 5432,
+      "driver": "PostgreSQL",
+      "name": "vts_database",
+      "username": "vts_user",
+      "database": "vts"
+    }
+  ]
+}
