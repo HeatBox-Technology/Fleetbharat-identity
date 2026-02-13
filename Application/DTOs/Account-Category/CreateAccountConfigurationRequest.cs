@@ -53,6 +53,15 @@ public class AccountConfigurationResponseDto
     public string AccountName { get; set; } = "";
 
     public string MapProvider { get; set; } = "";
+    public string? licenseKey { get; set; }
+    public string? AddressKey { get; set; }
+    public string TimeFormat { get; set; } = "";
+    public string DistanceUnit { get; set; } = "";
+    public string SpeedUnit { get; set; } = "";
+    public string FuelUnit { get; set; } = "";
+    public string TemperatureUnit { get; set; } = "";
+    public string AddressDisplay { get; set; } = "";
+
     public string DateFormat { get; set; } = "";
     public string DefaultLanguage { get; set; } = "";
 

@@ -134,7 +134,16 @@ public class AccountResponseDto
     public string address { get; set; } = "";
     public int TaxTypeId { get; set; }
     public bool Status { get; set; }
-
+    public string Position { get; set; } = "";
+    public string BusinessPhone { get; set; } = "";
+    public string BusinessEmail { get; set; } = "";
+    public string BusinessAddress { get; set; } = "";
+    public string BusinessHours { get; set; } = "";
+    public string BusinessTimeZone { get; set; } = "";
+    public string share { get; set; } = "";
+    public string Zipcode { get; set; } = "";
+    public string usernamesacc { get; set; } = "";
+    public string password { get; set; } = "";
     public DateTime CreatedOn { get; set; }
 }
 

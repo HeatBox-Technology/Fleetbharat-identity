@@ -106,6 +106,14 @@ public class AccountConfigurationService : IAccountConfigurationService
                               AccountName = acc.AccountName,
 
                               MapProvider = cfg.MapProvider,
+                              licenseKey = cfg.LicenseKey,
+                              AddressKey = cfg.AddressKey,
+                              TimeFormat = cfg.TimeFormat,
+                              DistanceUnit = cfg.DistanceUnit,
+                              SpeedUnit = cfg.SpeedUnit,
+                              FuelUnit = cfg.FuelUnit,
+                              TemperatureUnit = cfg.TemperatureUnit,
+                              AddressDisplay = cfg.AddressDisplay,
                               DateFormat = cfg.DateFormat,
                               DefaultLanguage = cfg.DefaultLanguage,
 
@@ -156,6 +164,14 @@ public class AccountConfigurationService : IAccountConfigurationService
                 AccountName = x.acc.AccountName,
 
                 MapProvider = x.cfg.MapProvider,
+                licenseKey = x.cfg.LicenseKey,
+                AddressKey = x.cfg.AddressKey,
+                TimeFormat = x.cfg.TimeFormat,
+                DistanceUnit = x.cfg.DistanceUnit,
+                SpeedUnit = x.cfg.SpeedUnit,
+                FuelUnit = x.cfg.FuelUnit,
+                TemperatureUnit = x.cfg.TemperatureUnit,
+                AddressDisplay = x.cfg.AddressDisplay,
                 DateFormat = x.cfg.DateFormat,
                 DefaultLanguage = x.cfg.DefaultLanguage,
 
