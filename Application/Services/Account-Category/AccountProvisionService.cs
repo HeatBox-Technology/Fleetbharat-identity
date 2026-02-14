@@ -241,6 +241,7 @@ public class AccountProvisionService : IAccountProvisionService
                 AccountId = x.a.AccountId,
                 AccountCode = x.a.AccountCode,
                 AccountName = x.a.AccountName,
+                Reffer = x.a.RefferCode,
 
                 ParentAccountId = x.a.ParentAccountId,
                 HierarchyPath = x.a.HierarchyPath,
@@ -325,6 +326,7 @@ public class AccountProvisionService : IAccountProvisionService
                 AccountId = x.a.AccountId,
                 AccountCode = x.a.AccountCode,
                 AccountName = x.a.AccountName,
+                Reffer = x.a.RefferCode,
 
                 ParentAccountId = x.a.ParentAccountId,
                 HierarchyPath = x.a.HierarchyPath,
@@ -410,7 +412,7 @@ public class AccountProvisionService : IAccountProvisionService
         account.AccountName = req.AccountName.Trim();
         account.CategoryId = req.CategoryId;
         account.PrimaryDomain = req.PrimaryDomain.Trim();
-
+        account.RefferCode = req.RefferCode;
         account.CountryId = req.CountryId;
         account.StateId = req.StateId;
         account.CityId = req.CityId;
