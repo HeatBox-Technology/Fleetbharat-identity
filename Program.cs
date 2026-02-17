@@ -1,6 +1,7 @@
 using Infrastructure.Data;
 using Infrastructure.Redis;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -112,13 +113,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateIssuerSigningKey = true,
             ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero,
             ValidIssuer = jwtIssuer,
             ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -145,8 +152,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 
-app.MapControllers();
-app.MapHub<TrackingHub>("/hubs/tracking");
+app.MapControllers().RequireAuthorization();
+app.MapHub<TrackingHub>("/hubs/tracking").RequireAuthorization();
 
 
 app.Run();

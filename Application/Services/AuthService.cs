@@ -14,6 +14,7 @@ public class AuthService : IAuthService
     private readonly JwtTokenService _jwt;
     private readonly IEmailService _emailService;
     private readonly IConfiguration _config;
+    private readonly int _accessTokenExpiryMinutes;
 
     public AuthService(IdentityDbContext db, JwtTokenService jwt, IEmailService emailService, IConfiguration config)
     {
@@ -21,14 +22,24 @@ public class AuthService : IAuthService
         _jwt = jwt;
         _emailService = emailService;
         _config = config;
+        _accessTokenExpiryMinutes = Math.Max(1, _config.GetValue<int?>("Jwt:AccessTokenExpiryMinutes") ?? 60);
     }
 
     public async Task<LoginWithAccessResponse> LoginAsync(LoginRequest req)
     {
-        var email = req.Email.Trim().ToLower();
+        var loginInput = req.Email?.Trim();
+        if (string.IsNullOrWhiteSpace(loginInput))
+            throw new UnauthorizedAccessException("Invalid email or password");
+        var normalizedLoginInput = loginInput.ToLower();
 
         var user = await _db.Users
-            .FirstOrDefaultAsync(x => x.Email.ToLower() == email && !x.IsDeleted);
+            .FirstOrDefaultAsync(x =>
+                !x.IsDeleted &&
+                (
+                    x.Email.ToLower() == normalizedLoginInput ||
+                    x.MobileNo.ToLower() == normalizedLoginInput ||
+                    (x.User_name != null && x.User_name.ToLower() == normalizedLoginInput)
+                ));
 
         if (user == null)
             throw new UnauthorizedAccessException("Invalid email or password");
@@ -157,9 +168,17 @@ public class AuthService : IAuthService
 
     public async Task<LoginResponse> RefreshAsync(RefreshTokenRequest req)
     {
-        var user = await _db.Users.FirstAsync(x => x.RefreshToken == req.RefreshToken);
-        if (user.RefreshTokenExpiry < DateTime.UtcNow)
-            throw new UnauthorizedAccessException();
+        if (string.IsNullOrWhiteSpace(req.RefreshToken))
+            throw new UnauthorizedAccessException("Invalid refresh token");
+
+        var refreshToken = req.RefreshToken.Trim();
+        var user = await _db.Users.FirstOrDefaultAsync(x => x.RefreshToken == refreshToken && !x.IsDeleted);
+
+        if (user == null)
+            throw new UnauthorizedAccessException("Invalid refresh token");
+
+        if (user.RefreshTokenExpiry <= DateTime.UtcNow)
+            throw new UnauthorizedAccessException("Refresh token expired");
 
         return await GenerateTokens(user);
     }
@@ -173,7 +192,7 @@ public class AuthService : IAuthService
         user.RefreshTokenExpiry = DateTime.UtcNow.AddDays(7);
         await _db.SaveChangesAsync();
 
-        return new LoginResponse(access, refresh, DateTime.UtcNow.AddHours(1));
+        return new LoginResponse(access, refresh, DateTime.UtcNow.AddMinutes(_accessTokenExpiryMinutes));
     }
 
     public async Task RegisterAsync(RegisterRequest req)
@@ -313,3 +332,4 @@ public class AuthService : IAuthService
     }
 
 }
+

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 
 [ApiController]
 [Route("api/auth")]
+[AllowAnonymous]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _service;

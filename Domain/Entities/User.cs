@@ -11,6 +11,7 @@ public class User
     public string LastName { get; set; } = "";
     public string Email { get; set; } = "";
     public string MobileNo { get; set; } = "0000000000";        // With country code
+    public string? User_name { get; set; } = "user.name"; // Can be email or mobile number, used for login
     public string CountryCode { get; set; } = "";         // ISO-3 (IND, USA)
     public string Timezone { get; set; } = "";             // Asia/Kolkata
     public string Language { get; set; } = "";            // en, ar, fr

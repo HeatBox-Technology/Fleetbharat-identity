@@ -9,7 +9,12 @@ using System;
 public class JwtTokenService
 {
     private readonly IConfiguration _config;
-    public JwtTokenService(IConfiguration config) => _config = config;
+    private readonly int _accessTokenExpiryMinutes;
+    public JwtTokenService(IConfiguration config)
+    {
+        _config = config;
+        _accessTokenExpiryMinutes = Math.Max(1, _config.GetValue<int?>("Jwt:AccessTokenExpiryMinutes") ?? 60);
+    }
 
     public string GenerateAccessToken(User user)
     {
@@ -26,7 +31,7 @@ public class JwtTokenService
             _config["Jwt:Issuer"],
             _config["Jwt:Audience"],
             claims,
-            expires: DateTime.UtcNow.AddHours(1),
+            expires: DateTime.UtcNow.AddMinutes(_accessTokenExpiryMinutes),
             signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256)
         );
 

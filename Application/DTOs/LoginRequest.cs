@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 
 public record LoginRequest(
-    [Required, EmailAddress]
+    [Required]
     string Email,
     string Password
 );
