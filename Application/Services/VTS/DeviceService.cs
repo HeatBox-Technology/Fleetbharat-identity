@@ -40,7 +40,7 @@ namespace Application.Services
                     DeviceNo = dto.DeviceNo,
                     DeviceImeiOrSerial = imei,
                     DeviceStatus = dto.DeviceStatus ?? "Active",
-                    createdBy = dto.createdBy,
+                    createdBy = dto.CreatedBy,
                     createdAt = DateTime.UtcNow,
                     IsDeleted = false
                 };
@@ -113,24 +113,24 @@ namespace Application.Services
                     DeviceNo = x.DeviceNo,
                     DeviceImeiOrSerial = x.DeviceImeiOrSerial,
                     DeviceStatus = x.DeviceStatus,
-                    createdBy = x.createdBy,
-                    createdAt = x.createdAt,
-                    updatedBy = x.updatedBy,
-                    updatedAt = x.updatedAt,
+                    CreatedBy = x.createdBy,
+                    CreatedAt = x.createdAt,
+                    UpdatedBy = x.updatedBy,
+                    UpdatedAt = x.updatedAt,
                     IsDeleted = x.IsDeleted
                 })
                 .ToListAsync();
 
             return new DeviceListUiResponseDto
             {
-                Summary = summary,
-                Devices = new PagedResultDto<DeviceDto>
-                {
-                    Items = items,
-                    TotalRecords = totalDevices,
-                    Page = page,
-                    PageSize = pageSize
-                }
+                Summary = summary
+                // Devices = new PagedResultDto<DeviceDto>
+                // {
+                //     Items = items,
+                //     TotalRecords = totalDevices,
+                //     Page = page,
+                //     PageSize = pageSize
+                // }
             };
         }
 
@@ -147,10 +147,10 @@ namespace Application.Services
                     DeviceNo = x.DeviceNo,
                     DeviceImeiOrSerial = x.DeviceImeiOrSerial,
                     DeviceStatus = x.DeviceStatus,
-                    createdBy = x.createdBy,
-                    createdAt = x.createdAt,
-                    updatedBy = x.updatedBy,
-                    updatedAt = x.updatedAt,
+                    CreatedBy = x.createdBy,
+                    CreatedAt = x.createdAt,
+                    UpdatedBy = x.updatedBy,
+                    UpdatedAt = x.updatedAt,
                     IsDeleted = x.IsDeleted
                 })
                 .FirstOrDefaultAsync();
@@ -169,7 +169,7 @@ namespace Application.Services
             entity.DeviceNo = dto.DeviceNo;
             entity.DeviceImeiOrSerial = dto.DeviceImeiOrSerial.Trim();
             entity.DeviceStatus = dto.DeviceStatus;
-            entity.updatedBy = dto.updatedBy;
+            entity.updatedBy = dto.UpdatedBy;
             entity.updatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
@@ -221,7 +221,7 @@ namespace Application.Services
                     DeviceNo = dto.DeviceNo,
                     DeviceImeiOrSerial = dto.DeviceImeiOrSerial.Trim(),
                     DeviceStatus = dto.DeviceStatus ?? "Active",
-                    createdBy = dto.createdBy,
+                    createdBy = dto.CreatedBy,
                     createdAt = DateTime.UtcNow,
                     IsDeleted = false
                 }).ToList();
@@ -240,8 +240,8 @@ namespace Application.Services
                     DeviceNo = x.DeviceNo,
                     DeviceImeiOrSerial = x.DeviceImeiOrSerial,
                     DeviceStatus = x.DeviceStatus,
-                    createdBy = x.createdBy,
-                    createdAt = x.createdAt
+                    CreatedBy = x.createdBy,
+                    CreatedAt = x.createdAt
                 }).ToList();
             }
             catch

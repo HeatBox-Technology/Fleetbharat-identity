@@ -13,7 +13,7 @@ namespace Domain.Entities
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public long VehicleDeviceId { get; set; }
+        public int Id { get; set; }
 
         /// <summary>
         /// Account ID (FK to mst_account)
@@ -25,48 +25,23 @@ namespace Domain.Entities
         /// Vehicle ID (FK to mst_vehicle)
         /// </summary>
         [Required]
-        public long VehicleId { get; set; }
-        public mst_vehicle? Vehicle { get; set; }
+        public int Fk_VehicleId { get; set; }
 
-        /// <summary>
-        /// Device ID (FK to mst_device)
-        /// </summary>
+        public int fk_devicetypeid { get; set; }
+
         [Required]
-        public long DeviceId { get; set; }
-        public mst_device? Device { get; set; }
+        public int Fk_DeviceId { get; set; }
 
-        /// <summary>
-        /// Installation position (e.g. 'primary_gps', 'adas', 'fuel', etc.)
-        /// </summary>
+        public int fk_simid { get; set; }
+        public string simnno { get; set; } = string.Empty;
         [Required]
-        public string InstallPosition { get; set; } = "primary_gps";
-
-        /// <summary>
-        /// Is this the primary device for the vehicle?
-        /// </summary>
-        [Required]
-        public bool IsPrimary { get; set; } = false;
-
-        /// <summary>
-        /// Mapping start timestamp
-        /// </summary>
-        [Required]
-        public DateTime FromTs { get; set; } = DateTime.UtcNow;
-
-        /// <summary>
-        /// Mapping end timestamp (null = active)
-        /// </summary>
-        public DateTime? ToTs { get; set; }
-
-        /// <summary>
-        /// User ID who installed the device (FK to mst_user)
-        /// </summary>
-        public long? InstalledByUserId { get; set; }
-        // public mst_user? InstalledByUser { get; set; } // Uncomment if mst_user entity exists
-
-        /// <summary>
-        /// Optional remarks about the installation
-        /// </summary>
         public string? Remarks { get; set; }
+        public int IsActive { get; set; } = 1; // 1 for active, 0 for inactive
+        public int IsDeleted { get; set; } = 0; // 0 for not deleted, 1 for deleted
+        public DateTime InstallationDate { get; set; } = DateTime.UtcNow;
+        public int createdBy { get; set; }
+        public DateTime createdAt { get; set; } = DateTime.UtcNow;
+        public int? updatedBy { get; set; }
+        public DateTime? updatedAt { get; set; }
     }
 }

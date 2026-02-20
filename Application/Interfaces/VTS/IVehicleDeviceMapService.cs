@@ -2,22 +2,48 @@ using Application.DTOs;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-
 /// <summary>
-/// Service for mapping vehicles to devices (historical mapping).
-/// Provides CRUD operations for vehicle-device associations.
+/// Service for mapping vehicles to devices.
+/// Provides CRUD operations and listing with summary.
 /// </summary>
 public interface IVehicleDeviceMapService
 {
-    /// <summary>Get all vehicle-device mappings</summary>
-    Task<IEnumerable<VehicleDeviceMapDto>> GetAllAsync();
-    /// <summary>Get a vehicle-device mapping by ID</summary>
-    Task<VehicleDeviceMapDto?> GetByIdAsync(long id);
-    /// <summary>Create a new vehicle-device mapping</summary>
-    Task<VehicleDeviceMapDto> CreateAsync(VehicleDeviceMapDto dto);
-    /// <summary>Update an existing vehicle-device mapping</summary>
-    Task<VehicleDeviceMapDto> UpdateAsync(long id, VehicleDeviceMapDto dto);
-    /// <summary>Delete a vehicle-device mapping</summary>
-    Task<bool> DeleteAsync(long id);
-}
+    /// <summary>
+    /// Create a new vehicle-device mapping.
+    /// </summary>
+    Task<int> CreateAsync(VehicleDeviceMapDto dto);
 
+    /// <summary>
+    /// Get mappings with pagination and dashboard summary.
+    /// </summary>
+    Task<VehicleDeviceAssignmentListUiResponseDto> GetAssignments(
+        int page,
+        int pageSize,
+        long? accountId,
+        string? search);
+
+    /// <summary>
+    /// Get mapping by Id.
+    /// </summary>
+    Task<VehicleDeviceMapDto?> GetByIdAsync(int id);
+
+    /// <summary>
+    /// Update mapping.
+    /// </summary>
+    Task<bool> UpdateAsync(int id, VehicleDeviceMapDto dto);
+
+    /// <summary>
+    /// Update active status.
+    /// </summary>
+    Task<bool> UpdateStatusAsync(int id, int isActive);
+
+    /// <summary>
+    /// Soft delete mapping.
+    /// </summary>
+    Task<bool> DeleteAsync(int id);
+
+    /// <summary>
+    /// Bulk create mappings.
+    /// </summary>
+    Task<List<VehicleDeviceMapDto>> BulkCreateAsync(List<VehicleDeviceMapDto> items);
+}

@@ -1,132 +1,222 @@
 using Application.DTOs;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using System.Linq;
 using Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using Domain.Entities;
+using System.Linq;
+using System.Threading.Tasks;
+using System;
+using System.Collections.Generic;
 
 namespace Application.Services
 {
-    /// <summary>
-    /// Service implementation for mapping vehicles to devices (historical mapping).
-    /// Handles CRUD operations for vehicle-device associations.
-    /// </summary>
     public class VehicleDeviceMapService : IVehicleDeviceMapService
     {
-        private readonly IdentityDbContext _context;
+        private readonly IdentityDbContext _db;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="VehicleDeviceMapService"/> class.
-        /// </summary>
-        public VehicleDeviceMapService(IdentityDbContext context)
+        public VehicleDeviceMapService(IdentityDbContext db)
         {
-            _context = context;
+            _db = db;
         }
 
-        /// <summary>
-        /// Gets all vehicle-device mappings.
-        /// </summary>
-        /// <returns>List of <see cref="VehicleDeviceMapDto"/>.</returns>
-        public async Task<IEnumerable<VehicleDeviceMapDto>> GetAllAsync()
+        public async Task<int> CreateAsync(VehicleDeviceMapDto dto)
         {
-            var entities = await _context.Set<Domain.Entities.map_vehicle_device>().ToListAsync();
-            return entities.Select(MapToDto);
+            var entity = new map_vehicle_device
+            {
+                AccountId = dto.AccountId,
+                Fk_VehicleId = dto.Fk_VehicleId,
+                fk_devicetypeid = dto.fk_devicetypeid,
+                Fk_DeviceId = dto.Fk_DeviceId,
+                fk_simid = dto.fk_simid,
+                simnno = dto.simnno,
+                Remarks = dto.Remarks,
+                IsActive = dto.IsActive,
+                IsDeleted = 0,
+                InstallationDate = dto.InstallationDate == default
+                    ? DateTime.UtcNow
+                    : dto.InstallationDate,
+                createdBy = dto.createdBy,
+                createdAt = DateTime.UtcNow
+            };
+
+            _db.VehicleDeviceMaps.Add(entity);
+            await _db.SaveChangesAsync();
+
+            return entity.Id;
         }
 
-        /// <summary>
-        /// Gets a vehicle-device mapping by its unique identifier.
-        /// </summary>
-        /// <param name="id">Mapping ID.</param>
-        /// <returns>The <see cref="VehicleDeviceMapDto"/> if found; otherwise, null.</returns>
-        public async Task<VehicleDeviceMapDto?> GetByIdAsync(long id)
+        public async Task<VehicleDeviceAssignmentListUiResponseDto> GetAssignments(
+            int page,
+            int pageSize,
+            long? accountId,
+            string? search)
         {
-            var entity = await _context.Set<Domain.Entities.map_vehicle_device>().FindAsync(id);
-            return entity == null ? null : MapToDto(entity);
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 10;
+
+            var query = _db.VehicleDeviceMaps
+                .AsNoTracking()
+                .Where(x => x.IsDeleted == 0)
+                .AsQueryable();
+
+            if (accountId.HasValue)
+                query = query.Where(x => x.AccountId == accountId.Value);
+
+            // 🔹 Summary
+            var totalAssignments = await query.CountAsync();
+            var active = await query.CountAsync(x => x.IsActive == 1);
+            var issues = await query.CountAsync(x => x.IsActive == 0);
+
+            var summary = new VehicleDeviceAssignmentSummaryDto
+            {
+                TotalAssignments = totalAssignments,
+                Active = active,
+                WithIssues = issues
+            };
+
+            // 🔹 Pagination
+            var totalRecords = await query.CountAsync();
+
+            var items = await query
+                .OrderByDescending(x => x.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new VehicleDeviceMapDto
+                {
+                    Id = x.Id,
+                    AccountId = x.AccountId,
+                    Fk_VehicleId = x.Fk_VehicleId,
+                    fk_devicetypeid = x.fk_devicetypeid,
+                    Fk_DeviceId = x.Fk_DeviceId,
+                    fk_simid = x.fk_simid,
+                    simnno = x.simnno,
+                    Remarks = x.Remarks,
+                    IsActive = x.IsActive,
+                    IsDeleted = x.IsDeleted,
+                    InstallationDate = x.InstallationDate,
+                    createdBy = x.createdBy,
+                    createdAt = x.createdAt,
+                    updatedBy = x.updatedBy,
+                    updatedAt = x.updatedAt
+                })
+                .ToListAsync();
+
+            return new VehicleDeviceAssignmentListUiResponseDto
+            {
+                Summary = summary,
+                // Assignments = new PagedResultDto<VehicleDeviceMapDto>
+                // {
+                //     Items = items,
+                //     TotalRecords = totalRecords,
+                //     Page = page,
+                //     PageSize = pageSize
+                // }
+            };
         }
 
-        /// <summary>
-        /// Creates a new vehicle-device mapping.
-        /// </summary>
-        /// <param name="dto">Mapping DTO.</param>
-        /// <returns>The created <see cref="VehicleDeviceMapDto"/>.</returns>
-        public async Task<VehicleDeviceMapDto> CreateAsync(VehicleDeviceMapDto dto)
+        public async Task<VehicleDeviceMapDto?> GetByIdAsync(int id)
         {
-            var entity = MapToEntity(dto, false);
-            _context.Set<Domain.Entities.map_vehicle_device>().Add(entity);
-            await _context.SaveChangesAsync();
-            return MapToDto(entity);
+            return await _db.VehicleDeviceMaps
+                .Where(x => x.Id == id && x.IsDeleted == 0)
+                .Select(x => new VehicleDeviceMapDto
+                {
+                    Id = x.Id,
+                    AccountId = x.AccountId,
+                    Fk_VehicleId = x.Fk_VehicleId,
+                    fk_devicetypeid = x.fk_devicetypeid,
+                    Fk_DeviceId = x.Fk_DeviceId,
+                    fk_simid = x.fk_simid,
+                    simnno = x.simnno,
+                    Remarks = x.Remarks,
+                    IsActive = x.IsActive,
+                    IsDeleted = x.IsDeleted,
+                    InstallationDate = x.InstallationDate,
+                    createdBy = x.createdBy,
+                    createdAt = x.createdAt,
+                    updatedBy = x.updatedBy,
+                    updatedAt = x.updatedAt
+                })
+                .FirstOrDefaultAsync();
         }
 
-        /// <summary>
-        /// Updates an existing vehicle-device mapping.
-        /// </summary>
-        /// <param name="id">Mapping ID.</param>
-        /// <param name="dto">Mapping DTO.</param>
-        /// <returns>The updated <see cref="VehicleDeviceMapDto"/>.</returns>
-        public async Task<VehicleDeviceMapDto> UpdateAsync(long id, VehicleDeviceMapDto dto)
+        public async Task<bool> UpdateAsync(int id, VehicleDeviceMapDto dto)
         {
-            var entity = await _context.Set<Domain.Entities.map_vehicle_device>().FindAsync(id);
-            if (entity == null) throw new KeyNotFoundException();
-            entity.AccountId = dto.AccountId;
-            entity.VehicleId = dto.VehicleId;
-            entity.DeviceId = dto.DeviceId;
-            entity.InstallPosition = dto.InstallPosition;
-            entity.IsPrimary = dto.IsPrimary;
-            entity.FromTs = dto.FromTs;
-            entity.ToTs = dto.ToTs;
-            entity.InstalledByUserId = dto.InstalledByUserId;
-            entity.Remarks = dto.Remarks;
-            await _context.SaveChangesAsync();
-            return MapToDto(entity);
-        }
+            var entity = await _db.VehicleDeviceMaps
+                .FirstOrDefaultAsync(x => x.Id == id && x.IsDeleted == 0);
 
-        /// <summary>
-        /// Deletes a vehicle-device mapping.
-        /// </summary>
-        /// <param name="id">Mapping ID.</param>
-        /// <returns>True if deleted; otherwise, false.</returns>
-        public async Task<bool> DeleteAsync(long id)
-        {
-            var entity = await _context.Set<Domain.Entities.map_vehicle_device>().FindAsync(id);
             if (entity == null) return false;
-            _context.Set<Domain.Entities.map_vehicle_device>().Remove(entity);
-            await _context.SaveChangesAsync();
+
+            entity.AccountId = dto.AccountId;
+            entity.Fk_VehicleId = dto.Fk_VehicleId;
+            entity.fk_devicetypeid = dto.fk_devicetypeid;
+            entity.Fk_DeviceId = dto.Fk_DeviceId;
+            entity.fk_simid = dto.fk_simid;
+            entity.simnno = dto.simnno;
+            entity.Remarks = dto.Remarks;
+            entity.IsActive = dto.IsActive;
+            entity.updatedBy = dto.updatedBy;
+            entity.updatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
             return true;
         }
 
-        private static VehicleDeviceMapDto MapToDto(Domain.Entities.map_vehicle_device entity)
+        public async Task<bool> UpdateStatusAsync(int id, int isActive)
         {
-            return new VehicleDeviceMapDto
-            {
-                VehicleDeviceId = entity.VehicleDeviceId,
-                AccountId = entity.AccountId,
-                VehicleId = entity.VehicleId,
-                DeviceId = entity.DeviceId,
-                InstallPosition = entity.InstallPosition,
-                IsPrimary = entity.IsPrimary,
-                FromTs = entity.FromTs,
-                ToTs = entity.ToTs,
-                InstalledByUserId = entity.InstalledByUserId,
-                Remarks = entity.Remarks
-            };
+            var entity = await _db.VehicleDeviceMaps
+                .FirstOrDefaultAsync(x => x.Id == id && x.IsDeleted == 0);
+
+            if (entity == null) return false;
+
+            entity.IsActive = isActive;
+            entity.updatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+            return true;
         }
 
-        private static Domain.Entities.map_vehicle_device MapToEntity(VehicleDeviceMapDto dto, bool includeId)
+        public async Task<bool> DeleteAsync(int id)
         {
-            var entity = new Domain.Entities.map_vehicle_device
+            var entity = await _db.VehicleDeviceMaps
+                .FirstOrDefaultAsync(x => x.Id == id);
+
+            if (entity == null) return false;
+
+            entity.IsDeleted = 1;
+            entity.updatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<List<VehicleDeviceMapDto>> BulkCreateAsync(List<VehicleDeviceMapDto> items)
+        {
+            var entities = items.Select(dto => new map_vehicle_device
             {
                 AccountId = dto.AccountId,
-                VehicleId = dto.VehicleId,
-                DeviceId = dto.DeviceId,
-                InstallPosition = dto.InstallPosition,
-                IsPrimary = dto.IsPrimary,
-                FromTs = dto.FromTs == default ? System.DateTime.UtcNow : dto.FromTs,
-                ToTs = dto.ToTs,
-                InstalledByUserId = dto.InstalledByUserId,
-                Remarks = dto.Remarks
-            };
-            if (includeId) entity.VehicleDeviceId = dto.VehicleDeviceId;
-            return entity;
+                Fk_VehicleId = dto.Fk_VehicleId,
+                fk_devicetypeid = dto.fk_devicetypeid,
+                Fk_DeviceId = dto.Fk_DeviceId,
+                fk_simid = dto.fk_simid,
+                simnno = dto.simnno,
+                Remarks = dto.Remarks,
+                IsActive = dto.IsActive,
+                IsDeleted = 0,
+                InstallationDate = DateTime.UtcNow,
+                createdBy = dto.createdBy,
+                createdAt = DateTime.UtcNow
+            }).ToList();
+
+            _db.VehicleDeviceMaps.AddRange(entities);
+            await _db.SaveChangesAsync();
+
+            return entities.Select(x => new VehicleDeviceMapDto
+            {
+                Id = x.Id,
+                AccountId = x.AccountId,
+                Fk_VehicleId = x.Fk_VehicleId,
+                Fk_DeviceId = x.Fk_DeviceId
+            }).ToList();
         }
     }
 }
