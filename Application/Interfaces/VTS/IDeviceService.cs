@@ -1,26 +1,48 @@
-using Application.DTOs;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Application.DTOs;
 
+/// <summary>
+/// Service contract for device management.
+/// </summary>
 public interface IDeviceService
 {
     /// <summary>
-    /// Gets a paged list of devices.
+    /// Create a new device.
     /// </summary>
-    /// <param name="page">Page number (1-based).</param>
-    /// <param name="pageSize">Page size.</param>
-    /// <returns>Paged result of devices.</returns>
-    Task<PagedResultDto<DeviceDto>> GetPagedAsync(int page, int pageSize);
-    Task<IEnumerable<DeviceDto>> GetAllAsync();
+    Task<int> CreateAsync(DeviceDto dto);
+
+    /// <summary>
+    /// Get devices with summary cards and pagination.
+    /// </summary>
+    Task<DeviceListUiResponseDto> GetDevices(
+        int page,
+        int pageSize,
+        int? accountId,
+        string? search);
+
+    /// <summary>
+    /// Get device by Id.
+    /// </summary>
     Task<DeviceDto?> GetByIdAsync(int id);
-    Task<DeviceDto> CreateAsync(DeviceDto dto);
-    Task<DeviceDto> UpdateAsync(int id, DeviceDto dto);
+
+    /// <summary>
+    /// Update device.
+    /// </summary>
+    Task<bool> UpdateAsync(int id, DeviceDto dto);
+
+    /// <summary>
+    /// Update device status only.
+    /// </summary>
+    Task<bool> UpdateStatusAsync(int id, string status);
+
+    /// <summary>
+    /// Soft delete device.
+    /// </summary>
     Task<bool> DeleteAsync(int id);
+
     /// <summary>
     /// Bulk create devices.
     /// </summary>
-    /// <param name="devices">List of devices to create.</param>
-    /// <returns>List of created devices.</returns>
-    Task<IEnumerable<DeviceDto>> BulkCreateAsync(IEnumerable<DeviceDto> devices);
+    Task<List<DeviceDto>> BulkCreateAsync(List<DeviceDto> devices);
 }
-

@@ -1,110 +1,122 @@
-using Application.DTOs;
-using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Application.DTOs;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Controllers
 {
-    /// <summary>
-    /// API controller for managing devices.
-    /// </summary>
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/devices")]
+    [AllowAnonymous]
     public class DeviceController : ControllerBase
     {
         private readonly IDeviceService _service;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="DeviceController"/> class.
-        /// </summary>
         public DeviceController(IDeviceService service)
         {
             _service = service;
         }
 
         /// <summary>
-        /// Gets a paged list of devices.
+        /// Create device
         /// </summary>
-        /// <param name="page">Page number (1-based).</param>
-        /// <param name="pageSize">Page size.</param>
-        /// <returns>Paged result of devices.</returns>
-        /// <remarks>
-        /// Sample response:
-        /// {
-        ///   "data": [ { /* DeviceDto fields */ } ],
-        ///   "totalCount": 100,
-        ///   "page": 1,
-        ///   "pageSize": 10
-        /// }
-        /// </remarks>
-        [HttpGet]
-        public async Task<IActionResult> GetPaged([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        [HttpPost]
+        public async Task<IActionResult> Create([FromBody] DeviceDto req)
         {
-            var result = await _service.GetPagedAsync(page, pageSize);
-            return Ok(result);
+            var id = await _service.CreateAsync(req);
+
+            return Ok(ApiResponse<object>.Ok(
+                new { deviceId = id },
+                "Device created",
+                200));
         }
 
         /// <summary>
-        /// Gets a device by its unique identifier.
+        /// Get devices with summary + pagination
         /// </summary>
-        /// <param name="id">Device ID.</param>
-        /// <returns>The device if found; otherwise, NotFound.</returns>
+        [HttpGet("list")]
+        public async Task<IActionResult> GetDevices(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] int? accountId = null,
+            [FromQuery] string? search = null)
+        {
+            var result = await _service.GetDevices(page, pageSize, accountId, search);
+
+            return Ok(ApiResponse<object>.Ok(result, "Success", 200));
+        }
+
+        /// <summary>
+        /// Get device by Id
+        /// </summary>
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {
-            var result = await _service.GetByIdAsync(id);
-            if (result == null) return NotFound();
-            return Ok(result);
+            var data = await _service.GetByIdAsync(id);
+
+            if (data == null)
+                return NotFound(ApiResponse<object>.Fail("Device not found", 404));
+
+            return Ok(ApiResponse<object>.Ok(data, "Success", 200));
         }
 
         /// <summary>
-        /// Creates a new device.
+        /// Update device
         /// </summary>
-        /// <param name="dto">Device DTO.</param>
-        /// <returns>The created device.</returns>
-        /// <remarks>Returns 201 Created with the new device.</remarks>
-        [HttpPost]
-        public async Task<IActionResult> Create([FromBody] DeviceDto dto)
-        {
-            var result = await _service.CreateAsync(dto);
-            return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
-        }
-
-        /// <summary>
-        /// Updates an existing device.
-        /// </summary>
-        /// <param name="id">Device ID.</param>
-        /// <param name="dto">Device DTO.</param>
-        /// <returns>The updated device.</returns>
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] DeviceDto dto)
+        public async Task<IActionResult> Update(int id, [FromBody] DeviceDto req)
         {
-            var result = await _service.UpdateAsync(id, dto);
-            return Ok(result);
+            var ok = await _service.UpdateAsync(id, req);
+
+            if (!ok)
+                return NotFound(ApiResponse<object>.Fail("Device not found", 404));
+
+            return Ok(ApiResponse<string>.Ok("Updated", "Device updated", 200));
         }
 
         /// <summary>
-        /// Deletes a device.
+        /// Update device status
         /// </summary>
-        /// <param name="id">Device ID.</param>
-        /// <returns>No content if deleted; otherwise, NotFound.</returns>
+        [HttpPatch("{id}/status")]
+        public async Task<IActionResult> UpdateStatus(
+            int id,
+            [FromQuery] string status)
+        {
+            var ok = await _service.UpdateStatusAsync(id, status);
+
+            if (!ok)
+                return NotFound(ApiResponse<object>.Fail("Device not found", 404));
+
+            return Ok(ApiResponse<string>.Ok("Updated", "Status updated", 200));
+        }
+
+        /// <summary>
+        /// Delete device (soft delete)
+        /// </summary>
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var success = await _service.DeleteAsync(id);
-            if (!success) return NotFound();
-            return NoContent();
+            var ok = await _service.DeleteAsync(id);
+
+            if (!ok)
+                return NotFound(ApiResponse<object>.Fail("Device not found", 404));
+
+            return Ok(ApiResponse<string>.Ok("Deleted", "Device deleted", 200));
         }
+
         /// <summary>
-        /// Bulk upload devices.
+        /// Bulk upload devices
         /// </summary>
-        /// <remarks>Uploads multiple devices at once.</remarks>
-        /// <param name="devices">List of devices to upload.</param>
-        [HttpPost("bulk-upload")]
-        public async Task<IActionResult> BulkUpload([FromBody] IEnumerable<DeviceDto> devices)
+        [HttpPost("bulk")]
+        public async Task<IActionResult> BulkUpload([FromBody] List<DeviceDto> devices)
         {
             var result = await _service.BulkCreateAsync(devices);
-            return Ok(result);
+
+            return Ok(ApiResponse<object>.Ok(
+                result,
+                "Devices created successfully",
+                200));
         }
     }
 }

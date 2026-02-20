@@ -1,11 +1,11 @@
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Domain.Entities
 {
     /// <summary>
-    /// Device master table, stores device details (IMEI, type, SIM, etc.).
-    /// Example: A GPS device with IMEI '123456789012345' assigned to an account.
+    /// Device master table, stores device details (IMEI, type, manufacturer, etc.).
     /// </summary>
     [Table("mst_device")]
     public class mst_device
@@ -17,32 +17,39 @@ namespace Domain.Entities
         /// <summary>Account ID (FK to mst_account)</summary>
         public int AccountId { get; set; }
 
+        /// <summary>Manufacturer ID (FK to mst_manufacturer)</summary>
+        public int ManufactureID { get; set; }
+
+        /// <summary>Device type ID (FK to mst_device_type)</summary>
+        public int DeviceTypeId { get; set; }
+
+        /// <summary>Internal device number</summary>
+        [Required]
+        [MaxLength(50)]
+        public string DeviceNo { get; set; } = string.Empty;
+
         /// <summary>Device IMEI or serial number (unique)</summary>
         [Required]
         [MaxLength(50)]
         public string DeviceImeiOrSerial { get; set; } = string.Empty;
 
-        /// <summary>Device type ID (FK to mst_device_type)</summary>
-        public int DeviceTypeId { get; set; }
-
-        /// <summary>Firmware version (optional)</summary>
-        [MaxLength(50)]
-        public string? FirmwareVersion { get; set; }
-
-        /// <summary>SIM mobile number (optional)</summary>
-        [MaxLength(20)]
-        public string? SimMobile { get; set; }
-
-        /// <summary>SIM ICCID (optional)</summary>
-        [MaxLength(30)]
-        public string? SimIccid { get; set; }
-
-        /// <summary>Network provider ID (FK to lkp_network_provider, optional)</summary>
-        public int? NetworkProviderId { get; set; }
-        public NetworkProvider? NetworkProvider { get; set; }
-
-        /// <summary>Device status (e.g. 'Active', 'Inactive')</summary>
+        /// <summary>Device status (Active, InService, OutOfService, etc.)</summary>
         [MaxLength(20)]
         public string DeviceStatus { get; set; } = "Active";
+
+        /// <summary>Created by user</summary>
+        public int createdBy { get; set; }
+
+        /// <summary>Created timestamp</summary>
+        public DateTime createdAt { get; set; } = DateTime.UtcNow;
+
+        /// <summary>Updated by user</summary>
+        public int? updatedBy { get; set; }
+
+        /// <summary>Updated timestamp</summary>
+        public DateTime? updatedAt { get; set; }
+
+        /// <summary>Soft delete flag</summary>
+        public bool IsDeleted { get; set; } = false;
     }
 }

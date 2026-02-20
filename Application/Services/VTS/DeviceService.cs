@@ -1,161 +1,254 @@
 using Application.DTOs;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using System.Linq;
 using Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using Domain.Entities;
+using System.Threading.Tasks;
+using System.Linq;
+using System;
+using System.Collections.Generic;
 
 namespace Application.Services
 {
-    /// <summary>
-    /// Service implementation for device management.
-    /// Handles CRUD operations for devices.
-    /// </summary>
     public class DeviceService : IDeviceService
     {
-        private readonly IdentityDbContext _context;
+        private readonly IdentityDbContext _db;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="DeviceService"/> class.
-        /// </summary>
-        public DeviceService(IdentityDbContext context)
+        public DeviceService(IdentityDbContext db)
         {
-            _context = context;
+            _db = db;
         }
 
-        /// <summary>
-        /// Gets all devices.
-        /// </summary>
-        /// <returns>List of <see cref="DeviceDto"/>.</returns>
-        public async Task<IEnumerable<DeviceDto>> GetAllAsync()
+        public async Task<int> CreateAsync(DeviceDto dto)
         {
-            var entities = await _context.Devices.ToListAsync();
-            return entities.Select(MapToDto);
+            var imei = dto.DeviceImeiOrSerial.Trim();
+
+            var exists = await _db.Devices
+                .AnyAsync(x => x.DeviceImeiOrSerial == imei && !x.IsDeleted);
+
+            if (exists)
+                throw new InvalidOperationException("Device already exists");
+
+            using var tx = await _db.Database.BeginTransactionAsync();
+
+            try
+            {
+                var entity = new mst_device
+                {
+                    AccountId = dto.AccountId,
+                    ManufactureID = dto.ManufactureID,
+                    DeviceTypeId = dto.DeviceTypeId,
+                    DeviceNo = dto.DeviceNo,
+                    DeviceImeiOrSerial = imei,
+                    DeviceStatus = dto.DeviceStatus ?? "Active",
+                    createdBy = dto.createdBy,
+                    createdAt = DateTime.UtcNow,
+                    IsDeleted = false
+                };
+
+                _db.Devices.Add(entity);
+                await _db.SaveChangesAsync();
+
+                await tx.CommitAsync();
+
+                return entity.Id;
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
         }
 
-        /// <summary>
-        /// Gets a device by its unique identifier.
-        /// </summary>
-        /// <param name="id">Device ID.</param>
-        /// <returns>The <see cref="DeviceDto"/> if found; otherwise, null.</returns>
+        public async Task<DeviceListUiResponseDto> GetDevices(
+            int page,
+            int pageSize,
+            int? accountId,
+            string? search)
+        {
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 10;
+
+            var query = _db.Devices
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted)
+                .AsQueryable();
+
+            if (accountId.HasValue)
+                query = query.Where(x => x.AccountId == accountId.Value);
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(x =>
+                    x.DeviceImeiOrSerial.ToLower().Contains(s) ||
+                    x.DeviceNo.ToLower().Contains(s));
+            }
+
+            // Summary
+            var totalDevices = await query.CountAsync();
+
+            var inService = await query.CountAsync(x =>
+                x.DeviceStatus.ToLower() == "active" ||
+                x.DeviceStatus.ToLower() == "inservice");
+
+            var outOfService = totalDevices - inService;
+
+            var summary = new DeviceCardSummaryDto
+            {
+                TotalDevices = totalDevices,
+                InService = inService,
+                OutOfService = outOfService
+            };
+
+            var items = await query
+                .OrderByDescending(x => x.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new DeviceDto
+                {
+                    Id = x.Id,
+                    AccountId = x.AccountId,
+                    ManufactureID = x.ManufactureID,
+                    DeviceTypeId = x.DeviceTypeId,
+                    DeviceNo = x.DeviceNo,
+                    DeviceImeiOrSerial = x.DeviceImeiOrSerial,
+                    DeviceStatus = x.DeviceStatus,
+                    createdBy = x.createdBy,
+                    createdAt = x.createdAt,
+                    updatedBy = x.updatedBy,
+                    updatedAt = x.updatedAt,
+                    IsDeleted = x.IsDeleted
+                })
+                .ToListAsync();
+
+            return new DeviceListUiResponseDto
+            {
+                Summary = summary,
+                Devices = new PagedResultDto<DeviceDto>
+                {
+                    Items = items,
+                    TotalRecords = totalDevices,
+                    Page = page,
+                    PageSize = pageSize
+                }
+            };
+        }
+
         public async Task<DeviceDto?> GetByIdAsync(int id)
         {
-            var entity = await _context.Devices.FindAsync(id);
-            return entity == null ? null : MapToDto(entity);
+            return await _db.Devices
+                .Where(x => x.Id == id && !x.IsDeleted)
+                .Select(x => new DeviceDto
+                {
+                    Id = x.Id,
+                    AccountId = x.AccountId,
+                    ManufactureID = x.ManufactureID,
+                    DeviceTypeId = x.DeviceTypeId,
+                    DeviceNo = x.DeviceNo,
+                    DeviceImeiOrSerial = x.DeviceImeiOrSerial,
+                    DeviceStatus = x.DeviceStatus,
+                    createdBy = x.createdBy,
+                    createdAt = x.createdAt,
+                    updatedBy = x.updatedBy,
+                    updatedAt = x.updatedAt,
+                    IsDeleted = x.IsDeleted
+                })
+                .FirstOrDefaultAsync();
         }
 
-        /// <summary>
-        /// Creates a new device.
-        /// </summary>
-        /// <param name="dto">Device DTO.</param>
-        /// <returns>The created <see cref="DeviceDto"/>.</returns>
-        public async Task<DeviceDto> CreateAsync(DeviceDto dto)
+        public async Task<bool> UpdateAsync(int id, DeviceDto dto)
         {
-            var entity = MapToEntity(dto, false);
-            _context.Devices.Add(entity);
-            await _context.SaveChangesAsync();
-            return MapToDto(entity);
-        }
+            var entity = await _db.Devices
+                .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
-        /// <summary>
-        /// Updates an existing device.
-        /// </summary>
-        /// <param name="id">Device ID.</param>
-        /// <param name="dto">Device DTO.</param>
-        /// <returns>The updated <see cref="DeviceDto"/>.</returns>
-        public async Task<DeviceDto> UpdateAsync(int id, DeviceDto dto)
-        {
-            var entity = await _context.Devices.FindAsync(id);
-            if (entity == null) throw new KeyNotFoundException();
-            entity.AccountId = dto.AccountId;
-            entity.DeviceImeiOrSerial = dto.DeviceImeiOrSerial;
-            entity.DeviceTypeId = dto.DeviceTypeId;
-            entity.FirmwareVersion = dto.FirmwareVersion;
-            entity.SimMobile = dto.SimMobile;
-            entity.SimIccid = dto.SimIccid;
-            entity.NetworkProviderId = dto.NetworkProviderId;
-            entity.DeviceStatus = dto.DeviceStatus;
-            await _context.SaveChangesAsync();
-            return MapToDto(entity);
-        }
-
-        /// <summary>
-        /// Deletes a device.
-        /// </summary>
-        /// <param name="id">Device ID.</param>
-        /// <returns>True if deleted; otherwise, false.</returns>
-        public async Task<bool> DeleteAsync(int id)
-        {
-            var entity = await _context.Devices.FindAsync(id);
             if (entity == null) return false;
-            _context.Devices.Remove(entity);
-            await _context.SaveChangesAsync();
+
+            entity.AccountId = dto.AccountId;
+            entity.ManufactureID = dto.ManufactureID;
+            entity.DeviceTypeId = dto.DeviceTypeId;
+            entity.DeviceNo = dto.DeviceNo;
+            entity.DeviceImeiOrSerial = dto.DeviceImeiOrSerial.Trim();
+            entity.DeviceStatus = dto.DeviceStatus;
+            entity.updatedBy = dto.updatedBy;
+            entity.updatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
             return true;
         }
 
-        private static DeviceDto MapToDto(Domain.Entities.mst_device entity)
+        public async Task<bool> UpdateStatusAsync(int id, string status)
         {
-            return new DeviceDto
-            {
-                Id = entity.Id,
-                AccountId = entity.AccountId,
-                DeviceImeiOrSerial = entity.DeviceImeiOrSerial,
-                DeviceTypeId = entity.DeviceTypeId,
-                FirmwareVersion = entity.FirmwareVersion,
-                SimMobile = entity.SimMobile,
-                SimIccid = entity.SimIccid,
-                NetworkProviderId = entity.NetworkProviderId,
-                DeviceStatus = entity.DeviceStatus
-            };
+            var entity = await _db.Devices
+                .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+
+            if (entity == null) return false;
+
+            entity.DeviceStatus = status;
+            entity.updatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            return true;
         }
 
-        private static Domain.Entities.mst_device MapToEntity(DeviceDto dto, bool includeId)
+        public async Task<bool> DeleteAsync(int id)
         {
-            var entity = new Domain.Entities.mst_device
-            {
-                AccountId = dto.AccountId,
-                DeviceImeiOrSerial = dto.DeviceImeiOrSerial,
-                DeviceTypeId = dto.DeviceTypeId,
-                FirmwareVersion = dto.FirmwareVersion,
-                SimMobile = dto.SimMobile,
-                SimIccid = dto.SimIccid,
-                NetworkProviderId = dto.NetworkProviderId,
-                DeviceStatus = dto.DeviceStatus
-            };
-            if (includeId) entity.Id = dto.Id;
-            return entity;
-        }
-        /// <summary>
-        /// Bulk create devices.
-        /// </summary>
-        /// <param name="devices">List of devices to create.</param>
-        /// <returns>List of created devices.</returns>
-        public async Task<IEnumerable<DeviceDto>> BulkCreateAsync(IEnumerable<DeviceDto> devices)
-        {
-            var entities = devices.Select(dto => MapToEntity(dto, false)).ToList();
-            _context.Devices.AddRange(entities);
-            await _context.SaveChangesAsync();
-            return entities.Select(MapToDto).ToList();
+            var entity = await _db.Devices
+                .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+
+            if (entity == null) return false;
+
+            // Soft Delete
+            entity.IsDeleted = true;
+            entity.updatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            return true;
         }
 
-        public async Task<PagedResultDto<DeviceDto>> GetPagedAsync(int page, int pageSize)
+        public async Task<List<DeviceDto>> BulkCreateAsync(List<DeviceDto> devices)
         {
-            if (page < 1) page = 1;
-            if (pageSize < 1) pageSize = 10;
-            var query = _context.Devices.AsQueryable();
-            var totalCount = await query.CountAsync();
-            var data = await query
-                .OrderByDescending(d => d.Id)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
-            return new PagedResultDto<DeviceDto>
+            using var tx = await _db.Database.BeginTransactionAsync();
+
+            try
             {
-                Items = data.Select(MapToDto).ToList(),
-                TotalRecords = totalCount,
-                Page = page,
-                PageSize = pageSize
-            };
+                var entities = devices.Select(dto => new mst_device
+                {
+                    AccountId = dto.AccountId,
+                    ManufactureID = dto.ManufactureID,
+                    DeviceTypeId = dto.DeviceTypeId,
+                    DeviceNo = dto.DeviceNo,
+                    DeviceImeiOrSerial = dto.DeviceImeiOrSerial.Trim(),
+                    DeviceStatus = dto.DeviceStatus ?? "Active",
+                    createdBy = dto.createdBy,
+                    createdAt = DateTime.UtcNow,
+                    IsDeleted = false
+                }).ToList();
+
+                _db.Devices.AddRange(entities);
+                await _db.SaveChangesAsync();
+
+                await tx.CommitAsync();
+
+                return entities.Select(x => new DeviceDto
+                {
+                    Id = x.Id,
+                    AccountId = x.AccountId,
+                    ManufactureID = x.ManufactureID,
+                    DeviceTypeId = x.DeviceTypeId,
+                    DeviceNo = x.DeviceNo,
+                    DeviceImeiOrSerial = x.DeviceImeiOrSerial,
+                    DeviceStatus = x.DeviceStatus,
+                    createdBy = x.createdBy,
+                    createdAt = x.createdAt
+                }).ToList();
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
         }
     }
 }
