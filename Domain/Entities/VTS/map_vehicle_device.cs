@@ -19,7 +19,7 @@ namespace Domain.Entities
         /// Account ID (FK to mst_account)
         /// </summary>
         [Required]
-        public long AccountId { get; set; }
+        public int AccountId { get; set; }
 
         /// <summary>
         /// Vehicle ID (FK to mst_vehicle)

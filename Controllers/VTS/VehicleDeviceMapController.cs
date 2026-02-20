@@ -1,87 +1,123 @@
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using Application.DTOs;
 using Microsoft.AspNetCore.Mvc;
-using System.Threading.Tasks;
 
 namespace Controllers
 {
     /// <summary>
-    /// API controller for managing vehicle-device mappings (historical mapping).
+    /// API controller for managing vehicle-device mappings.
     /// </summary>
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/vehicle-device-maps")]
     public class VehicleDeviceMapController : ControllerBase
     {
         private readonly IVehicleDeviceMapService _service;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="VehicleDeviceMapController"/> class.
-        /// </summary>
         public VehicleDeviceMapController(IVehicleDeviceMapService service)
         {
             _service = service;
         }
 
         /// <summary>
-        /// Gets all vehicle-device mappings.
+        /// Create mapping
         /// </summary>
-        /// <returns>List of vehicle-device mappings.</returns>
-        [HttpGet]
-        public async Task<IActionResult> GetAll()
-        {
-            var result = await _service.GetAllAsync();
-            return Ok(result);
-        }
-
-        /// <summary>
-        /// Gets a vehicle-device mapping by its unique identifier.
-        /// </summary>
-        /// <param name="id">Mapping ID.</param>
-        /// <returns>The vehicle-device mapping if found; otherwise, NotFound.</returns>
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(long id)
-        {
-            var result = await _service.GetByIdAsync(id);
-            if (result == null) return NotFound();
-            return Ok(result);
-        }
-
-        /// <summary>
-        /// Creates a new vehicle-device mapping.
-        /// </summary>
-        /// <param name="dto">Mapping DTO.</param>
-        /// <returns>The created mapping.</returns>
-        /// <remarks>Returns 201 Created with the new mapping.</remarks>
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] VehicleDeviceMapDto dto)
         {
-            var result = await _service.CreateAsync(dto);
-            return CreatedAtAction(nameof(GetById), new { id = result.VehicleDeviceId }, result);
+            var id = await _service.CreateAsync(dto);
+
+            return Ok(ApiResponse<object>.Ok(
+                new { vehicleDeviceMapId = id },
+                "Mapping created",
+                200));
         }
 
         /// <summary>
-        /// Updates an existing vehicle-device mapping.
+        /// Get mappings with summary + pagination
         /// </summary>
-        /// <param name="id">Mapping ID.</param>
-        /// <param name="dto">Mapping DTO.</param>
-        /// <returns>The updated mapping.</returns>
+        [HttpGet("list")]
+        public async Task<IActionResult> GetAssignments(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10,
+            [FromQuery] long? accountId = null,
+            [FromQuery] string? search = null)
+        {
+            var result = await _service.GetAssignments(page, pageSize, accountId, search);
+
+            return Ok(ApiResponse<object>.Ok(result, "Success", 200));
+        }
+
+        /// <summary>
+        /// Get mapping by Id
+        /// </summary>
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetById(int id)
+        {
+            var data = await _service.GetByIdAsync(id);
+
+            if (data == null)
+                return NotFound(ApiResponse<object>.Fail("Mapping not found", 404));
+
+            return Ok(ApiResponse<object>.Ok(data, "Success", 200));
+        }
+
+        /// <summary>
+        /// Update mapping
+        /// </summary>
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(long id, [FromBody] VehicleDeviceMapDto dto)
+        public async Task<IActionResult> Update(int id, [FromBody] VehicleDeviceMapDto dto)
         {
-            var result = await _service.UpdateAsync(id, dto);
-            return Ok(result);
+            var ok = await _service.UpdateAsync(id, dto);
+
+            if (!ok)
+                return NotFound(ApiResponse<object>.Fail("Mapping not found", 404));
+
+            return Ok(ApiResponse<string>.Ok("Updated", "Mapping updated", 200));
         }
 
         /// <summary>
-        /// Deletes a vehicle-device mapping.
+        /// Update active status
         /// </summary>
-        /// <param name="id">Mapping ID.</param>
-        /// <returns>No content if deleted; otherwise, NotFound.</returns>
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(long id)
+        [HttpPatch("{id}/status")]
+        public async Task<IActionResult> UpdateStatus(
+            int id,
+            [FromQuery] int isActive)
         {
-            var success = await _service.DeleteAsync(id);
-            if (!success) return NotFound();
-            return NoContent();
+            var ok = await _service.UpdateStatusAsync(id, isActive);
+
+            if (!ok)
+                return NotFound(ApiResponse<object>.Fail("Mapping not found", 404));
+
+            return Ok(ApiResponse<string>.Ok("Updated", "Status updated", 200));
+        }
+
+        /// <summary>
+        /// Delete mapping (soft delete)
+        /// </summary>
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var ok = await _service.DeleteAsync(id);
+
+            if (!ok)
+                return NotFound(ApiResponse<object>.Fail("Mapping not found", 404));
+
+            return Ok(ApiResponse<string>.Ok("Deleted", "Mapping deleted", 200));
+        }
+
+        /// <summary>
+        /// Bulk create mappings
+        /// </summary>
+        [HttpPost("bulk")]
+        public async Task<IActionResult> BulkUpload([FromBody] List<VehicleDeviceMapDto> items)
+        {
+            var result = await _service.BulkCreateAsync(items);
+
+            return Ok(ApiResponse<object>.Ok(
+                result,
+                "Mappings created successfully",
+                200));
         }
     }
 }

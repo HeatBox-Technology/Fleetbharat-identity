@@ -8,7 +8,6 @@ namespace Controllers
 {
     [ApiController]
     [Route("api/devices")]
-    [AllowAnonymous]
     public class DeviceController : ControllerBase
     {
         private readonly IDeviceService _service;
