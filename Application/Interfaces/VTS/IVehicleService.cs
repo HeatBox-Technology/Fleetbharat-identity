@@ -1,27 +1,46 @@
-using Application.DTOs;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-
+using Application.DTOs;
 
 public interface IVehicleService
 {
     /// <summary>
-    /// Gets a paged list of vehicles.
+    /// Create new vehicle
     /// </summary>
-    /// <param name="page">Page number (1-based).</param>
-    /// <param name="pageSize">Page size.</param>
-    /// <returns>Paged result of vehicles.</returns>
-    Task<PagedResultDto<VehicleDto>> GetPagedAsync(int page, int pageSize);
-    Task<IEnumerable<VehicleDto>> GetAllAsync();
-    Task<VehicleDto?> GetByIdAsync(int id);
-    Task<VehicleDto> CreateAsync(VehicleDto dto);
-    Task<VehicleDto> UpdateAsync(int id, VehicleDto dto);
-    Task<bool> DeleteAsync(int id);
-    /// <summary>
-    /// Bulk create vehicles.
-    /// </summary>
-    /// <param name="vehicles">List of vehicles to create.</param>
-    /// <returns>List of created vehicles.</returns>
-    Task<IEnumerable<VehicleDto>> BulkCreateAsync(IEnumerable<VehicleDto> vehicles);
-}
+    Task<int> CreateAsync(VehicleDto dto);
 
+    /// <summary>
+    /// Get all vehicles with optional search
+    /// </summary>
+    Task<List<VehicleDto>> GetAllAsync(string? search = null);
+
+    /// <summary>
+    /// Get vehicle by id
+    /// </summary>
+    Task<VehicleDto?> GetByIdAsync(int id);
+
+    /// <summary>
+    /// Update vehicle
+    /// </summary>
+    Task<bool> UpdateAsync(int id, VehicleDto dto);
+
+    /// <summary>
+    /// Update vehicle status
+    /// </summary>
+    Task<bool> UpdateStatusAsync(int id, string status);
+
+    /// <summary>
+    /// Delete vehicle
+    /// </summary>
+    Task<bool> DeleteAsync(int id);
+
+    /// <summary>
+    /// Get paged vehicles
+    /// </summary>
+    Task<PagedResultDto<VehicleDto>> GetPagedAsync(int page, int pageSize);
+
+    /// <summary>
+    /// Bulk create vehicles
+    /// </summary>
+    Task<List<VehicleDto>> BulkCreateAsync(List<VehicleDto> vehicles);
+}

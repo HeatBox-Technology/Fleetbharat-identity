@@ -1,75 +1,144 @@
 using Application.DTOs;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+using Infrastructure.Data;
+using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
-using Infrastructure.Data;
+using System.Threading.Tasks;
+using System;
+using System.Collections.Generic;
 
 namespace Application.Services
 {
-    /// <summary>
-    /// Service implementation for vehicle management.
-    /// Handles CRUD operations for vehicles.
-    /// </summary>
     public class VehicleService : IVehicleService
     {
-        private readonly IdentityDbContext _context;
+        private readonly IdentityDbContext _db;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="VehicleService"/> class.
-        /// </summary>
-        public VehicleService(IdentityDbContext context)
+        public VehicleService(IdentityDbContext db)
         {
-            _context = context;
+            _db = db;
         }
 
-        /// <summary>
-        /// Gets all vehicles.
-        /// </summary>
-        /// <returns>List of <see cref="VehicleDto"/>.</returns>
-        public async Task<IEnumerable<VehicleDto>> GetAllAsync()
+        public async Task<int> CreateAsync(VehicleDto dto)
         {
-            var entities = await _context.Set<Domain.Entities.mst_vehicle>().ToListAsync();
-            return entities.Select(MapToDto);
+            var vehicleNumber = dto.VehicleNumber.Trim();
+
+            var exists = await _db.Vehicles
+                .AnyAsync(x => x.VehicleNumber == vehicleNumber);
+
+            if (exists)
+                throw new InvalidOperationException("Vehicle already exists");
+
+            using var tx = await _db.Database.BeginTransactionAsync();
+
+            try
+            {
+                var entity = new mst_vehicle
+                {
+                    AccountId = dto.AccountId,
+                    VehicleNumber = vehicleNumber,
+                    VinOrChassisNumber = dto.VinOrChassisNumber?.Trim(),
+                    RegistrationDate = dto.RegistrationDate,
+                    VehicleTypeId = dto.VehicleTypeId,
+                    VehicleBrandOemId = dto.VehicleBrandOemId,
+                    OwnershipType = dto.OwnershipType,
+                    LeasedVendorId = dto.LeasedVendorId,
+                    ImageFilePath = dto.ImageFilePath,
+                    Status = dto.Status,
+                    VehicleClass = dto.VehicleClass,
+                    RtoPassing = dto.RtoPassing,
+                    Warranty = dto.Warranty,
+                    Insurer = dto.Insurer,
+                    VehicleColor = dto.VehicleColor,
+                    //CreatedAt = DateTime.UtcNow,
+                    //UpdatedAt = DateTime.UtcNow
+                };
+
+                _db.Vehicles.Add(entity);
+                await _db.SaveChangesAsync();
+
+                await tx.CommitAsync();
+
+                return entity.Id;
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+
+                Console.WriteLine("ERROR ======");
+                Console.WriteLine(ex.ToString());
+                Console.WriteLine("============");
+                throw;
+            }
         }
 
-        /// <summary>
-        /// Gets a vehicle by its unique identifier.
-        /// </summary>
-        /// <param name="id">Vehicle ID.</param>
-        /// <returns>The <see cref="VehicleDto"/> if found; otherwise, null.</returns>
+        public async Task<List<VehicleDto>> GetAllAsync(string? search = null)
+        {
+            var query = _db.Vehicles.AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(x => x.VehicleNumber.ToLower().Contains(s));
+            }
+
+            return await query
+                .OrderByDescending(x => x.Id)
+                .Select(x => new VehicleDto
+                {
+                    Id = x.Id,
+                    AccountId = x.AccountId,
+                    VehicleNumber = x.VehicleNumber,
+                    VinOrChassisNumber = x.VinOrChassisNumber,
+                    RegistrationDate = x.RegistrationDate,
+                    VehicleTypeId = x.VehicleTypeId,
+                    VehicleBrandOemId = x.VehicleBrandOemId,
+                    OwnershipType = x.OwnershipType,
+                    LeasedVendorId = x.LeasedVendorId,
+                    ImageFilePath = x.ImageFilePath,
+                    Status = x.Status,
+                    VehicleClass = x.VehicleClass,
+                    RtoPassing = x.RtoPassing,
+                    Warranty = x.Warranty,
+                    Insurer = x.Insurer,
+                    VehicleColor = x.VehicleColor
+                })
+                .ToListAsync();
+        }
+
         public async Task<VehicleDto?> GetByIdAsync(int id)
         {
-            var entity = await _context.Set<Domain.Entities.mst_vehicle>().FindAsync(id);
-            return entity == null ? null : MapToDto(entity);
+            return await _db.Vehicles
+                .Where(x => x.Id == id)
+                .Select(x => new VehicleDto
+                {
+                    Id = x.Id,
+                    AccountId = x.AccountId,
+                    VehicleNumber = x.VehicleNumber,
+                    VinOrChassisNumber = x.VinOrChassisNumber,
+                    RegistrationDate = x.RegistrationDate,
+                    VehicleTypeId = x.VehicleTypeId,
+                    VehicleBrandOemId = x.VehicleBrandOemId,
+                    OwnershipType = x.OwnershipType,
+                    LeasedVendorId = x.LeasedVendorId,
+                    ImageFilePath = x.ImageFilePath,
+                    Status = x.Status,
+                    VehicleClass = x.VehicleClass,
+                    RtoPassing = x.RtoPassing,
+                    Warranty = x.Warranty,
+                    Insurer = x.Insurer,
+                    VehicleColor = x.VehicleColor
+                })
+                .FirstOrDefaultAsync();
         }
 
-        /// <summary>
-        /// Creates a new vehicle.
-        /// </summary>
-        /// <param name="dto">Vehicle DTO.</param>
-        /// <returns>The created <see cref="VehicleDto"/>.</returns>
-        public async Task<VehicleDto> CreateAsync(VehicleDto dto)
+        public async Task<bool> UpdateAsync(int id, VehicleDto dto)
         {
-            var entity = MapToEntity(dto, false);
-            _context.Set<Domain.Entities.mst_vehicle>().Add(entity);
-            await _context.SaveChangesAsync();
-            return MapToDto(entity);
-        }
+            var entity = await _db.Vehicles.FirstOrDefaultAsync(x => x.Id == id);
+            if (entity == null) return false;
 
-        /// <summary>
-        /// Updates an existing vehicle.
-        /// </summary>
-        /// <param name="id">Vehicle ID.</param>
-        /// <param name="dto">Vehicle DTO.</param>
-        /// <returns>The updated <see cref="VehicleDto"/>.</returns>
-        public async Task<VehicleDto> UpdateAsync(int id, VehicleDto dto)
-        {
-            var entity = await _context.Set<Domain.Entities.mst_vehicle>().FindAsync(id);
-            if (entity == null) throw new KeyNotFoundException();
             entity.AccountId = dto.AccountId;
-            entity.VehicleNumber = dto.VehicleNumber;
-            entity.VinOrChassisNumber = dto.VinOrChassisNumber;
+            entity.VehicleNumber = dto.VehicleNumber.Trim();
+            entity.VinOrChassisNumber = dto.VinOrChassisNumber?.Trim();
             entity.RegistrationDate = dto.RegistrationDate;
             entity.VehicleTypeId = dto.VehicleTypeId;
             entity.VehicleBrandOemId = dto.VehicleBrandOemId;
@@ -82,112 +151,136 @@ namespace Application.Services
             entity.Warranty = dto.Warranty;
             entity.Insurer = dto.Insurer;
             entity.VehicleColor = dto.VehicleColor;
-            await _context.SaveChangesAsync();
-            return MapToDto(entity);
-        }
+            //entity.UpdatedAt = DateTime.UtcNow;
 
-        /// <summary>
-        /// Deletes a vehicle.
-        /// </summary>
-        /// <param name="id">Vehicle ID.</param>
-        /// <returns>True if deleted; otherwise, false.</returns>
-        public async Task<bool> DeleteAsync(int id)
-        {
-            var entity = await _context.Set<Domain.Entities.mst_vehicle>().FindAsync(id);
-            if (entity == null) return false;
-            _context.Set<Domain.Entities.mst_vehicle>().Remove(entity);
-            await _context.SaveChangesAsync();
+            await _db.SaveChangesAsync();
             return true;
         }
 
-        /// <summary>
-        /// Gets a paged list of vehicles.
-        /// </summary>
-        /// <param name="page">Page number.</param>
-        /// <param name="pageSize">Number of items per page.</param>
-        /// <returns>A <see cref="PagedResultDto{VehicleDto}"/> containing the paged vehicles.</returns>
+        public async Task<bool> UpdateStatusAsync(int id, string status)
+        {
+            var entity = await _db.Vehicles.FirstOrDefaultAsync(x => x.Id == id);
+            if (entity == null) return false;
+
+            entity.Status = status;
+            //entity.UpdatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> DeleteAsync(int id)
+        {
+            var entity = await _db.Vehicles.FirstOrDefaultAsync(x => x.Id == id);
+            if (entity == null) return false;
+
+            _db.Vehicles.Remove(entity);
+            await _db.SaveChangesAsync();
+            return true;
+        }
+
         public async Task<PagedResultDto<VehicleDto>> GetPagedAsync(int page, int pageSize)
         {
             if (page < 1) page = 1;
             if (pageSize < 1) pageSize = 10;
-            var query = _context.Set<Domain.Entities.mst_vehicle>().AsQueryable();
+
+            var query = _db.Vehicles.AsQueryable();
+
             var totalCount = await query.CountAsync();
+
             var data = await query
-                .OrderByDescending(v => v.Id)
+                .OrderByDescending(x => x.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
+                .Select(x => new VehicleDto
+                {
+                    Id = x.Id,
+                    AccountId = x.AccountId,
+                    VehicleNumber = x.VehicleNumber,
+                    VinOrChassisNumber = x.VinOrChassisNumber,
+                    RegistrationDate = x.RegistrationDate,
+                    VehicleTypeId = x.VehicleTypeId,
+                    VehicleBrandOemId = x.VehicleBrandOemId,
+                    OwnershipType = x.OwnershipType,
+                    LeasedVendorId = x.LeasedVendorId,
+                    ImageFilePath = x.ImageFilePath,
+                    Status = x.Status,
+                    VehicleClass = x.VehicleClass,
+                    RtoPassing = x.RtoPassing,
+                    Warranty = x.Warranty,
+                    Insurer = x.Insurer,
+                    VehicleColor = x.VehicleColor
+                })
                 .ToListAsync();
+
             return new PagedResultDto<VehicleDto>
             {
-                Items = data.Select(MapToDto).ToList(),
+                Items = data,
                 TotalRecords = totalCount,
                 Page = page,
                 PageSize = pageSize
             };
         }
 
-        private static VehicleDto MapToDto(Domain.Entities.mst_vehicle entity)
+        public async Task<List<VehicleDto>> BulkCreateAsync(List<VehicleDto> vehicles)
         {
-            return new VehicleDto
+            using var tx = await _db.Database.BeginTransactionAsync();
+
+            try
             {
-                Id = entity.Id,
-                AccountId = entity.AccountId,
-                VehicleNumber = entity.VehicleNumber,
-                VinOrChassisNumber = entity.VinOrChassisNumber,
-                RegistrationDate = entity.RegistrationDate,
-                VehicleTypeId = entity.VehicleTypeId,
-                VehicleBrandOemId = entity.VehicleBrandOemId,
-                OwnershipType = entity.OwnershipType,
-                LeasedVendorId = entity.LeasedVendorId,
-                ImageFilePath = entity.ImageFilePath,
-                Status = entity.Status,
-                VehicleClass = entity.VehicleClass,
-                RtoPassing = entity.RtoPassing,
-                Warranty = entity.Warranty,
-                Insurer = entity.Insurer,
-                VehicleColor = entity.VehicleColor
-            };
+                var entities = vehicles.Select(dto => new mst_vehicle
+                {
+                    AccountId = dto.AccountId,
+                    VehicleNumber = dto.VehicleNumber.Trim(),
+                    VinOrChassisNumber = dto.VinOrChassisNumber?.Trim(),
+                    RegistrationDate = dto.RegistrationDate,
+                    VehicleTypeId = dto.VehicleTypeId,
+                    VehicleBrandOemId = dto.VehicleBrandOemId,
+                    OwnershipType = dto.OwnershipType,
+                    LeasedVendorId = dto.LeasedVendorId,
+                    ImageFilePath = dto.ImageFilePath,
+                    Status = dto.Status,
+                    VehicleClass = dto.VehicleClass,
+                    RtoPassing = dto.RtoPassing,
+                    Warranty = dto.Warranty,
+                    Insurer = dto.Insurer,
+                    VehicleColor = dto.VehicleColor
+                }).ToList();
+
+                _db.Vehicles.AddRange(entities);
+                await _db.SaveChangesAsync();
+
+                await tx.CommitAsync();
+
+                return entities.Select(x => new VehicleDto
+                {
+                    Id = x.Id,
+                    AccountId = x.AccountId,
+                    VehicleNumber = x.VehicleNumber,
+                    VinOrChassisNumber = x.VinOrChassisNumber,
+                    RegistrationDate = x.RegistrationDate,
+                    VehicleTypeId = x.VehicleTypeId,
+                    VehicleBrandOemId = x.VehicleBrandOemId,
+                    OwnershipType = x.OwnershipType,
+                    LeasedVendorId = x.LeasedVendorId,
+                    ImageFilePath = x.ImageFilePath,
+                    Status = x.Status,
+                    VehicleClass = x.VehicleClass,
+                    RtoPassing = x.RtoPassing,
+                    Warranty = x.Warranty,
+                    Insurer = x.Insurer,
+                    VehicleColor = x.VehicleColor
+                }).ToList();
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
         }
 
-        private static Domain.Entities.mst_vehicle MapToEntity(VehicleDto dto)
-        {
-            return MapToEntity(dto, true);
-        }
 
-        private static Domain.Entities.mst_vehicle MapToEntity(VehicleDto dto, bool includeId)
-        {
-            var entity = new Domain.Entities.mst_vehicle
-            {
-                AccountId = dto.AccountId,
-                VehicleNumber = dto.VehicleNumber,
-                VinOrChassisNumber = dto.VinOrChassisNumber,
-                RegistrationDate = dto.RegistrationDate,
-                VehicleTypeId = dto.VehicleTypeId,
-                VehicleBrandOemId = dto.VehicleBrandOemId,
-                OwnershipType = dto.OwnershipType,
-                LeasedVendorId = dto.LeasedVendorId,
-                ImageFilePath = dto.ImageFilePath,
-                Status = dto.Status,
-                VehicleClass = dto.VehicleClass,
-                RtoPassing = dto.RtoPassing,
-                Warranty = dto.Warranty,
-                Insurer = dto.Insurer,
-                VehicleColor = dto.VehicleColor
-            };
-            if (includeId) entity.Id = dto.Id;
-            return entity;
-        }
-        /// <summary>
-        /// Bulk create vehicles.
-        /// </summary>
-        /// <param name="vehicles">List of vehicles to create.</param>
-        /// <returns>List of created vehicles.</returns>
-        public async Task<IEnumerable<VehicleDto>> BulkCreateAsync(IEnumerable<VehicleDto> vehicles)
-        {
-            var entities = vehicles.Select(dto => MapToEntity(dto, false)).ToList();
-            _context.Set<Domain.Entities.mst_vehicle>().AddRange(entities);
-            await _context.SaveChangesAsync();
-            return entities.Select(MapToDto).ToList();
-        }
     }
+
+
 }

@@ -1,105 +1,147 @@
-using Application.DTOs;
-using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Application.DTOs;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
-namespace Controllers
+/// <summary>
+/// API controller for managing vehicles.
+/// </summary>
+[ApiController]
+[Route("api/vehicles")]
+public class VehicleController : ControllerBase
 {
-    /// <summary>
-    /// API controller for managing vehicles.
-    /// </summary>
-    [ApiController]
-    [Route("api/[controller]")]
-    public class VehicleController : ControllerBase
+    private readonly IVehicleService _service;
+
+    public VehicleController(IVehicleService service)
     {
-        private readonly IVehicleService _service;
+        _service = service;
+    }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="VehicleController"/> class.
-        /// </summary>
-        public VehicleController(IVehicleService service)
-        {
-            _service = service;
-        }
+    /// <summary>
+    /// Create vehicle
+    /// </summary>
+    /// 
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] VehicleDto req)
+    {
+        var id = await _service.CreateAsync(req);
 
-        /// <summary>
-        /// Gets all vehicles.
-        /// </summary>
-        /// <returns>List of vehicles.</returns>
-        /// <summary>
-        /// Gets a paged list of vehicles.
-        /// </summary>
-        /// <param name="page">Page number (1-based).</param>
-        /// <param name="pageSize">Page size.</param>
-        /// <returns>Paged result of vehicles.</returns>
-        [HttpGet]
-        public async Task<IActionResult> GetPaged([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
-        {
-            var result = await _service.GetPagedAsync(page, pageSize);
-            return Ok(result);
-        }
+        return Ok(ApiResponse<object>.Ok(
+            new { vehicleId = id },
+            "Vehicle created",
+            200));
+    }
 
-        /// <summary>
-        /// Gets a vehicle by its unique identifier.
-        /// </summary>
-        /// <param name="id">Vehicle ID.</param>
-        /// <returns>The vehicle if found; otherwise, NotFound.</returns>
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(int id)
-        {
-            var result = await _service.GetByIdAsync(id);
-            if (result == null) return NotFound();
-            return Ok(result);
-        }
+    /// <summary>
+    /// Get all vehicles
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> GetAll([FromQuery] string? search = null)
+    {
+        var list = await _service.GetAllAsync(search);
 
-        /// <summary>
-        /// Creates a new vehicle.
-        /// </summary>
-        /// <param name="dto">Vehicle DTO.</param>
-        /// <returns>The created vehicle.</returns>
-        /// <remarks>Returns 201 Created with the new vehicle.</remarks>
-        [HttpPost]
-        public async Task<IActionResult> Create([FromBody] VehicleDto dto)
-        {
-            var result = await _service.CreateAsync(dto);
-            return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
-        }
+        return Ok(ApiResponse<object>.Ok(
+            list,
+            "Success",
+            200));
+    }
 
-        /// <summary>
-        /// Updates an existing vehicle.
-        /// </summary>
-        /// <param name="id">Vehicle ID.</param>
-        /// <param name="dto">Vehicle DTO.</param>
-        /// <returns>The updated vehicle.</returns>
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] VehicleDto dto)
-        {
-            var result = await _service.UpdateAsync(id, dto);
-            return Ok(result);
-        }
+    /// <summary>
+    /// Get vehicle by id
+    /// </summary>
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var data = await _service.GetByIdAsync(id);
 
-        /// <summary>
-        /// Deletes a vehicle.
-        /// </summary>
-        /// <param name="id">Vehicle ID.</param>
-        /// <returns>No content if deleted; otherwise, NotFound.</returns>
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
-        {
-            var success = await _service.DeleteAsync(id);
-            if (!success) return NotFound();
-            return NoContent();
-        }
-        /// <summary>
-        /// Bulk upload vehicles.
-        /// </summary>
-        /// <remarks>Uploads multiple vehicles at once.</remarks>
-        /// <param name="vehicles">List of vehicles to upload.</param>
-        [HttpPost("bulk-upload")]
-        public async Task<IActionResult> BulkUpload([FromBody] IEnumerable<VehicleDto> vehicles)
-        {
-            var result = await _service.BulkCreateAsync(vehicles);
-            return Ok(result);
-        }
+        if (data == null)
+            return NotFound(ApiResponse<object>.Fail("Vehicle not found", 404));
+
+        return Ok(ApiResponse<object>.Ok(
+            data,
+            "Success",
+            200));
+    }
+
+    /// <summary>
+    /// Update vehicle
+    /// </summary>
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(int id, [FromBody] VehicleDto req)
+    {
+        var ok = await _service.UpdateAsync(id, req);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("Vehicle not found", 404));
+
+        return Ok(ApiResponse<string>.Ok(
+            "Updated",
+            "Vehicle updated",
+            200));
+    }
+
+    /// <summary>
+    /// Update vehicle status
+    /// </summary>
+    [HttpPatch("{id}/status")]
+    public async Task<IActionResult> UpdateStatus(int id, [FromQuery] string status)
+    {
+        var ok = await _service.UpdateStatusAsync(id, status);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("Vehicle not found", 404));
+
+        return Ok(ApiResponse<string>.Ok(
+            "Updated",
+            "Status updated",
+            200));
+    }
+
+    /// <summary>
+    /// Delete vehicle
+    /// </summary>
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var ok = await _service.DeleteAsync(id);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("Vehicle not found", 404));
+
+        return Ok(ApiResponse<string>.Ok(
+            "Deleted",
+            "Vehicle deleted",
+            200));
+    }
+
+    /// <summary>
+    /// Get paginated vehicles
+    /// </summary>
+    [HttpGet("paged")]
+    public async Task<IActionResult> GetPaged(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
+    {
+        var result = await _service.GetPagedAsync(page, pageSize);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Success",
+            200));
+    }
+
+    /// <summary>
+    /// Bulk upload vehicles (Ultra fast)
+    /// </summary>
+    [HttpPost("bulk")]
+    public async Task<IActionResult> BulkUpload([FromBody] List<VehicleDto> vehicles)
+    {
+        var result = await _service.BulkCreateAsync(vehicles);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Vehicles created successfully",
+            200));
     }
 }

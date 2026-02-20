@@ -237,7 +237,8 @@ public class IdentityDbContext : DbContext
             .WithMany(x => x.EntitlementModules)
             .HasForeignKey(x => x.PlanId);
 
-
+        modelBuilder.Entity<mst_vehicle>()
+            .HasKey(x => x.Id);
 
     }
 
