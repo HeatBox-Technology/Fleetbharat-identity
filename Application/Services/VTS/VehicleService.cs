@@ -71,9 +71,15 @@ namespace Application.Services
             }
         }
 
-        public async Task<List<VehicleDto>> GetAllAsync(string? search = null)
+        public async Task<VehicleListUiResponseDto> GetVehicles(
+    int page,
+    int pageSize,
+    string? search = null)
         {
-            var query = _db.Vehicles.AsQueryable();
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 10;
+
+            var query = _db.Vehicles.AsNoTracking().AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -81,8 +87,25 @@ namespace Application.Services
                 query = query.Where(x => x.VehicleNumber.ToLower().Contains(s));
             }
 
-            return await query
+            // 🔹 Summary
+            var totalFleet = await query.CountAsync();
+            var inService = await query.CountAsync(x => x.Status.ToLower() == "active");
+            var outOfService = totalFleet - inService;
+
+            var summary = new VehicleSummaryDto
+            {
+                TotalFleetSize = totalFleet,
+                InService = inService,
+                OutOfService = outOfService
+            };
+
+            // 🔹 Pagination
+            var totalRecords = totalFleet;
+
+            var items = await query
                 .OrderByDescending(x => x.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .Select(x => new VehicleDto
                 {
                     Id = x.Id,
@@ -103,6 +126,21 @@ namespace Application.Services
                     VehicleColor = x.VehicleColor
                 })
                 .ToListAsync();
+
+            var totalPages = (int)Math.Ceiling((double)totalRecords / pageSize);
+
+            return new VehicleListUiResponseDto
+            {
+                Summary = summary,
+                Vehicles = new PagedResultDto<VehicleDto>
+                {
+                    Items = items,
+                    TotalRecords = totalRecords,
+                    Page = page,
+                    PageSize = pageSize,
+                    TotalPages = totalPages
+                }
+            };
         }
 
         public async Task<VehicleDto?> GetByIdAsync(int id)

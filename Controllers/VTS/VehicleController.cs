@@ -32,17 +32,16 @@ public class VehicleController : ControllerBase
             "Vehicle created",
             200));
     }
-
-    /// <summary>
-    /// Get all vehicles
-    /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] string? search = null)
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null)
     {
-        var list = await _service.GetAllAsync(search);
+        var result = await _service.GetVehicles(page, pageSize, search);
 
         return Ok(ApiResponse<object>.Ok(
-            list,
+            result,
             "Success",
             200));
     }

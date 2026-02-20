@@ -12,8 +12,10 @@ public interface IVehicleService
     /// <summary>
     /// Get all vehicles with optional search
     /// </summary>
-    Task<List<VehicleDto>> GetAllAsync(string? search = null);
-
+    Task<VehicleListUiResponseDto> GetVehicles(
+     int page,
+     int pageSize,
+     string? search = null);
     /// <summary>
     /// Get vehicle by id
     /// </summary>

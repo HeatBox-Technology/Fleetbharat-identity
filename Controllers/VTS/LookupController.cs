@@ -39,10 +39,10 @@ namespace Controllers
         /// Gets all device categories.
         /// </summary>
         /// <returns>List of device categories (Id, Name).</returns>
-        [HttpGet("device-categories")]
-        public async Task<IActionResult> GetDeviceCategories()
+        [HttpGet("device-types")]
+        public async Task<IActionResult> GetDeviceTypes()
         {
-            var data = await _context.DeviceCategories.Select(x => new { x.Id, x.Name }).ToListAsync();
+            var data = await _context.DeviceTypes.Select(x => new { x.Id, x.Name }).ToListAsync();
             return Ok(data);
         }
 

@@ -1,87 +1,80 @@
-using Application.DTOs;
-using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
 
-namespace Controllers
+[ApiController]
+[Route("api/device-types")]
+public class DeviceTypeController : ControllerBase
 {
-    /// <summary>
-    /// API controller for managing device types.
-    /// </summary>
-    [ApiController]
-    [Route("api/[controller]")]
-    public class DeviceTypeController : ControllerBase
+    private readonly IDeviceTypeService _service;
+
+    public DeviceTypeController(IDeviceTypeService service)
     {
-        private readonly IDeviceTypeService _service;
+        _service = service;
+    }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="DeviceTypeController"/> class.
-        /// </summary>
-        public DeviceTypeController(IDeviceTypeService service)
-        {
-            _service = service;
-        }
+    [HttpPost]
+    public async Task<IActionResult> Create(DeviceTypeDto req)
+    {
+        var id = await _service.CreateAsync(req);
 
-        /// <summary>
-        /// Gets all device types.
-        /// </summary>
-        /// <returns>List of device types.</returns>
-        [HttpGet]
-        public async Task<IActionResult> GetAll()
-        {
-            var result = await _service.GetAllAsync();
-            return Ok(result);
-        }
+        return Ok(ApiResponse<object>.Ok(
+            new { deviceTypeId = id },
+            "Device type created",
+            200));
+    }
 
-        /// <summary>
-        /// Gets a device type by its unique identifier.
-        /// </summary>
-        /// <param name="id">Device type ID.</param>
-        /// <returns>The device type if found; otherwise, NotFound.</returns>
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(int id)
-        {
-            var result = await _service.GetByIdAsync(id);
-            if (result == null) return NotFound();
-            return Ok(result);
-        }
+    [HttpGet("list")]
+    public async Task<IActionResult> GetDeviceTypes(
+        int page = 1,
+        int pageSize = 10,
+        string? search = null)
+    {
+        var result = await _service.GetDeviceTypes(page, pageSize, search);
 
-        /// <summary>
-        /// Creates a new device type.
-        /// </summary>
-        /// <param name="dto">Device type DTO.</param>
-        /// <returns>The created device type.</returns>
-        /// <remarks>Returns 201 Created with the new device type.</remarks>
-        [HttpPost]
-        public async Task<IActionResult> Create([FromBody] DeviceTypeDto dto)
-        {
-            var result = await _service.CreateAsync(dto);
-            return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
-        }
+        return Ok(ApiResponse<object>.Ok(result, "Success", 200));
+    }
 
-        /// <summary>
-        /// Updates an existing device type.
-        /// </summary>
-        /// <param name="id">Device type ID.</param>
-        /// <param name="dto">Device type DTO.</param>
-        /// <returns>The updated device type.</returns>
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] DeviceTypeDto dto)
-        {
-            var result = await _service.UpdateAsync(id, dto);
-            return Ok(result);
-        }
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var data = await _service.GetByIdAsync(id);
 
-        /// <summary>
-        /// Deletes a device type.
-        /// </summary>
-        /// <param name="id">Device type ID.</param>
-        /// <returns>No content if deleted; otherwise, NotFound.</returns>
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
-        {
-            var success = await _service.DeleteAsync(id);
-            if (!success) return NotFound();
-            return NoContent();
-        }
+        if (data == null)
+            return NotFound(ApiResponse<object>.Fail("Not found", 404));
+
+        return Ok(ApiResponse<object>.Ok(data, "Success", 200));
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(int id, DeviceTypeDto req)
+    {
+        var ok = await _service.UpdateAsync(id, req);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("Not found", 404));
+
+        return Ok(ApiResponse<string>.Ok("Updated", "Device type updated", 200));
+    }
+
+    [HttpPatch("{id}/status")]
+    public async Task<IActionResult> UpdateStatus(int id, bool isEnabled)
+    {
+        var ok = await _service.UpdateStatusAsync(id, isEnabled);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("Not found", 404));
+
+        return Ok(ApiResponse<string>.Ok("Updated", "Status updated", 200));
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var ok = await _service.DeleteAsync(id);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("Not found", 404));
+
+        return Ok(ApiResponse<string>.Ok("Deleted", "Device type deleted", 200));
     }
 }
