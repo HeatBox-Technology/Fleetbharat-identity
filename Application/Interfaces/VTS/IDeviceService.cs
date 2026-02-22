@@ -10,7 +10,7 @@ public interface IDeviceService
     /// <summary>
     /// Create a new device.
     /// </summary>
-    Task<int> CreateAsync(DeviceDto dto);
+    Task<int> CreateAsync(CreateDeviceDto dto);
 
     /// <summary>
     /// Get devices with summary cards and pagination.
@@ -18,8 +18,8 @@ public interface IDeviceService
     Task<DeviceListUiResponseDto> GetDevices(
         int page,
         int pageSize,
-        int? accountId,
-        string? search);
+        int? accountId = null,
+        string? search = null);
 
     /// <summary>
     /// Get device by Id.
@@ -29,7 +29,7 @@ public interface IDeviceService
     /// <summary>
     /// Update device.
     /// </summary>
-    Task<bool> UpdateAsync(int id, DeviceDto dto);
+    Task<bool> UpdateAsync(int id, UpdateDeviceDto dto);
 
     /// <summary>
     /// Update device status only.
@@ -42,7 +42,16 @@ public interface IDeviceService
     Task<bool> DeleteAsync(int id);
 
     /// <summary>
+    /// Get paged devices without summary.
+    /// </summary>
+    Task<PagedResultDto<DeviceDto>> GetPagedAsync(
+        int page,
+        int pageSize,
+        int? accountId = null,
+        string? search = null);
+
+    /// <summary>
     /// Bulk create devices.
     /// </summary>
-    Task<List<DeviceDto>> BulkCreateAsync(List<DeviceDto> devices);
+    Task<List<DeviceDto>> BulkCreateAsync(List<CreateDeviceDto> devices);
 }

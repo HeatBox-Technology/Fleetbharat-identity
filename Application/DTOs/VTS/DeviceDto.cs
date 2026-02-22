@@ -4,6 +4,11 @@ using System;
 /// <summary>
 /// DTO for device details.
 /// </summary>
+using System;
+
+/// <summary>
+/// DTO for device details.
+/// </summary>
 public class DeviceDto
 {
     public int Id { get; set; }
@@ -12,7 +17,7 @@ public class DeviceDto
     public int AccountId { get; set; }
 
     /// <summary>Manufacturer ID</summary>
-    public int ManufactureID { get; set; }
+    public int ManufacturerId { get; set; }
 
     /// <summary>Device type ID</summary>
     public int DeviceTypeId { get; set; }
@@ -35,19 +40,36 @@ public class DeviceDto
     public DateTime? UpdatedAt { get; set; }
 
     public bool IsDeleted { get; set; }
-}
 
+    public bool IsActive { get; set; }
+}
+public class CreateDeviceDto
+{
+    public int AccountId { get; set; }
+    public int ManufacturerId { get; set; }
+    public int DeviceTypeId { get; set; }
+    public string DeviceNo { get; set; } = string.Empty;
+    public string DeviceImeiOrSerial { get; set; } = string.Empty;
+    public int CreatedBy { get; set; }
+}
+public class UpdateDeviceDto
+{
+    public int Id { get; set; }
+    public int ManufacturerId { get; set; }
+    public int DeviceTypeId { get; set; }
+    public string DeviceNo { get; set; } = string.Empty;
+    public string DeviceImeiOrSerial { get; set; } = string.Empty;
+    public string DeviceStatus { get; set; } = "Active";
+    public bool IsActive { get; set; }
+    public int? UpdatedBy { get; set; }
+}
 
 public class DeviceCardSummaryDto
 {
     public int TotalDevices { get; set; }
-
     public int InService { get; set; }
-
     public int OutOfService { get; set; }
 }
-
-
 public class DeviceListUiResponseDto
 {
     public DeviceCardSummaryDto Summary { get; set; } = new();

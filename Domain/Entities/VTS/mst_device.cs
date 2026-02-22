@@ -51,5 +51,6 @@ namespace Domain.Entities
 
         /// <summary>Soft delete flag</summary>
         public bool IsDeleted { get; set; } = false;
+        public bool IsActive { get; set; } = true;
     }
 }
