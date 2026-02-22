@@ -1,5 +1,4 @@
 using System;
-using Newtonsoft.Json;
 
 namespace Application.DTOs
 {
@@ -7,51 +6,42 @@ namespace Application.DTOs
     /// DTO for device live tracking and current location data from Redis.
     /// </summary>
     public class DeviceLiveTrackingDto
-{
-    public string DeviceNo { get; set; } = string.Empty;
-    public string Imei { get; set; } = string.Empty;
-    public double Latitude { get; set; }
-    public double Longitude { get; set; }
-    public double Speed { get; set; }
-    public double Altitude { get; set; }
-    public int Direction { get; set; }
-    public int? Rpm { get; set; }
-
-    // 👇 Raw array mapping
-    [JsonProperty("gpsDate")]
-    private int[]? GpsDateArray { get; set; }
-
-    [JsonProperty("receivedAt")]
-    private long[]? ReceivedAtArray { get; set; }
-
-    // 👇 Convert to proper DateTime
-    [JsonIgnore]
-    public DateTime GpsDate =>
-        GpsDateArray != null && GpsDateArray.Length >= 6
-            ? new DateTime(
-                GpsDateArray[0],
-                GpsDateArray[1],
-                GpsDateArray[2],
-                GpsDateArray[3],
-                GpsDateArray[4],
-                GpsDateArray[5])
-            : default;
-
-    [JsonIgnore]
-    public DateTime? ReceivedAt =>
-        ReceivedAtArray != null && ReceivedAtArray.Length >= 6
-            ? new DateTime(
-                (int)ReceivedAtArray[0],
-                (int)ReceivedAtArray[1],
-                (int)ReceivedAtArray[2],
-                (int)ReceivedAtArray[3],
-                (int)ReceivedAtArray[4],
-                (int)ReceivedAtArray[5])
-            : null;
-
-    public string Id { get; set; } = string.Empty;
-    public string VehicleNo { get; set; } = string.Empty;
-
-    // keep your other bool properties here...
-}
+    {
+        public string DeviceNo { get; set; } = string.Empty;
+        public string Imei { get; set; } = string.Empty;
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+        public double Speed { get; set; }
+        public double Altitude { get; set; }
+        public int Direction { get; set; }
+        public int? Rpm { get; set; }
+        public string? NorthSouthLatitude { get; set; }
+        public string? EastWestLongitude { get; set; }
+        public bool Ignition { get; set; }
+        public bool Ac { get; set; }
+        public bool PowerCut { get; set; }
+        public bool LowVoltage { get; set; }
+        public bool DoorLock { get; set; }
+        public bool DoorOpen { get; set; }
+        public bool DeviceLock { get; set; }
+        public bool FuelCut { get; set; }
+        public bool GpsFixed { get; set; }
+        public bool Collision { get; set; }
+        public DateTime GpsDate { get; set; }
+        public bool Sos { get; set; }
+        public bool OverSpeed { get; set; }
+        public bool Fatigue { get; set; }
+        public bool Danger { get; set; }
+        public bool GnssFault { get; set; }
+        public bool GnssAntennaDisconnect { get; set; }
+        public bool GnssAntennaShort { get; set; }
+        public bool PowerUnderVoltage { get; set; }
+        public bool PowerDown { get; set; }
+        public bool PowerDisplayFault { get; set; }
+        public bool TtsFault { get; set; }
+        public bool Rollover { get; set; }
+        public DateTime? ReceivedAt { get; set; }
+        public string Id { get; set; } = string.Empty;
+        public string VehicleNo { get; set; } = string.Empty;
+    }
 }
