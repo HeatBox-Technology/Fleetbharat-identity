@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Mvc;
 /// </summary>
 [ApiController]
 [Route("api/vehicles")]
+[AllowAnonymous]
+//[Authorize] // Enable if authentication required
 public class VehicleController : ControllerBase
 {
     private readonly IVehicleService _service;
@@ -21,9 +23,8 @@ public class VehicleController : ControllerBase
     /// <summary>
     /// Create vehicle
     /// </summary>
-    /// 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] VehicleDto req)
+    public async Task<IActionResult> Create([FromBody] CreateVehicleDto req)
     {
         var id = await _service.CreateAsync(req);
 
@@ -32,6 +33,10 @@ public class VehicleController : ControllerBase
             "Vehicle created",
             200));
     }
+
+    /// <summary>
+    /// Get vehicles with summary + pagination
+    /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetAll(
         [FromQuery] int page = 1,
@@ -67,7 +72,7 @@ public class VehicleController : ControllerBase
     /// Update vehicle
     /// </summary>
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, [FromBody] VehicleDto req)
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateVehicleDto req)
     {
         var ok = await _service.UpdateAsync(id, req);
 
@@ -98,7 +103,7 @@ public class VehicleController : ControllerBase
     }
 
     /// <summary>
-    /// Delete vehicle
+    /// Delete vehicle (Soft delete)
     /// </summary>
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
@@ -120,9 +125,10 @@ public class VehicleController : ControllerBase
     [HttpGet("paged")]
     public async Task<IActionResult> GetPaged(
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 10)
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null)
     {
-        var result = await _service.GetPagedAsync(page, pageSize);
+        var result = await _service.GetPagedAsync(page, pageSize, search);
 
         return Ok(ApiResponse<object>.Ok(
             result,
@@ -131,10 +137,10 @@ public class VehicleController : ControllerBase
     }
 
     /// <summary>
-    /// Bulk upload vehicles (Ultra fast)
+    /// Bulk upload vehicles
     /// </summary>
     [HttpPost("bulk")]
-    public async Task<IActionResult> BulkUpload([FromBody] List<VehicleDto> vehicles)
+    public async Task<IActionResult> BulkUpload([FromBody] List<CreateVehicleDto> vehicles)
     {
         var result = await _service.BulkCreateAsync(vehicles);
 

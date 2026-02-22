@@ -7,15 +7,16 @@ public interface IVehicleService
     /// <summary>
     /// Create new vehicle
     /// </summary>
-    Task<int> CreateAsync(VehicleDto dto);
+    Task<int> CreateAsync(CreateVehicleDto dto);
 
     /// <summary>
-    /// Get all vehicles with optional search
+    /// Get vehicles with summary + pagination (UI response)
     /// </summary>
     Task<VehicleListUiResponseDto> GetVehicles(
-     int page,
-     int pageSize,
-     string? search = null);
+        int page,
+        int pageSize,
+        string? search = null);
+
     /// <summary>
     /// Get vehicle by id
     /// </summary>
@@ -24,7 +25,7 @@ public interface IVehicleService
     /// <summary>
     /// Update vehicle
     /// </summary>
-    Task<bool> UpdateAsync(int id, VehicleDto dto);
+    Task<bool> UpdateAsync(int id, UpdateVehicleDto dto);
 
     /// <summary>
     /// Update vehicle status
@@ -32,17 +33,20 @@ public interface IVehicleService
     Task<bool> UpdateStatusAsync(int id, string status);
 
     /// <summary>
-    /// Delete vehicle
+    /// Soft delete vehicle
     /// </summary>
     Task<bool> DeleteAsync(int id);
 
     /// <summary>
-    /// Get paged vehicles
+    /// Get paged vehicles (without summary)
     /// </summary>
-    Task<PagedResultDto<VehicleDto>> GetPagedAsync(int page, int pageSize);
+    Task<PagedResultDto<VehicleDto>> GetPagedAsync(
+        int page,
+        int pageSize,
+        string? search = null);
 
     /// <summary>
     /// Bulk create vehicles
     /// </summary>
-    Task<List<VehicleDto>> BulkCreateAsync(List<VehicleDto> vehicles);
+    Task<List<VehicleDto>> BulkCreateAsync(List<CreateVehicleDto> vehicles);
 }

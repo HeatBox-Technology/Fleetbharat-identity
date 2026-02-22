@@ -18,68 +18,44 @@ namespace Application.Services
             _db = db;
         }
 
-        public async Task<int> CreateAsync(VehicleDto dto)
+        public async Task<int> CreateAsync(CreateVehicleDto dto)
         {
             var vehicleNumber = dto.VehicleNumber.Trim();
 
             var exists = await _db.Vehicles
-                .AnyAsync(x => x.VehicleNumber == vehicleNumber);
+                .AnyAsync(x => x.VehicleNumber == vehicleNumber && !x.IsDeleted);
 
             if (exists)
                 throw new InvalidOperationException("Vehicle already exists");
 
-            using var tx = await _db.Database.BeginTransactionAsync();
-
-            try
+            var entity = new mst_vehicle
             {
-                var entity = new mst_vehicle
-                {
-                    AccountId = dto.AccountId,
-                    VehicleNumber = vehicleNumber,
-                    VinOrChassisNumber = dto.VinOrChassisNumber?.Trim(),
-                    RegistrationDate = dto.RegistrationDate,
-                    VehicleTypeId = dto.VehicleTypeId,
-                    VehicleBrandOemId = dto.VehicleBrandOemId,
-                    OwnershipType = dto.OwnershipType,
-                    LeasedVendorId = dto.LeasedVendorId,
-                    ImageFilePath = dto.ImageFilePath,
-                    Status = dto.Status,
-                    VehicleClass = dto.VehicleClass,
-                    RtoPassing = dto.RtoPassing,
-                    Warranty = dto.Warranty,
-                    Insurer = dto.Insurer,
-                    VehicleColor = dto.VehicleColor,
-                    //CreatedAt = DateTime.UtcNow,
-                    //UpdatedAt = DateTime.UtcNow
-                };
+                AccountId = dto.AccountId,
+                VehicleNumber = vehicleNumber,
+                VinOrChassisNumber = dto.VinOrChassisNumber?.Trim(),
+                VehicleTypeId = dto.VehicleTypeId,
+                Status = "Active",
+                CreatedBy = dto.CreatedBy,
+                CreatedAt = DateTime.UtcNow
+            };
 
-                _db.Vehicles.Add(entity);
-                await _db.SaveChangesAsync();
+            _db.Vehicles.Add(entity);
+            await _db.SaveChangesAsync();
 
-                await tx.CommitAsync();
-
-                return entity.Id;
-            }
-            catch (Exception ex)
-            {
-                await tx.RollbackAsync();
-
-                Console.WriteLine("ERROR ======");
-                Console.WriteLine(ex.ToString());
-                Console.WriteLine("============");
-                throw;
-            }
+            return entity.Id;
         }
 
         public async Task<VehicleListUiResponseDto> GetVehicles(
-    int page,
-    int pageSize,
-    string? search = null)
+            int page,
+            int pageSize,
+            string? search = null)
         {
             if (page <= 0) page = 1;
             if (pageSize <= 0) pageSize = 10;
 
-            var query = _db.Vehicles.AsNoTracking().AsQueryable();
+            var query = _db.Vehicles
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted);
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -87,7 +63,6 @@ namespace Application.Services
                 query = query.Where(x => x.VehicleNumber.ToLower().Contains(s));
             }
 
-            // 🔹 Summary
             var totalFleet = await query.CountAsync();
             var inService = await query.CountAsync(x => x.Status.ToLower() == "active");
             var outOfService = totalFleet - inService;
@@ -99,7 +74,6 @@ namespace Application.Services
                 OutOfService = outOfService
             };
 
-            // 🔹 Pagination
             var totalRecords = totalFleet;
 
             var items = await query
@@ -112,18 +86,13 @@ namespace Application.Services
                     AccountId = x.AccountId,
                     VehicleNumber = x.VehicleNumber,
                     VinOrChassisNumber = x.VinOrChassisNumber,
-                    RegistrationDate = x.RegistrationDate,
                     VehicleTypeId = x.VehicleTypeId,
-                    VehicleBrandOemId = x.VehicleBrandOemId,
-                    OwnershipType = x.OwnershipType,
-                    LeasedVendorId = x.LeasedVendorId,
-                    ImageFilePath = x.ImageFilePath,
                     Status = x.Status,
-                    VehicleClass = x.VehicleClass,
-                    RtoPassing = x.RtoPassing,
-                    Warranty = x.Warranty,
-                    Insurer = x.Insurer,
-                    VehicleColor = x.VehicleColor
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt,
+                    UpdatedBy = x.UpdatedBy,
+                    UpdatedAt = x.UpdatedAt,
+                    IsDeleted = x.IsDeleted
                 })
                 .ToListAsync();
 
@@ -146,50 +115,37 @@ namespace Application.Services
         public async Task<VehicleDto?> GetByIdAsync(int id)
         {
             return await _db.Vehicles
-                .Where(x => x.Id == id)
+                .Where(x => x.Id == id && !x.IsDeleted)
                 .Select(x => new VehicleDto
                 {
                     Id = x.Id,
                     AccountId = x.AccountId,
                     VehicleNumber = x.VehicleNumber,
                     VinOrChassisNumber = x.VinOrChassisNumber,
-                    RegistrationDate = x.RegistrationDate,
                     VehicleTypeId = x.VehicleTypeId,
-                    VehicleBrandOemId = x.VehicleBrandOemId,
-                    OwnershipType = x.OwnershipType,
-                    LeasedVendorId = x.LeasedVendorId,
-                    ImageFilePath = x.ImageFilePath,
                     Status = x.Status,
-                    VehicleClass = x.VehicleClass,
-                    RtoPassing = x.RtoPassing,
-                    Warranty = x.Warranty,
-                    Insurer = x.Insurer,
-                    VehicleColor = x.VehicleColor
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt,
+                    UpdatedBy = x.UpdatedBy,
+                    UpdatedAt = x.UpdatedAt,
+                    IsDeleted = x.IsDeleted
                 })
                 .FirstOrDefaultAsync();
         }
 
-        public async Task<bool> UpdateAsync(int id, VehicleDto dto)
+        public async Task<bool> UpdateAsync(int id, UpdateVehicleDto dto)
         {
-            var entity = await _db.Vehicles.FirstOrDefaultAsync(x => x.Id == id);
+            var entity = await _db.Vehicles
+                .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+
             if (entity == null) return false;
 
-            entity.AccountId = dto.AccountId;
             entity.VehicleNumber = dto.VehicleNumber.Trim();
             entity.VinOrChassisNumber = dto.VinOrChassisNumber?.Trim();
-            entity.RegistrationDate = dto.RegistrationDate;
             entity.VehicleTypeId = dto.VehicleTypeId;
-            entity.VehicleBrandOemId = dto.VehicleBrandOemId;
-            entity.OwnershipType = dto.OwnershipType;
-            entity.LeasedVendorId = dto.LeasedVendorId;
-            entity.ImageFilePath = dto.ImageFilePath;
             entity.Status = dto.Status;
-            entity.VehicleClass = dto.VehicleClass;
-            entity.RtoPassing = dto.RtoPassing;
-            entity.Warranty = dto.Warranty;
-            entity.Insurer = dto.Insurer;
-            entity.VehicleColor = dto.VehicleColor;
-            //entity.UpdatedAt = DateTime.UtcNow;
+            entity.UpdatedBy = dto.updatedBy;
+            entity.UpdatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
             return true;
@@ -197,11 +153,13 @@ namespace Application.Services
 
         public async Task<bool> UpdateStatusAsync(int id, string status)
         {
-            var entity = await _db.Vehicles.FirstOrDefaultAsync(x => x.Id == id);
+            var entity = await _db.Vehicles
+                .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+
             if (entity == null) return false;
 
             entity.Status = status;
-            //entity.UpdatedAt = DateTime.UtcNow;
+            entity.UpdatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
             return true;
@@ -209,20 +167,35 @@ namespace Application.Services
 
         public async Task<bool> DeleteAsync(int id)
         {
-            var entity = await _db.Vehicles.FirstOrDefaultAsync(x => x.Id == id);
+            var entity = await _db.Vehicles
+                .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+
             if (entity == null) return false;
 
-            _db.Vehicles.Remove(entity);
+            entity.IsDeleted = true;
+            entity.UpdatedAt = DateTime.UtcNow;
+
             await _db.SaveChangesAsync();
             return true;
         }
 
-        public async Task<PagedResultDto<VehicleDto>> GetPagedAsync(int page, int pageSize)
+        public async Task<PagedResultDto<VehicleDto>> GetPagedAsync(
+            int page,
+            int pageSize,
+            string? search = null)
         {
             if (page < 1) page = 1;
             if (pageSize < 1) pageSize = 10;
 
-            var query = _db.Vehicles.AsQueryable();
+            var query = _db.Vehicles
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(x => x.VehicleNumber.ToLower().Contains(s));
+            }
 
             var totalCount = await query.CountAsync();
 
@@ -236,18 +209,10 @@ namespace Application.Services
                     AccountId = x.AccountId,
                     VehicleNumber = x.VehicleNumber,
                     VinOrChassisNumber = x.VinOrChassisNumber,
-                    RegistrationDate = x.RegistrationDate,
                     VehicleTypeId = x.VehicleTypeId,
-                    VehicleBrandOemId = x.VehicleBrandOemId,
-                    OwnershipType = x.OwnershipType,
-                    LeasedVendorId = x.LeasedVendorId,
-                    ImageFilePath = x.ImageFilePath,
                     Status = x.Status,
-                    VehicleClass = x.VehicleClass,
-                    RtoPassing = x.RtoPassing,
-                    Warranty = x.Warranty,
-                    Insurer = x.Insurer,
-                    VehicleColor = x.VehicleColor
+                    CreatedBy = x.CreatedBy,
+                    CreatedAt = x.CreatedAt
                 })
                 .ToListAsync();
 
@@ -260,65 +225,33 @@ namespace Application.Services
             };
         }
 
-        public async Task<List<VehicleDto>> BulkCreateAsync(List<VehicleDto> vehicles)
+        public async Task<List<VehicleDto>> BulkCreateAsync(List<CreateVehicleDto> vehicles)
         {
-            using var tx = await _db.Database.BeginTransactionAsync();
-
-            try
+            var entities = vehicles.Select(dto => new mst_vehicle
             {
-                var entities = vehicles.Select(dto => new mst_vehicle
-                {
-                    AccountId = dto.AccountId,
-                    VehicleNumber = dto.VehicleNumber.Trim(),
-                    VinOrChassisNumber = dto.VinOrChassisNumber?.Trim(),
-                    RegistrationDate = dto.RegistrationDate,
-                    VehicleTypeId = dto.VehicleTypeId,
-                    VehicleBrandOemId = dto.VehicleBrandOemId,
-                    OwnershipType = dto.OwnershipType,
-                    LeasedVendorId = dto.LeasedVendorId,
-                    ImageFilePath = dto.ImageFilePath,
-                    Status = dto.Status,
-                    VehicleClass = dto.VehicleClass,
-                    RtoPassing = dto.RtoPassing,
-                    Warranty = dto.Warranty,
-                    Insurer = dto.Insurer,
-                    VehicleColor = dto.VehicleColor
-                }).ToList();
+                AccountId = dto.AccountId,
+                VehicleNumber = dto.VehicleNumber.Trim(),
+                VinOrChassisNumber = dto.VinOrChassisNumber?.Trim(),
+                VehicleTypeId = dto.VehicleTypeId,
+                Status = "Active",
+                CreatedBy = dto.CreatedBy,
+                CreatedAt = DateTime.UtcNow
+            }).ToList();
 
-                _db.Vehicles.AddRange(entities);
-                await _db.SaveChangesAsync();
+            _db.Vehicles.AddRange(entities);
+            await _db.SaveChangesAsync();
 
-                await tx.CommitAsync();
-
-                return entities.Select(x => new VehicleDto
-                {
-                    Id = x.Id,
-                    AccountId = x.AccountId,
-                    VehicleNumber = x.VehicleNumber,
-                    VinOrChassisNumber = x.VinOrChassisNumber,
-                    RegistrationDate = x.RegistrationDate,
-                    VehicleTypeId = x.VehicleTypeId,
-                    VehicleBrandOemId = x.VehicleBrandOemId,
-                    OwnershipType = x.OwnershipType,
-                    LeasedVendorId = x.LeasedVendorId,
-                    ImageFilePath = x.ImageFilePath,
-                    Status = x.Status,
-                    VehicleClass = x.VehicleClass,
-                    RtoPassing = x.RtoPassing,
-                    Warranty = x.Warranty,
-                    Insurer = x.Insurer,
-                    VehicleColor = x.VehicleColor
-                }).ToList();
-            }
-            catch
+            return entities.Select(x => new VehicleDto
             {
-                await tx.RollbackAsync();
-                throw;
-            }
+                Id = x.Id,
+                AccountId = x.AccountId,
+                VehicleNumber = x.VehicleNumber,
+                VinOrChassisNumber = x.VinOrChassisNumber,
+                VehicleTypeId = x.VehicleTypeId,
+                Status = x.Status,
+                CreatedBy = x.CreatedBy,
+                CreatedAt = x.CreatedAt
+            }).ToList();
         }
-
-
     }
-
-
 }

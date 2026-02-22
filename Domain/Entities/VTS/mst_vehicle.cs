@@ -27,41 +27,19 @@ namespace Domain.Entities
         [MaxLength(50)]
         public string VinOrChassisNumber { get; set; } = string.Empty;
 
-        /// <summary>Registration date</summary>
-        public DateTime RegistrationDate { get; set; }
-
         /// <summary>Vehicle type ID (FK to mst_vehicle_type)</summary>
         public int VehicleTypeId { get; set; }
 
         /// <summary>Vehicle brand OEM ID (FK to VehicleBrandOem)</summary>
-        public int VehicleBrandOemId { get; set; }
-        public VehicleBrandOem? VehicleBrandOem { get; set; }
 
-        /// <summary>Ownership type (e.g. 'Owned', 'Leased')</summary>
-        [MaxLength(20)]
-        public string OwnershipType { get; set; } = string.Empty;
-
-        /// <summary>Leased vendor ID (FK to LeasedVendor, optional)</summary>
-        public int? LeasedVendorId { get; set; }
-        public LeasedVendor? LeasedVendor { get; set; }
-
-        /// <summary>Image file path (optional)</summary>
-        public string? ImageFilePath { get; set; }
-
-        /// <summary>Status (e.g. 'Active', 'Inactive')</summary>
         [MaxLength(20)]
         public string Status { get; set; } = "Active";
 
-        // Optional fields
-        /// <summary>Vehicle class (optional)</summary>
-        public string? VehicleClass { get; set; }
-        /// <summary>RTO passing (optional)</summary>
-        public string? RtoPassing { get; set; }
-        /// <summary>Warranty (optional)</summary>
-        public string? Warranty { get; set; }
-        /// <summary>Insurer (optional)</summary>
-        public string? Insurer { get; set; }
-        /// <summary>Vehicle color (optional)</summary>
-        public string? VehicleColor { get; set; }
+        public int CreatedBy { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public int? UpdatedBy { get; set; }
+        public DateTime? UpdatedAt { get; set; }
+        public bool IsDeleted { get; set; } = false;
+
     }
 }
