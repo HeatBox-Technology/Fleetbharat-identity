@@ -1,11 +1,4 @@
 using System;
-
-
-/// <summary>
-/// DTO for device details.
-/// </summary>
-using System;
-
 /// <summary>
 /// DTO for device details.
 /// </summary>

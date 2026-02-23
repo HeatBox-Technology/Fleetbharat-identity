@@ -30,6 +30,8 @@ namespace Infrastructure.Data
             services.AddScoped<IDeviceSimMapService, DeviceSimMapService>();
             services.AddScoped<IVehicleSensorMapService, VehicleSensorMapService>();
             services.AddScoped<IOemManufacturerService, OemManufacturerService>();
+            services.AddScoped<IDriverService, DriverService>();
+
 
             // ✅ Redis
             var redisConn = configuration.GetSection("Redis")["ConnectionString"];

@@ -1,31 +1,91 @@
 using System;
 
-namespace Application.DTOs
+
+public class DriverDto
 {
-    /// <summary>
-    /// Data Transfer Object for Driver.
-    /// </summary>
-    public class DriverDto
-    {
-        /// <example>1</example>
-        public long DriverId { get; set; }
-        /// <example>101</example>
-        public long AccountId { get; set; }
-        /// <example>John Doe</example>
-        public string Name { get; set; } = string.Empty;
-        /// <example>9876543210</example>
-        public string Mobile { get; set; } = string.Empty;
-        /// <example>MH1234567890</example>
-        public string LicenseNumber { get; set; } = string.Empty;
-        /// <example>2027-01-01</example>
-        public DateTime? LicenseExpiry { get; set; }
-        /// <example>O+</example>
-        public string BloodGroup { get; set; } = string.Empty;
-        /// <example>9123456789</example>
-        public string EmergencyContact { get; set; } = string.Empty;
-        /// <example>active</example>
-        public string StatusKey { get; set; } = string.Empty;
-        /// <example>2026-01-31T12:00:00Z</example>
-        public DateTime CreatedAt { get; set; }
-    }
+    public int DriverId { get; set; }
+
+    public int AccountId { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Mobile { get; set; } = string.Empty;
+
+    public string LicenseNumber { get; set; } = string.Empty;
+
+    public DateTime? LicenseExpiry { get; set; }
+
+    public string? BloodGroup { get; set; }
+
+    public string? EmergencyContact { get; set; }
+
+    public string StatusKey { get; set; } = "active";
+
+    public DateTime CreatedAt { get; set; }
+
+    public int CreatedBy { get; set; }
+
+    public DateTime? UpdatedAt { get; set; }
+
+    public int? UpdatedBy { get; set; }
+
+    public bool IsActive { get; set; }
+
+    public bool IsDeleted { get; set; }
+}
+public class CreateDriverDto
+{
+    public int AccountId { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string Mobile { get; set; } = string.Empty;
+
+    public string LicenseNumber { get; set; } = string.Empty;
+
+    public DateTime? LicenseExpiry { get; set; }
+
+    public string? BloodGroup { get; set; }
+
+    public string? EmergencyContact { get; set; }
+
+    public string StatusKey { get; set; } = "active";
+
+    public int CreatedBy { get; set; }
+}
+public class UpdateDriverDto
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string Mobile { get; set; } = string.Empty;
+
+    public string LicenseNumber { get; set; } = string.Empty;
+
+    public DateTime? LicenseExpiry { get; set; }
+
+    public string? BloodGroup { get; set; }
+
+    public string? EmergencyContact { get; set; }
+
+    public string StatusKey { get; set; } = "active";
+
+    public bool IsActive { get; set; }
+
+    public int? UpdatedBy { get; set; }
+}
+public class DriverSummaryDto
+{
+    public int TotalDrivers { get; set; }
+
+    public int Active { get; set; }
+
+    public int Inactive { get; set; }
+
+    public int LicenseExpiringSoon { get; set; }
+}
+public class DriverListUiResponseDto
+{
+    public DriverSummaryDto Summary { get; set; } = new();
+
+    public PagedResultDto<DriverDto> Drivers { get; set; } = new();
 }

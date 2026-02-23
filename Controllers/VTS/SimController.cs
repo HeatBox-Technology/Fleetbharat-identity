@@ -1,110 +1,129 @@
-using Application.DTOs;
-using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Application.DTOs;
+using Microsoft.AspNetCore.Mvc;
 
-namespace Controllers
+[ApiController]
+[Route("api/sims")]
+public class SimController : ControllerBase
 {
-    /// <summary>
-    /// API controller for managing SIM cards.
-    /// </summary>
-    [ApiController]
-    [Route("api/[controller]")]
-    public class SimController : ControllerBase
+    private readonly ISimService _service;
+
+    public SimController(ISimService service)
     {
-        private readonly ISimService _service;
+        _service = service;
+    }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="SimController"/> class.
-        /// </summary>
-        public SimController(ISimService service)
-        {
-            _service = service;
-        }
+    /// <summary>
+    /// Get SIMs with summary + pagination
+    /// </summary>
+    [HttpGet("list")]
+    public async Task<IActionResult> GetSims(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] int? accountId = null,
+        [FromQuery] string? search = null)
+    {
+        var result = await _service.GetSims(page, pageSize, accountId, search);
 
-        /// <summary>
-        /// Gets a paged list of SIMs.
-        /// </summary>
-        /// <param name="page">Page number (1-based).</param>
-        /// <param name="pageSize">Page size.</param>
-        /// <returns>Paged result of SIMs.</returns>
-        /// <remarks>
-        /// Sample response:
-        /// {
-        ///   "data": [ { /* SimDto fields */ } ],
-        ///   "totalCount": 100,
-        ///   "page": 1,
-        ///   "pageSize": 10
-        /// }
-        /// </remarks>
-        [HttpGet]
-        public async Task<IActionResult> GetPaged([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
-        {
-            var result = await _service.GetPagedAsync(page, pageSize);
-            return Ok(result);
-        }
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "Success",
+            200));
+    }
 
-        /// <summary>
-        /// Gets a SIM by its unique identifier.
-        /// </summary>
-        /// <param name="id">SIM ID.</param>
-        /// <returns>The SIM if found; otherwise, NotFound.</returns>
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetById(long id)
-        {
-            var result = await _service.GetByIdAsync(id);
-            if (result == null) return NotFound();
-            return Ok(result);
-        }
+    /// <summary>
+    /// Get SIM by Id
+    /// </summary>
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var data = await _service.GetByIdAsync(id);
 
-        /// <summary>
-        /// Creates a new SIM.
-        /// </summary>
-        /// <param name="dto">SIM DTO.</param>
-        /// <returns>The created SIM.</returns>
-        /// <remarks>Returns 201 Created with the new SIM.</remarks>
-        [HttpPost]
-        public async Task<IActionResult> Create([FromBody] SimDto dto)
-        {
-            var result = await _service.CreateAsync(dto);
-            return CreatedAtAction(nameof(GetById), new { id = result.SimId }, result);
-        }
+        if (data == null)
+            return NotFound(ApiResponse<object>.Fail("SIM not found", 404));
 
-        /// <summary>
-        /// Updates an existing SIM.
-        /// </summary>
-        /// <param name="id">SIM ID.</param>
-        /// <param name="dto">SIM DTO.</param>
-        /// <returns>The updated SIM.</returns>
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(long id, [FromBody] SimDto dto)
-        {
-            var result = await _service.UpdateAsync(id, dto);
-            return Ok(result);
-        }
+        return Ok(ApiResponse<object>.Ok(data, "Success", 200));
+    }
 
-        /// <summary>
-        /// Deletes a SIM.
-        /// </summary>
-        /// <param name="id">SIM ID.</param>
-        /// <returns>No content if deleted; otherwise, NotFound.</returns>
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(long id)
-        {
-            var success = await _service.DeleteAsync(id);
-            if (!success) return NotFound();
-            return NoContent();
-        }
-        /// <summary>
-        /// Bulk upload SIMs.
-        /// </summary>
-        /// <remarks>Uploads multiple SIMs at once.</remarks>
-        /// <param name="sims">List of SIMs to upload.</param>
-        [HttpPost("bulk-upload")]
-        public async Task<IActionResult> BulkUpload([FromBody] IEnumerable<SimDto> sims)
-        {
-            var result = await _service.BulkCreateAsync(sims);
-            return Ok(result);
-        }
+    /// <summary>
+    /// Create SIM
+    /// </summary>
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreateSimDto dto)
+    {
+        var id = await _service.CreateAsync(dto);
+
+        return Ok(ApiResponse<object>.Ok(
+            new { simId = id },
+            "SIM created",
+            200));
+    }
+
+    /// <summary>
+    /// Update SIM
+    /// </summary>
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateSimDto dto)
+    {
+        var ok = await _service.UpdateAsync(id, dto);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("SIM not found", 404));
+
+        return Ok(ApiResponse<string>.Ok(
+            "Updated",
+            "SIM updated",
+            200));
+    }
+
+    /// <summary>
+    /// Update SIM status
+    /// </summary>
+    [HttpPatch("{id}/status")]
+    public async Task<IActionResult> UpdateStatus(
+        int id,
+        [FromQuery] bool isActive)
+    {
+        var ok = await _service.UpdateStatusAsync(id, isActive);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("SIM not found", 404));
+
+        return Ok(ApiResponse<string>.Ok(
+            "Updated",
+            "Status updated",
+            200));
+    }
+
+    /// <summary>
+    /// Delete SIM (soft delete)
+    /// </summary>
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var ok = await _service.DeleteAsync(id);
+
+        if (!ok)
+            return NotFound(ApiResponse<object>.Fail("SIM not found", 404));
+
+        return Ok(ApiResponse<string>.Ok(
+            "Deleted",
+            "SIM deleted",
+            200));
+    }
+
+    /// <summary>
+    /// Bulk upload SIMs
+    /// </summary>
+    [HttpPost("bulk")]
+    public async Task<IActionResult> BulkUpload([FromBody] List<CreateSimDto> sims)
+    {
+        var result = await _service.BulkCreateAsync(sims);
+
+        return Ok(ApiResponse<object>.Ok(
+            result,
+            "SIMs created successfully",
+            200));
     }
 }

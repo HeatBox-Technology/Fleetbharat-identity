@@ -1,169 +1,243 @@
 using Application.DTOs;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using System.Linq;
 using Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using Domain.Entities;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Linq;
+using System;
 
-namespace Application.Services
+public class SimService : ISimService
 {
-    /// <summary>
-    /// Service implementation for SIM management.
-    /// Handles CRUD operations for SIM cards.
-    /// </summary>
-    public class SimService : ISimService
+    private readonly IdentityDbContext _db;
+
+    public SimService(IdentityDbContext db)
     {
-        private readonly IdentityDbContext _context;
+        _db = db;
+    }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="SimService"/> class.
-        /// </summary>
-        public SimService(IdentityDbContext context)
+    public async Task<int> CreateAsync(CreateSimDto dto)
+    {
+        // Account validation
+        var accountExists = await _db.Accounts
+            .AnyAsync(x => x.AccountId == dto.AccountId);
+
+        if (!accountExists)
+            throw new Exception("Invalid AccountId");
+
+        // ICCID uniqueness
+        var exists = await _db.Sims
+            .AnyAsync(x => x.Iccid == dto.Iccid && !x.IsDeleted);
+
+        if (exists)
+            throw new Exception("ICCID already exists");
+
+        var entity = new mst_sim
         {
-            _context = context;
+            AccountId = dto.AccountId,
+            Iccid = dto.Iccid,
+            Msisdn = dto.Msisdn,
+            Imsi = dto.Imsi,
+            NetworkProviderId = dto.NetworkProviderId,
+            StatusKey = dto.StatusKey,
+            ActivatedAt = dto.ActivatedAt,
+            ExpiryAt = dto.ExpiryAt,
+            CreatedBy = dto.CreatedBy,
+            CreatedAt = DateTime.UtcNow,
+            IsActive = true,
+            IsDeleted = false
+        };
+
+        _db.Sims.Add(entity);
+        await _db.SaveChangesAsync();
+
+        return entity.SimId;
+    }
+
+    public async Task<bool> UpdateAsync(int id, UpdateSimDto dto)
+    {
+        var entity = await _db.Sims
+            .FirstOrDefaultAsync(x => x.SimId == id && !x.IsDeleted);
+
+        if (entity == null)
+            throw new Exception("SIM not found");
+
+        entity.Iccid = dto.Iccid;
+        entity.Msisdn = dto.Msisdn;
+        entity.Imsi = dto.Imsi;
+        entity.NetworkProviderId = dto.NetworkProviderId;
+        entity.StatusKey = dto.StatusKey;
+        entity.ActivatedAt = dto.ActivatedAt;
+        entity.ExpiryAt = dto.ExpiryAt;
+        entity.IsActive = dto.IsActive;
+        entity.UpdatedBy = dto.UpdatedBy;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> UpdateStatusAsync(int id, bool isActive)
+    {
+        var entity = await _db.Sims
+            .FirstOrDefaultAsync(x => x.SimId == id && !x.IsDeleted);
+
+        if (entity == null)
+            throw new Exception("SIM not found");
+
+        entity.IsActive = isActive;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> DeleteAsync(int id)
+    {
+        var entity = await _db.Sims
+            .FirstOrDefaultAsync(x => x.SimId == id && !x.IsDeleted);
+
+        if (entity == null)
+            return false;
+
+        entity.IsDeleted = true;
+        entity.IsActive = false;
+        entity.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<SimDto?> GetByIdAsync(int id)
+    {
+        return await _db.Sims
+            .Where(x => x.SimId == id && !x.IsDeleted)
+            .Select(x => MapToDto(x))
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<IEnumerable<SimDto>> GetAllAsync()
+    {
+        return await _db.Sims
+            .Where(x => !x.IsDeleted)
+            .Select(x => MapToDto(x))
+            .ToListAsync();
+    }
+
+    public async Task<PagedResultDto<SimDto>> GetPagedAsync(
+        int page,
+        int pageSize,
+        int? accountId = null,
+        string? search = null)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 10;
+
+        var query = _db.Sims
+            .Where(x => !x.IsDeleted)
+            .AsQueryable();
+
+        if (accountId.HasValue)
+            query = query.Where(x => x.AccountId == accountId);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.ToLower();
+            query = query.Where(x =>
+                x.Iccid.ToLower().Contains(s) ||
+                x.Msisdn!.ToLower().Contains(s));
         }
 
-        /// <summary>
-        /// Gets all SIMs.
-        /// </summary>
-        /// <returns>List of <see cref="SimDto"/>.</returns>
-        public async Task<IEnumerable<SimDto>> GetAllAsync()
-        {
-            var entities = await _context.Sims.ToListAsync();
-            return entities.Select(MapToDto);
-        }
+        var total = await query.CountAsync();
 
-        /// <summary>
-        /// Gets a SIM by its unique identifier.
-        /// </summary>
-        /// <param name="id">SIM ID.</param>
-        /// <returns>The <see cref="SimDto"/> if found; otherwise, null.</returns>
-        public async Task<SimDto?> GetByIdAsync(long id)
-        {
-            var entity = await _context.Sims.FindAsync(id);
-            return entity == null ? null : MapToDto(entity);
-        }
+        var items = await query
+            .OrderByDescending(x => x.SimId)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => MapToDto(x))
+            .ToListAsync();
 
-        /// <summary>
-        /// Creates a new SIM.
-        /// </summary>
-        /// <param name="dto">SIM DTO.</param>
-        /// <returns>The created <see cref="SimDto"/>.</returns>
-        public async Task<SimDto> CreateAsync(SimDto dto)
+        return new PagedResultDto<SimDto>
         {
-            var entity = MapToEntity(dto, false);
-            _context.Sims.Add(entity);
-            await _context.SaveChangesAsync();
-            return MapToDto(entity);
-        }
+            Items = items,
+            TotalRecords = total,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
 
-        /// <summary>
-        /// Updates an existing SIM.
-        /// </summary>
-        /// <param name="id">SIM ID.</param>
-        /// <param name="dto">SIM DTO.</param>
-        /// <returns>The updated <see cref="SimDto"/>.</returns>
-        public async Task<SimDto> UpdateAsync(long id, SimDto dto)
-        {
-            var entity = await _context.Sims.FindAsync(id);
-            if (entity == null) throw new KeyNotFoundException();
-            entity.AccountId = dto.AccountId;
-            entity.Iccid = dto.Iccid;
-            entity.Msisdn = dto.Msisdn;
-            entity.Imsi = dto.Imsi;
-            entity.NetworkProviderId = dto.NetworkProviderId;
-            entity.StatusKey = dto.StatusKey;
-            entity.ActivatedAt = dto.ActivatedAt;
-            entity.ExpiryAt = dto.ExpiryAt;
-            await _context.SaveChangesAsync();
-            return MapToDto(entity);
-        }
+    public async Task<SimListUiResponseDto> GetSims(
+        int page,
+        int pageSize,
+        int? accountId,
+        string? search)
+    {
+        var query = _db.Sims.Where(x => !x.IsDeleted);
 
-        /// <summary>
-        /// Deletes a SIM.
-        /// </summary>
-        /// <param name="id">SIM ID.</param>
-        /// <returns>True if deleted; otherwise, false.</returns>
-        public async Task<bool> DeleteAsync(long id)
-        {
-            var entity = await _context.Sims.FindAsync(id);
-            if (entity == null) return false;
-            _context.Sims.Remove(entity);
-            await _context.SaveChangesAsync();
-            return true;
-        }
+        var total = await query.CountAsync();
+        var active = await query.CountAsync(x => x.IsActive);
 
-        /// <summary>
-        /// Gets a paged list of SIMs.
-        /// </summary>
-        /// <param name="page">Page number.</param>
-        /// <param name="pageSize">Number of items per page.</param>
-        /// <returns>A <see cref="PagedResultDto{SimDto}"/> containing the paged SIMs.</returns>
-        public async Task<PagedResultDto<SimDto>> GetPagedAsync(int page, int pageSize)
+        var summary = new SimSummaryDto
         {
-            if (page < 1) page = 1;
-            if (pageSize < 1) pageSize = 10;
-            var query = _context.Sims.AsQueryable();
-            var totalCount = await query.CountAsync();
-            var data = await query
-                .OrderByDescending(s => s.SimId)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
-            return new PagedResultDto<SimDto>
-            {
-                Items = data.Select(MapToDto).ToList(),
-                TotalRecords = totalCount,
-                Page = page,
-                PageSize = pageSize
-            };
-        }
+            TotalSims = total,
+            Active = active,
+            Inactive = total - active,
+            Expired = await query.CountAsync(x =>
+                x.ExpiryAt != null && x.ExpiryAt < DateTime.UtcNow)
+        };
 
-        private static SimDto MapToDto(Domain.Entities.mst_sim entity)
-        {
-            return new SimDto
-            {
-                SimId = entity.SimId,
-                AccountId = entity.AccountId,
-                Iccid = entity.Iccid,
-                Msisdn = entity.Msisdn,
-                Imsi = entity.Imsi,
-                NetworkProviderId = entity.NetworkProviderId,
-                StatusKey = entity.StatusKey,
-                ActivatedAt = entity.ActivatedAt,
-                ExpiryAt = entity.ExpiryAt,
-                CreatedAt = entity.CreatedAt
-            };
-        }
+        var paged = await GetPagedAsync(page, pageSize, accountId, search);
 
-        private static Domain.Entities.mst_sim MapToEntity(SimDto dto, bool includeId)
+        return new SimListUiResponseDto
         {
-            var entity = new Domain.Entities.mst_sim
-            {
-                AccountId = dto.AccountId,
-                Iccid = dto.Iccid,
-                Msisdn = dto.Msisdn,
-                Imsi = dto.Imsi,
-                NetworkProviderId = dto.NetworkProviderId,
-                StatusKey = dto.StatusKey,
-                ActivatedAt = dto.ActivatedAt,
-                ExpiryAt = dto.ExpiryAt,
-                CreatedAt = dto.CreatedAt == default ? System.DateTime.UtcNow : dto.CreatedAt
-            };
-            if (includeId) entity.SimId = dto.SimId;
-            return entity;
-        }
-        /// <summary>
-        /// Bulk create SIMs.
-        /// </summary>
-        /// <param name="sims">List of SIMs to create.</param>
-        /// <returns>List of created SIMs.</returns>
-        public async Task<IEnumerable<SimDto>> BulkCreateAsync(IEnumerable<SimDto> sims)
+            Summary = summary,
+            Sims = paged
+        };
+    }
+
+    public async Task<List<SimDto>> BulkCreateAsync(List<CreateSimDto> sims)
+    {
+        var entities = sims.Select(dto => new mst_sim
         {
-            var entities = sims.Select(dto => MapToEntity(dto, false)).ToList();
-            _context.Sims.AddRange(entities);
-            await _context.SaveChangesAsync();
-            return entities.Select(MapToDto).ToList();
-        }
+            AccountId = dto.AccountId,
+            Iccid = dto.Iccid,
+            Msisdn = dto.Msisdn,
+            Imsi = dto.Imsi,
+            NetworkProviderId = dto.NetworkProviderId,
+            StatusKey = dto.StatusKey,
+            ActivatedAt = dto.ActivatedAt,
+            ExpiryAt = dto.ExpiryAt,
+            CreatedBy = dto.CreatedBy,
+            CreatedAt = DateTime.UtcNow,
+            IsActive = true,
+            IsDeleted = false
+        }).ToList();
+
+        _db.Sims.AddRange(entities);
+        await _db.SaveChangesAsync();
+
+        return entities.Select(MapToDto).ToList();
+    }
+
+    private static SimDto MapToDto(mst_sim x)
+    {
+        return new SimDto
+        {
+            SimId = x.SimId,
+            AccountId = x.AccountId,
+            Iccid = x.Iccid,
+            Msisdn = x.Msisdn,
+            Imsi = x.Imsi,
+            NetworkProviderId = x.NetworkProviderId,
+            StatusKey = x.StatusKey,
+            ActivatedAt = x.ActivatedAt,
+            ExpiryAt = x.ExpiryAt,
+            CreatedAt = x.CreatedAt,
+            CreatedBy = x.CreatedBy,
+            UpdatedAt = x.UpdatedAt,
+            UpdatedBy = x.UpdatedBy,
+            IsActive = x.IsActive,
+            IsDeleted = x.IsDeleted
+        };
     }
 }
