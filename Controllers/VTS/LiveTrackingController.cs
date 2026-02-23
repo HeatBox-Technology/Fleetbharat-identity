@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using StackExchange.Redis;
-using System.Text.Json;
 using Newtonsoft.Json;
 using Application.DTOs;
 using Microsoft.Extensions.Logging;
@@ -13,6 +13,7 @@ namespace Controller;
 
 [ApiController]
 [Route("api/live-tracking")]
+[AllowAnonymous]
 public class LiveTrackingController : ControllerBase
 {
     private readonly IConnectionMultiplexer _mux;
@@ -75,21 +76,30 @@ public class LiveTrackingController : ControllerBase
         var vehicles = vehicleNos.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var keys = vehicles.Select(v => $"dashboard::{v}").ToArray();
         var redisValues = await db.StringGetAsync(keys.Select(k => (RedisKey)k).ToArray());
+
         var result = new List<DeviceLiveTrackingDto>();
         for (int i = 0; i < redisValues.Length; i++)
         {
             var val = redisValues[i];
-            if (!val.IsNullOrEmpty)
+            if (val.IsNullOrEmpty)
             {
-                try
+                continue;
+            }
+
+            try
+            {
+                var dto = JsonConvert.DeserializeObject<DeviceLiveTrackingDto>(val.ToString());
+                if (dto != null)
                 {
-                    var dto = JsonConvert.DeserializeObject<DeviceLiveTrackingDto>(val.ToString());
-                    if (dto != null)
-                        result.Add(dto);
+                    result.Add(dto);
                 }
-                catch { /* skip invalid */ }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Invalid redis payload for key {Key}", keys[i]);
             }
         }
+
         return Ok(new { ok = true, data = result });
     }
 }
