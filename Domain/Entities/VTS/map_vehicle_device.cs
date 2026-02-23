@@ -36,8 +36,8 @@ namespace Domain.Entities
         public string simnno { get; set; } = string.Empty;
         [Required]
         public string? Remarks { get; set; }
-        public int IsActive { get; set; } = 1; // 1 for active, 0 for inactive
-        public int IsDeleted { get; set; } = 0; // 0 for not deleted, 1 for deleted
+        public bool IsActive { get; set; } = true; // true for active, false for inactive
+        public bool IsDeleted { get; set; } = false; // false for not deleted, true for deleted
         public DateTime InstallationDate { get; set; } = DateTime.UtcNow;
         public int createdBy { get; set; }
         public DateTime createdAt { get; set; } = DateTime.UtcNow;

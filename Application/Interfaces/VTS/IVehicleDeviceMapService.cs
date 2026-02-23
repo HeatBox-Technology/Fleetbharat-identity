@@ -11,7 +11,7 @@ public interface IVehicleDeviceMapService
     /// <summary>
     /// Create a new vehicle-device mapping.
     /// </summary>
-    Task<int> CreateAsync(VehicleDeviceMapDto dto);
+    Task<int> CreateAsync(CreateVehicleDeviceMapDto dto);
 
     /// <summary>
     /// Get mappings with pagination and dashboard summary.
@@ -19,8 +19,8 @@ public interface IVehicleDeviceMapService
     Task<VehicleDeviceAssignmentListUiResponseDto> GetAssignments(
         int page,
         int pageSize,
-        long? accountId,
-        string? search);
+        int? accountId = null,
+        string? search = null);
 
     /// <summary>
     /// Get mapping by Id.
@@ -30,12 +30,12 @@ public interface IVehicleDeviceMapService
     /// <summary>
     /// Update mapping.
     /// </summary>
-    Task<bool> UpdateAsync(int id, VehicleDeviceMapDto dto);
+    Task<bool> UpdateAsync(int id, UpdateVehicleDeviceMapDto dto);
 
     /// <summary>
     /// Update active status.
     /// </summary>
-    Task<bool> UpdateStatusAsync(int id, int isActive);
+    Task<bool> UpdateStatusAsync(int id, bool isActive);
 
     /// <summary>
     /// Soft delete mapping.
@@ -43,7 +43,16 @@ public interface IVehicleDeviceMapService
     Task<bool> DeleteAsync(int id);
 
     /// <summary>
+    /// Get paged assignments without summary.
+    /// </summary>
+    Task<PagedResultDto<VehicleDeviceMapDto>> GetPagedAsync(
+        int page,
+        int pageSize,
+        int? accountId = null,
+        string? search = null);
+
+    /// <summary>
     /// Bulk create mappings.
     /// </summary>
-    Task<List<VehicleDeviceMapDto>> BulkCreateAsync(List<VehicleDeviceMapDto> items);
+    Task<List<VehicleDeviceMapDto>> BulkCreateAsync(List<CreateVehicleDeviceMapDto> items);
 }

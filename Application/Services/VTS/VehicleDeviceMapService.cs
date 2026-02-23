@@ -1,169 +1,171 @@
-using Application.DTOs;
-using Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
-using Domain.Entities;
-using System.Linq;
-using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 
 public class VehicleDeviceMapService : IVehicleDeviceMapService
 {
     private readonly IdentityDbContext _db;
+    private readonly IExternalMappingApiService _externalApi;
 
-    public VehicleDeviceMapService(IdentityDbContext db)
+    public VehicleDeviceMapService(
+        IdentityDbContext db,
+        IExternalMappingApiService externalApi)
     {
         _db = db;
+        _externalApi = externalApi;
     }
-
-    public async Task<int> CreateAsync(VehicleDeviceMapDto dto)
+    public async Task<int> CreateAsync(CreateVehicleDeviceMapDto dto)
     {
+        // ✅ Account validation
+        var accountExists = await _db.Accounts
+            .AnyAsync(x => x.AccountId == dto.AccountId);
+
+        if (!accountExists)
+            throw new Exception("Invalid AccountId");
+
+        // ✅ Vehicle validation
+        var vehicleExists = await _db.Vehicles
+            .AnyAsync(x => x.Id == dto.VehicleId && !x.IsDeleted);
+
+        if (!vehicleExists)
+            throw new Exception("Invalid VehicleId");
+
+        // ✅ Device validation
+        var deviceExists = await _db.Devices
+            .AnyAsync(x => x.Id == dto.DeviceId && !x.IsDeleted);
+
+        if (!deviceExists)
+            throw new Exception("Invalid DeviceId");
+
+        // ✅ Business rule: device already assigned
+        var exists = await _db.VehicleDeviceMaps
+            .AnyAsync(x => x.Fk_DeviceId == dto.DeviceId && x.IsActive && !x.IsDeleted);
+
+        if (exists)
+            throw new InvalidOperationException("Device already assigned.");
+
         var entity = new map_vehicle_device
         {
             AccountId = dto.AccountId,
-            Fk_VehicleId = dto.Fk_VehicleId,
-            fk_devicetypeid = dto.fk_devicetypeid,
-            Fk_DeviceId = dto.Fk_DeviceId,
-            fk_simid = dto.fk_simid,
-            simnno = dto.simnno,
+            Fk_VehicleId = dto.VehicleId,
+            Fk_DeviceId = dto.DeviceId,
+            fk_devicetypeid = dto.DeviceTypeId,
+            fk_simid = dto.SimId,
+            simnno = dto.SimNumber,
             Remarks = dto.Remarks,
-            IsActive = dto.IsActive,
-            IsDeleted = 0,
-            InstallationDate = dto.InstallationDate == default
-                ? DateTime.UtcNow
-                : dto.InstallationDate,
-            createdBy = dto.createdBy,
+            InstallationDate = DateTime.UtcNow,
+            IsActive = true,
+            IsDeleted = false,
+            createdBy = dto.CreatedBy,
             createdAt = DateTime.UtcNow
         };
 
         _db.VehicleDeviceMaps.Add(entity);
         await _db.SaveChangesAsync();
 
+        await SendExternalMapping(entity);
+
         return entity.Id;
     }
 
-    public async Task<VehicleDeviceAssignmentListUiResponseDto> GetAssignments(
-        int page,
-        int pageSize,
-        long? accountId,
-        string? search)
+    private async Task SendExternalMapping(map_vehicle_device entity)
     {
-        if (page <= 0) page = 1;
-        if (pageSize <= 0) pageSize = 10;
+        var vehicle = await _db.Vehicles
+            .FirstOrDefaultAsync(x => x.Id == entity.Fk_VehicleId);
 
-        var query = _db.VehicleDeviceMaps
-            .AsNoTracking()
-            .Where(x => x.IsDeleted == 0)
-            .AsQueryable();
+        var device = await _db.Devices
+            .FirstOrDefaultAsync(x => x.Id == entity.Fk_DeviceId);
 
-        if (accountId.HasValue)
-            query = query.Where(x => x.AccountId == accountId.Value);
+        var account = await _db.Accounts
+            .FirstOrDefaultAsync(x => x.AccountId == entity.AccountId);
 
-        // 🔹 Summary
-        var totalAssignments = await query.CountAsync();
-        var active = await query.CountAsync(x => x.IsActive == 1);
-        var issues = await query.CountAsync(x => x.IsActive == 0);
+        if (vehicle == null || device == null || account == null)
+            return; // safety guard
 
-        var summary = new VehicleDeviceAssignmentSummaryDto
+        var request = new ExternalVehicleMappingRequest
         {
-            TotalAssignments = totalAssignments,
-            Active = active,
-            WithIssues = issues
+            vehicleid = vehicle.Id,
+            VehicleNo = vehicle.VehicleNumber,
+            DeviceNo = device.DeviceNo,
+            Imei = device.DeviceImeiOrSerial,
+            DeviceType = entity.fk_devicetypeid.ToString(),
+            OrgName = account.AccountName,
+            OrgId = entity.AccountId
         };
 
-        // 🔹 Pagination
-        var totalRecords = await query.CountAsync();
+        var success = false;
+        string? error = null;
 
-        var items = await query
-            .OrderByDescending(x => x.Id)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(x => new VehicleDeviceMapDto
-            {
-                Id = x.Id,
-                AccountId = x.AccountId,
-                Fk_VehicleId = x.Fk_VehicleId,
-                fk_devicetypeid = x.fk_devicetypeid,
-                Fk_DeviceId = x.Fk_DeviceId,
-                fk_simid = x.fk_simid,
-                simnno = x.simnno,
-                Remarks = x.Remarks,
-                IsActive = x.IsActive,
-                IsDeleted = x.IsDeleted,
-                InstallationDate = x.InstallationDate,
-                createdBy = x.createdBy,
-                createdAt = x.createdAt,
-                updatedBy = x.updatedBy,
-                updatedAt = x.updatedAt
-            })
-            .ToListAsync();
-
-        return new VehicleDeviceAssignmentListUiResponseDto
+        try
         {
-            Summary = summary,
-            Assignments = new PagedResultDto<VehicleDeviceMapDto>
-            {
-                Items = items,
-                TotalRecords = totalRecords,
-                Page = page,
-                PageSize = pageSize
-            }
+            success = await _externalApi.SendVehicleMappingAsync(request);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+
+        var log = new map_vehicle_device_sync_log
+        {
+            MappingId = entity.Id,
+            PayloadJson = JsonSerializer.Serialize(request),
+            IsSynced = success,
+            ErrorMessage = error,
+            RetryCount = success ? 0 : 1,
+            LastTriedAt = DateTime.UtcNow
         };
+
+        _db.map_vehicle_device_sync_logs.Add(log);
+        await _db.SaveChangesAsync();
     }
 
-    public async Task<VehicleDeviceMapDto?> GetByIdAsync(int id)
-    {
-        return await _db.VehicleDeviceMaps
-            .Where(x => x.Id == id && x.IsDeleted == 0)
-            .Select(x => new VehicleDeviceMapDto
-            {
-                Id = x.Id,
-                AccountId = x.AccountId,
-                Fk_VehicleId = x.Fk_VehicleId,
-                fk_devicetypeid = x.fk_devicetypeid,
-                Fk_DeviceId = x.Fk_DeviceId,
-                fk_simid = x.fk_simid,
-                simnno = x.simnno,
-                Remarks = x.Remarks,
-                IsActive = x.IsActive,
-                IsDeleted = x.IsDeleted,
-                InstallationDate = x.InstallationDate,
-                createdBy = x.createdBy,
-                createdAt = x.createdAt,
-                updatedBy = x.updatedBy,
-                updatedAt = x.updatedAt
-            })
-            .FirstOrDefaultAsync();
-    }
-
-    public async Task<bool> UpdateAsync(int id, VehicleDeviceMapDto dto)
+    public async Task<bool> UpdateAsync(int id, UpdateVehicleDeviceMapDto dto)
     {
         var entity = await _db.VehicleDeviceMaps
-            .FirstOrDefaultAsync(x => x.Id == id && x.IsDeleted == 0);
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
-        if (entity == null) return false;
+        if (entity == null)
+            throw new Exception("Mapping not found");
 
-        entity.AccountId = dto.AccountId;
-        entity.Fk_VehicleId = dto.Fk_VehicleId;
-        entity.fk_devicetypeid = dto.fk_devicetypeid;
-        entity.Fk_DeviceId = dto.Fk_DeviceId;
-        entity.fk_simid = dto.fk_simid;
-        entity.simnno = dto.simnno;
+        // Validate device
+        var deviceExists = await _db.Devices
+            .AnyAsync(x => x.Id == dto.DeviceId && !x.IsDeleted);
+
+        if (!deviceExists)
+            throw new Exception("Invalid DeviceId");
+
+        // Validate vehicle
+        var vehicleExists = await _db.Vehicles
+            .AnyAsync(x => x.Id == dto.VehicleId && !x.IsDeleted);
+
+        if (!vehicleExists)
+            throw new Exception("Invalid VehicleId");
+
+        entity.Fk_DeviceId = dto.DeviceId;
+        entity.Fk_VehicleId = dto.VehicleId;
+        entity.fk_devicetypeid = dto.DeviceTypeId;
+        entity.fk_simid = dto.SimId;
+        entity.simnno = dto.SimNumber;
         entity.Remarks = dto.Remarks;
         entity.IsActive = dto.IsActive;
-        entity.updatedBy = dto.updatedBy;
+        entity.updatedBy = dto.UpdatedBy;
         entity.updatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
         return true;
     }
 
-    public async Task<bool> UpdateStatusAsync(int id, int isActive)
+    public async Task<bool> UpdateStatusAsync(int id, bool isActive)
     {
         var entity = await _db.VehicleDeviceMaps
-            .FirstOrDefaultAsync(x => x.Id == id && x.IsDeleted == 0);
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
-        if (entity == null) return false;
+        if (entity == null)
+            throw new Exception("Mapping not found");
 
         entity.IsActive = isActive;
         entity.updatedAt = DateTime.UtcNow;
@@ -175,34 +177,138 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
     public async Task<bool> DeleteAsync(int id)
     {
         var entity = await _db.VehicleDeviceMaps
-            .FirstOrDefaultAsync(x => x.Id == id);
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
-        if (entity == null) return false;
+        if (entity == null)
+            throw new Exception("Mapping not found");
 
-        entity.IsDeleted = 1;
+        entity.IsDeleted = true;
+        entity.IsActive = false;
         entity.updatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
-
         return true;
     }
 
-    public async Task<List<VehicleDeviceMapDto>> BulkCreateAsync(List<VehicleDeviceMapDto> items)
+    public async Task<VehicleDeviceMapDto?> GetByIdAsync(int id)
+    {
+        return await _db.VehicleDeviceMaps
+            .Where(x => x.Id == id && !x.IsDeleted)
+            .Select(x => new VehicleDeviceMapDto
+            {
+                Id = x.Id,
+                AccountId = x.AccountId,
+                VehicleId = x.Fk_VehicleId,
+                DeviceId = x.Fk_DeviceId,
+                DeviceTypeId = x.fk_devicetypeid,
+                SimId = x.fk_simid,
+                SimNumber = x.simnno,
+                Remarks = x.Remarks,
+                IsActive = x.IsActive,
+                InstallationDate = x.InstallationDate
+            })
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<VehicleDeviceAssignmentListUiResponseDto> GetAssignments(
+        int page,
+        int pageSize,
+        int? accountId,
+        string? search)
+    {
+        var query = _db.VehicleDeviceMaps
+            .Where(x => !x.IsDeleted);
+
+        var total = await query.CountAsync();
+        var active = await query.CountAsync(x => x.IsActive);
+
+        var summary = new VehicleDeviceAssignmentSummaryDto
+        {
+            TotalAssignments = total,
+            Active = active,
+            WithIssues = total - active
+        };
+
+        var items = await query
+            .OrderByDescending(x => x.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new VehicleDeviceMapDto
+            {
+                Id = x.Id,
+                AccountId = x.AccountId,
+                VehicleId = x.Fk_VehicleId,
+                DeviceId = x.Fk_DeviceId,
+                DeviceTypeId = x.fk_devicetypeid,
+                SimId = x.fk_simid,
+                SimNumber = x.simnno,
+                Remarks = x.Remarks,
+                IsActive = x.IsActive,
+                InstallationDate = x.InstallationDate
+            })
+            .ToListAsync();
+
+        return new VehicleDeviceAssignmentListUiResponseDto
+        {
+            Summary = summary,
+            Assignments = new PagedResultDto<VehicleDeviceMapDto>
+            {
+                Items = items,
+                TotalRecords = total,
+                Page = page,
+                PageSize = pageSize
+            }
+        };
+    }
+
+    public async Task<PagedResultDto<VehicleDeviceMapDto>> GetPagedAsync(
+        int page,
+        int pageSize,
+        int? accountId,
+        string? search)
+    {
+        var query = _db.VehicleDeviceMaps.Where(x => !x.IsDeleted);
+
+        var total = await query.CountAsync();
+
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new VehicleDeviceMapDto
+            {
+                Id = x.Id,
+                VehicleId = x.Fk_VehicleId,
+                DeviceId = x.Fk_DeviceId,
+                DeviceTypeId = x.fk_devicetypeid,
+                SimId = x.fk_simid,
+                SimNumber = x.simnno
+            })
+            .ToListAsync();
+
+        return new PagedResultDto<VehicleDeviceMapDto>
+        {
+            Items = items,
+            TotalRecords = total,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
+
+    public async Task<List<VehicleDeviceMapDto>> BulkCreateAsync(List<CreateVehicleDeviceMapDto> items)
     {
         var entities = items.Select(dto => new map_vehicle_device
         {
             AccountId = dto.AccountId,
-            Fk_VehicleId = dto.Fk_VehicleId,
-            fk_devicetypeid = dto.fk_devicetypeid,
-            Fk_DeviceId = dto.Fk_DeviceId,
-            fk_simid = dto.fk_simid,
-            simnno = dto.simnno,
+            Fk_VehicleId = dto.VehicleId,
+            Fk_DeviceId = dto.DeviceId,
+            fk_devicetypeid = dto.DeviceTypeId,
+            fk_simid = dto.SimId,
+            simnno = dto.SimNumber,
             Remarks = dto.Remarks,
-            IsActive = dto.IsActive,
-            IsDeleted = 0,
             InstallationDate = DateTime.UtcNow,
-            createdBy = dto.createdBy,
-            createdAt = DateTime.UtcNow
+            createdBy = dto.CreatedBy,
+            createdAt = DateTime.UtcNow,
+            IsActive = true,
         }).ToList();
 
         _db.VehicleDeviceMaps.AddRange(entities);
@@ -211,9 +317,8 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
         return entities.Select(x => new VehicleDeviceMapDto
         {
             Id = x.Id,
-            AccountId = x.AccountId,
-            Fk_VehicleId = x.Fk_VehicleId,
-            Fk_DeviceId = x.Fk_DeviceId
+            VehicleId = x.Fk_VehicleId,
+            DeviceId = x.Fk_DeviceId
         }).ToList();
     }
 }

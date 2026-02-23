@@ -1,6 +1,5 @@
 using System;
 
-
 /// <summary>
 /// DTO for vehicle-device mapping.
 /// </summary>
@@ -10,33 +9,55 @@ public class VehicleDeviceMapDto
 
     public int AccountId { get; set; }
 
-    public int Fk_VehicleId { get; set; }
+    public int VehicleId { get; set; }
 
+    public int DeviceId { get; set; }
 
-    public int fk_devicetypeid { get; set; }
+    public int DeviceTypeId { get; set; }
 
-    public int Fk_DeviceId { get; set; }
+    public int? SimId { get; set; }
 
-    public int fk_simid { get; set; }
-
-    public string simnno { get; set; } = string.Empty;
+    public string? SimNumber { get; set; }
 
     public string? Remarks { get; set; }
 
-    public int IsActive { get; set; } = 1;
+    public bool IsActive { get; set; }
 
-    public int IsDeleted { get; set; } = 0;
+    public bool IsDeleted { get; set; }
 
     public DateTime InstallationDate { get; set; }
 
-    public int createdBy { get; set; }
+    public int CreatedBy { get; set; }
 
-    public DateTime createdAt { get; set; }
+    public DateTime CreatedAt { get; set; }
 
-    public int? updatedBy { get; set; }
+    public int? UpdatedBy { get; set; }
 
-    public DateTime? updatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 }
+public class CreateVehicleDeviceMapDto
+{
+    public int AccountId { get; set; }
+    public int VehicleId { get; set; }
+    public int DeviceId { get; set; }
+    public int DeviceTypeId { get; set; }
+    public int SimId { get; set; }
+    public string? SimNumber { get; set; }
+    public string? Remarks { get; set; }
+    public int CreatedBy { get; set; }
+}
+public class UpdateVehicleDeviceMapDto
+{
+    public int VehicleId { get; set; }
+    public int DeviceId { get; set; }
+    public int DeviceTypeId { get; set; }
+    public int SimId { get; set; }
+    public string? SimNumber { get; set; }
+    public string? Remarks { get; set; }
+    public bool IsActive { get; set; }
+    public int? UpdatedBy { get; set; }
+}
+
 public class VehicleDeviceAssignmentSummaryDto
 {
     public int TotalAssignments { get; set; }

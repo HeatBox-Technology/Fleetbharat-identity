@@ -52,6 +52,7 @@ public class IdentityDbContext : DbContext
     public DbSet<NetworkProvider> NetworkProviders { get; set; }
     public DbSet<VehicleBrandOem> VehicleBrandOems { get; set; }
     public DbSet<LeasedVendor> LeasedVendors { get; set; }
+    public DbSet<map_vehicle_device_sync_log> map_vehicle_device_sync_logs { get; set; }
 
 
 

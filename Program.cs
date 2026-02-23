@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using StackExchange.Redis;
 using System;
 using System.Text;
@@ -28,6 +29,10 @@ var jwtKey = builder.Configuration["Jwt:Key"]
 
 builder.Services.AddDbContext<IdentityDbContext>(opt =>
     opt.UseNpgsql(defaultConnection));
+builder.Services.AddHttpClient<IExternalMappingApiService, ExternalMappingApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://47.128.76.211:8083/api/v1/"); // external base url
+});
 
 builder.Services.AddVtsServices(builder.Configuration, defaultConnection);
 
@@ -129,7 +134,40 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Your API",
+        Version = "v1"
+    });
+    // 🔐 Bearer Token Configuration
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter JWT Token like: Bearer {your token}"
+    });
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
+
 
 // ✅ Live tracking simulator for animation demo
 builder.Services.AddHostedService<Infrastructure.LiveTracking.LiveTrackingSimulatorService>();
