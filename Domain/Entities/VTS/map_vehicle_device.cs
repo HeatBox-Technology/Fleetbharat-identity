@@ -43,5 +43,10 @@ namespace Domain.Entities
         public DateTime createdAt { get; set; } = DateTime.UtcNow;
         public int? updatedBy { get; set; }
         public DateTime? updatedAt { get; set; }
+        [ForeignKey("Fk_VehicleId")]
+        public mst_vehicle Vehicle { get; set; }
+
+        [ForeignKey("Fk_DeviceId")]
+        public mst_device Device { get; set; }
     }
 }

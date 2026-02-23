@@ -58,6 +58,33 @@ public class CommonDropdownController : ControllerBase
         var data = await _service.GetFormModuleDropdownAsync();
         return Ok(ApiResponse<object>.Ok(data, "Success"));
     }
+    [HttpGet("vehicles/{accountId}")]
+    public async Task<IActionResult> GetVehicles(int accountId)
+    {
+        var data = await _service.GetVehicles(accountId);
+        return Ok(ApiResponse<object>.Ok(data, "Success", 200));
+    }
+
+    [HttpGet("devices/{accountId}")]
+    public async Task<IActionResult> GetDevices(int accountId)
+    {
+        var data = await _service.GetDevices(accountId);
+        return Ok(ApiResponse<object>.Ok(data, "Success", 200));
+    }
+
+    [HttpGet("sims/{accountId}")]
+    public async Task<IActionResult> GetSims(int accountId)
+    {
+        var data = await _service.GetSims(accountId);
+        return Ok(ApiResponse<object>.Ok(data, "Success", 200));
+    }
+
+    [HttpGet("device-types")]
+    public async Task<IActionResult> GetDeviceTypes()
+    {
+        var data = await _service.GetDeviceTypes();
+        return Ok(ApiResponse<object>.Ok(data, "Success", 200));
+    }
 
 
 }

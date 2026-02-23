@@ -9,6 +9,13 @@ public interface ICommonDropdownService
     Task<List<DropdownGuidDto>> GetUsersAsync(int accountId, string? search, int limit);
     Task<List<DropdownDto>> GetCurrencyDropdownAsync();
     Task<List<DropdownDto>> GetFormModuleDropdownAsync();
+    Task<List<DropdownDto>> GetVehicles(int accountId);
+
+    Task<List<DropdownDto>> GetDevices(int accountId);
+
+    Task<List<DropdownDto>> GetSims(int accountId);
+
+    Task<List<DropdownDto>> GetDeviceTypes();
 
 
 }

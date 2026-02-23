@@ -141,6 +141,63 @@ public class CommonDropdownService : ICommonDropdownService
             })
             .ToListAsync();
     }
+    public async Task<List<DropdownDto>> GetVehicles(int accountId)
+    {
+        return await _db.Vehicles
+            .Where(x => x.AccountId == accountId &&
+                        x.Status == "Active" &&
+                        !x.IsDeleted)
+            .OrderBy(x => x.VehicleNumber)
+            .Select(x => new DropdownDto
+            {
+                Id = x.Id,
+                Value = x.VehicleNumber
+            })
+            .ToListAsync();
+    }
+
+    public async Task<List<DropdownDto>> GetDevices(int accountId)
+    {
+        return await _db.Devices
+            .Where(x => x.AccountId == accountId &&
+                        x.IsActive &&
+                        !x.IsDeleted)
+            .OrderBy(x => x.DeviceNo)
+            .Select(x => new DropdownDto
+            {
+                Id = x.Id,
+                Value = x.DeviceNo
+            })
+            .ToListAsync();
+    }
+
+    public async Task<List<DropdownDto>> GetSims(int accountId)
+    {
+        return await _db.Sims
+            .Where(x => x.AccountId == accountId &&
+                        x.IsActive &&
+                        !x.IsDeleted)
+            .OrderBy(x => x.Iccid)
+            .Select(x => new DropdownDto
+            {
+                Id = x.SimId,
+                Value = x.Iccid
+            })
+            .ToListAsync();
+    }
+
+    public async Task<List<DropdownDto>> GetDeviceTypes()
+    {
+        return await _db.DeviceTypes
+            .Where(x => !x.IsDeleted)
+            .OrderBy(x => x.Name)
+            .Select(x => new DropdownDto
+            {
+                Id = x.Id,
+                Value = x.Name
+            })
+            .ToListAsync();
+    }
 }
 
 

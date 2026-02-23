@@ -198,8 +198,13 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
             {
                 Id = x.Id,
                 AccountId = x.AccountId,
+
                 VehicleId = x.Fk_VehicleId,
+                VehicleNo = x.Vehicle.VehicleNumber,
+
                 DeviceId = x.Fk_DeviceId,
+                DeviceNo = x.Device.DeviceNo,
+
                 DeviceTypeId = x.fk_devicetypeid,
                 SimId = x.fk_simid,
                 SimNumber = x.simnno,
@@ -228,26 +233,29 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
             Active = active,
             WithIssues = total - active
         };
-
         var items = await query
-            .OrderByDescending(x => x.Id)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(x => new VehicleDeviceMapDto
-            {
-                Id = x.Id,
-                AccountId = x.AccountId,
-                VehicleId = x.Fk_VehicleId,
-                DeviceId = x.Fk_DeviceId,
-                DeviceTypeId = x.fk_devicetypeid,
-                SimId = x.fk_simid,
-                SimNumber = x.simnno,
-                Remarks = x.Remarks,
-                IsActive = x.IsActive,
-                InstallationDate = x.InstallationDate
-            })
-            .ToListAsync();
+    .OrderByDescending(x => x.Id)
+    .Skip((page - 1) * pageSize)
+    .Take(pageSize)
+    .Select(x => new VehicleDeviceMapDto
+    {
+        Id = x.Id,
+        AccountId = x.AccountId,
 
+        VehicleId = x.Fk_VehicleId,
+        VehicleNo = x.Vehicle.VehicleNumber,
+
+        DeviceId = x.Fk_DeviceId,
+        DeviceNo = x.Device.DeviceNo,
+
+        DeviceTypeId = x.fk_devicetypeid,
+        SimId = x.fk_simid,
+        SimNumber = x.simnno,
+        Remarks = x.Remarks,
+        IsActive = x.IsActive,
+        InstallationDate = x.InstallationDate
+    })
+    .ToListAsync();
         return new VehicleDeviceAssignmentListUiResponseDto
         {
             Summary = summary,
