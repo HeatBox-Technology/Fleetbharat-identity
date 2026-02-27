@@ -199,6 +199,35 @@ public class CommonDropdownService : ICommonDropdownService
             })
             .ToListAsync();
     }
+    public async Task<List<DropdownDto>> GetGeofences(
+     int accountId,
+     string? search,
+     int limit)
+    {
+        if (limit <= 0) limit = 20;
+
+        var query = _db.GeofenceZones.AsNoTracking()
+            .Where(x => x.AccountId == accountId &&
+                        x.Status == "ENABLED" &&
+                        !x.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                x.DisplayName.ToLower().Contains(s));
+        }
+
+        return await query
+            .OrderBy(x => x.DisplayName)
+            .Take(limit)
+            .Select(x => new DropdownDto
+            {
+                Id = x.Id,
+                Value = x.DisplayName
+            })
+            .ToListAsync();
+    }
 }
 
 

@@ -12,6 +12,10 @@ public interface ICommonDropdownService
     Task<List<DropdownDto>> GetVehicles(int accountId);
 
     Task<List<DropdownDto>> GetDevices(int accountId);
+    Task<List<DropdownDto>> GetGeofences(
+        int accountId,
+        string? search,
+        int limit);
 
     Task<List<DropdownDto>> GetSims(int accountId);
 

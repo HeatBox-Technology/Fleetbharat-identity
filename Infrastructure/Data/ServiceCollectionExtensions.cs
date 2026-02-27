@@ -32,6 +32,7 @@ namespace Infrastructure.Data
             services.AddScoped<IOemManufacturerService, OemManufacturerService>();
             services.AddScoped<IDriverService, DriverService>();
             services.AddScoped<IGeofenceService, GeofenceService>();
+            services.AddScoped<IVehicleGeofenceMapService, VehicleGeofenceMapService>();
 
 
             // ✅ Redis

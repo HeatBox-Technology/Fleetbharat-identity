@@ -85,6 +85,16 @@ public class CommonDropdownController : ControllerBase
         var data = await _service.GetDeviceType();
         return Ok(ApiResponse<object>.Ok(data, "Success", 200));
     }
+    [HttpGet("geofences")]
+    public async Task<IActionResult> GetGeofences(
+        [FromQuery] int accountId,
+        [FromQuery] string? search = null,
+        [FromQuery] int limit = 20)
+    {
+        var data = await _service.GetGeofences(accountId, search, limit);
+
+        return Ok(ApiResponse<object>.Ok(data, "Success", 200));
+    }
 
 
 }

@@ -39,3 +39,14 @@ public class map_geofence_sync_log
 
     public DateTime LastTriedAt { get; set; } = DateTime.UtcNow;
 }
+[Table("map_vehicle_geofence_sync_log")]
+public class map_vehicle_geofence_sync_log
+{
+    public int Id { get; set; }
+    public int MappingId { get; set; }
+    public string PayloadJson { get; set; }
+    public bool IsSynced { get; set; }
+    public string? ErrorMessage { get; set; }
+    public int RetryCount { get; set; }
+    public DateTime LastTriedAt { get; set; }
+}

@@ -6,4 +6,7 @@ public interface IExternalMappingApiService
 {
     Task<bool> SendVehicleMappingAsync(ExternalVehicleMappingRequest request);
     Task<bool> SendGeofenceAsync(List<ExternalGeofenceRequest> payload, HttpMethod method);
+    Task<bool> SendVehicleGeofenceMappingAsync(
+         List<ExternalGeofenceMappingRequest> payload,
+         HttpMethod method);
 }

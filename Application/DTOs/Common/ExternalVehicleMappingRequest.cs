@@ -54,3 +54,18 @@ public class ExternalGeoPoint
     public double Latitude { get; set; }
     public double Longitude { get; set; }
 }
+public class ExternalGeofenceMappingRequest
+{
+    public string vehicleId { get; set; }
+    public string vehicleNo { get; set; }
+    public string deviceNo { get; set; }
+
+    public List<ExternalGeofenceItem> geofence { get; set; } = new();
+}
+
+public class ExternalGeofenceItem
+{
+    public int geoId { get; set; }
+    public string tripNo { get; set; } = "0";
+    public string geoPoint { get; set; } = "START";
+}
