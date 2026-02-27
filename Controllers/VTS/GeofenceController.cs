@@ -1,42 +1,44 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 [ApiController]
-[Route("api/device-types")]
-public class DeviceTypeController : ControllerBase
+[Route("api/geofences")]
+[AllowAnonymous] // Remove this in production, added for testing
+public class GeofenceController : ControllerBase
 {
-    private readonly IDeviceTypeService _service;
+    private readonly IGeofenceService _service;
 
-    public DeviceTypeController(IDeviceTypeService service)
+    public GeofenceController(IGeofenceService service)
     {
         _service = service;
     }
 
     /// <summary>
-    /// Create device type
+    /// Create geofence
     /// </summary>
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateDeviceTypeDto req)
+    public async Task<IActionResult> Create([FromBody] CreateGeofenceDto req)
     {
         var id = await _service.CreateAsync(req);
 
         return Ok(ApiResponse<object>.Ok(
-            new { deviceTypeId = id },
-            "Device type created",
+            new { geofenceId = id },
+            "Geofence created",
             200));
     }
 
     /// <summary>
-    /// Get device types with summary + pagination
+    /// Get geofences with summary + pagination
     /// </summary>
     [HttpGet("list")]
-    public async Task<IActionResult> GetDeviceTypes(
+    public async Task<IActionResult> GetZones(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
         [FromQuery] string? search = null)
     {
-        var result = await _service.GetDeviceTypes(page, pageSize, search);
+        var result = await _service.GetZones(page, pageSize, search);
 
         return Ok(ApiResponse<object>.Ok(result, "Success", 200));
     }
@@ -55,9 +57,8 @@ public class DeviceTypeController : ControllerBase
         return Ok(ApiResponse<object>.Ok(result, "Success", 200));
     }
 
-
     /// <summary>
-    /// Get device type by id
+    /// Get geofence by id
     /// </summary>
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
@@ -65,27 +66,27 @@ public class DeviceTypeController : ControllerBase
         var data = await _service.GetByIdAsync(id);
 
         if (data == null)
-            return NotFound(ApiResponse<object>.Fail("Device type not found", 404));
+            return NotFound(ApiResponse<object>.Fail("Geofence not found", 404));
 
         return Ok(ApiResponse<object>.Ok(data, "Success", 200));
     }
 
     /// <summary>
-    /// Update device type
+    /// Update geofence
     /// </summary>
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateDeviceTypeDto req)
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateGeofenceDto req)
     {
         var ok = await _service.UpdateAsync(id, req);
 
         if (!ok)
-            return NotFound(ApiResponse<object>.Fail("Device type not found", 404));
+            return NotFound(ApiResponse<object>.Fail("Geofence not found", 404));
 
-        return Ok(ApiResponse<string>.Ok("Updated", "Device type updated", 200));
+        return Ok(ApiResponse<string>.Ok("Updated", "Geofence updated", 200));
     }
 
     /// <summary>
-    /// Enable / Disable device type
+    /// Enable / Disable geofence
     /// </summary>
     [HttpPatch("{id}/status")]
     public async Task<IActionResult> UpdateStatus(
@@ -95,13 +96,13 @@ public class DeviceTypeController : ControllerBase
         var ok = await _service.UpdateStatusAsync(id, isEnabled);
 
         if (!ok)
-            return NotFound(ApiResponse<object>.Fail("Device type not found", 404));
+            return NotFound(ApiResponse<object>.Fail("Geofence not found", 404));
 
         return Ok(ApiResponse<string>.Ok("Updated", "Status updated", 200));
     }
 
     /// <summary>
-    /// Soft delete device type
+    /// Soft delete geofence
     /// </summary>
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
@@ -109,23 +110,21 @@ public class DeviceTypeController : ControllerBase
         var ok = await _service.DeleteAsync(id);
 
         if (!ok)
-            return NotFound(ApiResponse<object>.Fail("Device type not found", 404));
+            return NotFound(ApiResponse<object>.Fail("Geofence not found", 404));
 
-        return Ok(ApiResponse<string>.Ok("Deleted", "Device type deleted", 200));
+        return Ok(ApiResponse<string>.Ok("Deleted", "Geofence deleted", 200));
     }
-
     /// <summary>
-    /// Bulk create device types
+    /// Bulk create geofences
     /// </summary>
     [HttpPost("bulk")]
-    public async Task<IActionResult> BulkUpload([FromBody] List<CreateDeviceTypeDto> items)
+    public async Task<IActionResult> BulkUpload([FromBody] List<CreateGeofenceDto> items)
     {
         var result = await _service.BulkCreateAsync(items);
 
         return Ok(ApiResponse<object>.Ok(
             result,
-            "Device types created successfully",
+            "Geofences created successfully",
             200));
     }
-
 }

@@ -12,6 +12,7 @@ using Microsoft.OpenApi.Models;
 using StackExchange.Redis;
 using System;
 using System.Text;
+using NetTopologySuite.Geometries;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,7 +29,9 @@ var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key is missing.");
 
 builder.Services.AddDbContext<IdentityDbContext>(opt =>
-    opt.UseNpgsql(defaultConnection));
+    opt.UseNpgsql(defaultConnection, x => x.UseNetTopologySuite())
+       .EnableDetailedErrors()
+       .EnableSensitiveDataLogging());
 builder.Services.AddHttpClient<IExternalMappingApiService, ExternalMappingApiService>(client =>
 {
     client.BaseAddress = new Uri("http://47.128.76.211:8083/api/v1/"); // external base url
@@ -57,6 +60,11 @@ builder.Services.AddScoped<ITaxTypeService, TaxTypeService>();
 builder.Services.AddScoped<IAccountConfigurationService, AccountConfigurationService>();
 builder.Services.AddScoped<IWhiteLabelService, WhiteLabelService>();
 builder.Services.AddScoped<ICommonDropdownService, CommonDropdownService>();
+builder.Services.AddSingleton<BulkQueue>();
+builder.Services.AddHostedService<BulkWorker>();
+builder.Services.AddScoped<IBulkService, BulkService>();
+builder.Services.AddScoped<BulkProcessorFactory>();
+builder.Services.AddScoped<IBulkModuleProcessor, GeofenceBulkProcessor>();
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
 
@@ -138,7 +146,7 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "Your API",
+        Title = "IOT.IdentityService API",
         Version = "v1"
     });
     // 🔐 Bearer Token Configuration

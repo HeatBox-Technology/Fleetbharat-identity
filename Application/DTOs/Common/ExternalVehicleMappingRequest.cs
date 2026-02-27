@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 public class ExternalVehicleMappingRequest
 {
     public int vehicleid { get; set; }
@@ -30,4 +32,25 @@ public class ExternalVehicleMappingRequest
     public bool IdleAc { get; set; } = true;
     public int IdleACDurationMin { get; set; } = 0;
     public bool Towing { get; set; } = true;
+}
+public class ExternalGeofenceRequest
+{
+    public string GeoId { get; set; } = string.Empty;
+    public string GeoName { get; set; } = string.Empty;
+    public int OrgId { get; set; }
+    public string OrgName { get; set; } = string.Empty;
+
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+    public int Radius { get; set; }
+
+    public string GeoType { get; set; } = "CIRCLE";
+
+    public List<ExternalGeoPoint> GeoPoints { get; set; } = new();
+}
+
+public class ExternalGeoPoint
+{
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
 }

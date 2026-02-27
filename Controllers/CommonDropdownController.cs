@@ -82,7 +82,7 @@ public class CommonDropdownController : ControllerBase
     [HttpGet("device-types")]
     public async Task<IActionResult> GetDeviceTypes()
     {
-        var data = await _service.GetDeviceTypes();
+        var data = await _service.GetDeviceType();
         return Ok(ApiResponse<object>.Ok(data, "Success", 200));
     }
 

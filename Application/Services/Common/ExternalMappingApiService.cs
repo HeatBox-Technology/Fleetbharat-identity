@@ -22,4 +22,34 @@ public class ExternalMappingApiService : IExternalMappingApiService
 
         return response.IsSuccessStatusCode;
     }
+    public async Task<bool> SendGeofenceAsync(
+    List<ExternalGeofenceRequest> payload,
+    HttpMethod method)
+    {
+        HttpResponseMessage response;
+
+        if (method == HttpMethod.Post)
+        {
+            response = await _http.PostAsJsonAsync(
+                "/api/v1/mapping/geofence",
+                payload);
+        }
+        else if (method == HttpMethod.Delete)
+        {
+            var request = new HttpRequestMessage(
+                HttpMethod.Delete,
+                "/api/v1/mapping/geofence")
+            {
+                Content = JsonContent.Create(payload)
+            };
+
+            response = await _http.SendAsync(request);
+        }
+        else
+        {
+            return false;
+        }
+
+        return response.IsSuccessStatusCode;
+    }
 }

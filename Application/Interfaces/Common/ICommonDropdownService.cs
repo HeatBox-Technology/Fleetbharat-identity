@@ -15,7 +15,7 @@ public interface ICommonDropdownService
 
     Task<List<DropdownDto>> GetSims(int accountId);
 
-    Task<List<DropdownDto>> GetDeviceTypes();
+    Task<List<DropdownDto>> GetDeviceType();
 
 
 }

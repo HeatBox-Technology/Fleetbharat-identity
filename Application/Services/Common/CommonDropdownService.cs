@@ -186,10 +186,11 @@ public class CommonDropdownService : ICommonDropdownService
             .ToListAsync();
     }
 
-    public async Task<List<DropdownDto>> GetDeviceTypes()
+    public async Task<List<DropdownDto>> GetDeviceType()
     {
         return await _db.DeviceTypes
-            .Where(x => !x.IsDeleted)
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && x.IsActive && x.IsEnabled)
             .OrderBy(x => x.Name)
             .Select(x => new DropdownDto
             {
