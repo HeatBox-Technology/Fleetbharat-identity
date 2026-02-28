@@ -9,6 +9,7 @@ using NetTopologySuite.Geometries;
 using System.Text.Json;
 using System.Net.Http;
 using Microsoft.Extensions.Logging;
+using NetTopologySuite;
 
 public class GeofenceService : IGeofenceService
 {
@@ -60,6 +61,8 @@ public class GeofenceService : IGeofenceService
         {
             throw new Exception($"Geometry build failed: {ex.Message}");
         }
+        if (geometryType == "POLYGON")
+            dto.RadiusM = null;
 
         var entity = new mst_Geofence
         {
@@ -70,9 +73,8 @@ public class GeofenceService : IGeofenceService
             ClassificationCode = dto.ClassificationCode,
             ClassificationLabel = dto.ClassificationLabel,
             GeometryType = geometryType,
-            RadiusM = dto.RadiusM,
+            RadiusM = geometryType == "CIRCLE" ? dto.RadiusM : null,
             Geom = geom,
-
             CoordinatesJson = dto.Coordinates == null
                 ? null
                 : JsonDocument.Parse(JsonSerializer.Serialize(dto.Coordinates)),
@@ -85,7 +87,15 @@ public class GeofenceService : IGeofenceService
         };
 
         _db.GeofenceZones.Add(entity);
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            throw new Exception(
+                $"DB SAVE ERROR: {ex.Message} | INNER: {ex.InnerException?.Message}");
+        }
 
         // Sync should not break DB operation
         try
@@ -280,22 +290,45 @@ public class GeofenceService : IGeofenceService
     // ===============================
     private Geometry BuildGeometry(string geometryType, List<CoordinateDto> coordinates)
     {
-        var factory = new GeometryFactory(new PrecisionModel(), 4326);
+        if (coordinates == null || coordinates.Count == 0)
+            throw new Exception("Coordinates are required");
+
+        var factory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
 
         if (geometryType == "CIRCLE")
         {
             var c = coordinates.First();
+
             return factory.CreatePoint(new Coordinate(c.Longitude, c.Latitude));
         }
 
-        var coords = coordinates
-            .Select(c => new Coordinate(c.Longitude, c.Latitude))
-            .ToList();
+        if (geometryType == "POLYGON")
+        {
+            if (coordinates.Count < 3)
+                throw new Exception("Polygon requires at least 3 points");
 
-        if (!coords.First().Equals2D(coords.Last()))
-            coords.Add(coords.First());
+            var coords = coordinates
+                .Select(c => new Coordinate(c.Longitude, c.Latitude))
+                .Distinct()
+                .ToList();
 
-        return factory.CreatePolygon(coords.ToArray());
+            // Close polygon
+            if (!coords.First().Equals2D(coords.Last()))
+                coords.Add(coords.First());
+
+            var polygon = factory.CreatePolygon(coords.ToArray());
+
+            // 🔥 IMPORTANT: Fix invalid polygons automatically
+            if (!polygon.IsValid)
+                polygon = (Polygon)polygon.Buffer(0);
+
+            if (!polygon.IsValid)
+                throw new Exception("Invalid polygon geometry");
+
+            return polygon;
+        }
+
+        throw new Exception("Invalid geometry type");
     }
     public async Task<List<GeofenceDto>> BulkCreateAsync(List<CreateGeofenceDto> items)
     {

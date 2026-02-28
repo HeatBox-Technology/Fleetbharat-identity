@@ -3,15 +3,23 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 public class ExceptionMiddleware
 {
     private readonly RequestDelegate _next;
+    private readonly ILogger<ExceptionMiddleware> _logger;
 
-    public ExceptionMiddleware(RequestDelegate next)
+
+    public ExceptionMiddleware(RequestDelegate next,
+        ILogger<ExceptionMiddleware> logger)
     {
         _next = next;
+        _logger = logger;
     }
+
+
 
     public async Task Invoke(HttpContext context)
     {
@@ -19,45 +27,49 @@ public class ExceptionMiddleware
         {
             await _next(context);
         }
-        catch (BadHttpRequestException ex)
+        catch (Exception ex)
         {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            context.Response.ContentType = "application/json";
+            // 🔥 LOG REAL ERROR
+            _logger.LogError(ex, "Unhandled Exception");
 
-            var response = ApiResponse<object>.Fail(ex.Message, 400);
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+            var dbLogger = context.RequestServices.GetService<DbLogger>();
+            if (dbLogger != null)
+            {
+                try
+                {
+                    await dbLogger.LogAsync(ex, context);
+                }
+                catch
+                {
+                    // never break API if logging fails
+                }
+            }
+            await HandleExceptionAsync(context, ex);
         }
-        catch (UnauthorizedAccessException ex)
-        {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            context.Response.ContentType = "application/json";
+    }
 
-            var response = ApiResponse<object>.Fail(ex.Message, 401);
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
-        }
-        catch (KeyNotFoundException ex)
-        {
-            context.Response.StatusCode = StatusCodes.Status404NotFound;
-            context.Response.ContentType = "application/json";
+    private async Task HandleExceptionAsync(HttpContext context, Exception ex)
+    {
+        context.Response.ContentType = "application/json";
 
-            var response = ApiResponse<object>.Fail(ex.Message, 404);
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
-        }
-        catch (InvalidOperationException ex)
-        {
-            context.Response.StatusCode = StatusCodes.Status409Conflict;
-            context.Response.ContentType = "application/json";
+        int statusCode = StatusCodes.Status500InternalServerError;
 
-            var response = ApiResponse<object>.Fail(ex.Message, 409);
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
-        }
-        catch (Exception)
-        {
-            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-            context.Response.ContentType = "application/json";
+        if (ex is BadHttpRequestException)
+            statusCode = 400;
+        else if (ex is UnauthorizedAccessException)
+            statusCode = 401;
+        else if (ex is KeyNotFoundException)
+            statusCode = 404;
+        else if (ex is InvalidOperationException)
+            statusCode = 409;
 
-            var response = ApiResponse<object>.Fail("Something went wrong", 500);
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
-        }
+        context.Response.StatusCode = statusCode;
+
+        var response = ApiResponse<object>.Fail(
+            ex.Message,   // ✅ send real message
+            statusCode);
+
+        await context.Response.WriteAsync(
+            JsonSerializer.Serialize(response));
     }
 }

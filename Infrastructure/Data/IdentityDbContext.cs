@@ -61,6 +61,7 @@ public class IdentityDbContext : DbContext
        public DbSet<bulk_column_config> bulk_column_configs { get; set; }
        public DbSet<map_vehicle_geofence> VehicleGeofenceMaps { get; set; }
        public DbSet<map_vehicle_geofence_sync_log> map_vehicle_geofence_sync_logs { get; set; }
+       public DbSet<ErrorLog> ErrorLogs { get; set; }
 
 
 

@@ -65,6 +65,8 @@ builder.Services.AddHostedService<BulkWorker>();
 builder.Services.AddScoped<IBulkService, BulkService>();
 builder.Services.AddScoped<BulkProcessorFactory>();
 builder.Services.AddScoped<IBulkModuleProcessor, GeofenceBulkProcessor>();
+builder.Services.AddScoped<DbLogger>();
+
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
 
