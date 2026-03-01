@@ -116,6 +116,8 @@ public class AuthService : IAuthService
                 FormId = f.FormId,
                 FormCode = f.FormCode,
                 FormName = f.FormName,
+                PageUrl = f.PageUrl,
+                icon = f.IconName,
                 CanRead = rr.CanRead,
                 CanWrite = rr.CanWrite,
                 CanDelete = rr.CanDelete,

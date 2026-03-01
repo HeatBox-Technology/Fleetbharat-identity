@@ -42,9 +42,6 @@ public class FormService : IFormService
 
     public async Task<PagedResultDto<FormResponseDto>> GetAllAsync(int page, int pageSize, string? search, bool? isActive)
     {
-        if (page <= 0) page = 1;
-        if (pageSize <= 0) pageSize = 10;
-
         var query = _db.Forms.AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -57,6 +54,33 @@ public class FormService : IFormService
             query = query.Where(x => x.IsActive == isActive.Value);
 
         var total = await query.CountAsync();
+
+        // If pageSize <= 0 → return all data
+        if (pageSize <= 0)
+        {
+            var allItems = await query
+                .OrderBy(x => x.SortOrder)
+                .Select(x => new FormResponseDto
+                {
+                    FormId = x.FormId,
+                    FormCode = x.FormCode,
+                    FormName = x.FormName,
+                    ModuleName = x.ModuleName,
+                    PageUrl = x.PageUrl,
+                    IsActive = x.IsActive
+                })
+                .ToListAsync();
+
+            return new PagedResultDto<FormResponseDto>
+            {
+                Page = 1,
+                PageSize = total,
+                TotalRecords = total,
+                Items = allItems
+            };
+        }
+
+        if (page <= 0) page = 1;
 
         var items = await query
             .OrderBy(x => x.SortOrder)
@@ -81,7 +105,6 @@ public class FormService : IFormService
             Items = items
         };
     }
-
     public async Task<FormResponseDto?> GetByIdAsync(int id)
     {
         return await _db.Forms
