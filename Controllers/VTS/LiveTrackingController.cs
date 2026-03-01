@@ -65,34 +65,49 @@ public class LiveTrackingController : ControllerBase
     /// Get live tracking data for multiple vehicles from Redis.
     /// </summary>
     /// <param name="vehicleNos">Comma-separated vehicle numbers</param>
+    /// <param name="orgId">Organization id</param>
     /// <returns>List of DeviceLiveTrackingDto</returns>
     [HttpGet("batch")]
-    public async Task<IActionResult> GetBatch([FromQuery] string vehicleNos)
+    public async Task<IActionResult> GetBatch([FromQuery] string? vehicleNos, [FromQuery] int? orgId)
     {
-        if (string.IsNullOrWhiteSpace(vehicleNos))
-            return BadRequest(new { ok = false, message = "Missing vehicleNos parameter." });
+        if (string.IsNullOrWhiteSpace(vehicleNos) && !orgId.HasValue)
+            return BadRequest(new { ok = false, message = "Pass either vehicleNos or orgId parameter." });
 
         var db = _mux.GetDatabase();
-        var vehicles = vehicleNos.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var keys = vehicles.Select(v => $"dashboard::{v}").ToArray();
-        var redisValues = await db.StringGetAsync(keys.Select(k => (RedisKey)k).ToArray());
+        RedisKey[] keys;
 
+        if (!string.IsNullOrWhiteSpace(vehicleNos))
+        {
+            var vehicles = vehicleNos.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            keys = vehicles.Select(v => (RedisKey)$"dashboard::{v}").ToArray();
+        }
+        else
+        {
+            keys = await GetDashboardKeysAsync();
+        }
+
+        if (keys.Length == 0)
+            return Ok(new { ok = true, data = new List<DeviceLiveTrackingDto>() });
+
+        var redisValues = await db.StringGetAsync(keys);
         var result = new List<DeviceLiveTrackingDto>();
+
         for (int i = 0; i < redisValues.Length; i++)
         {
             var val = redisValues[i];
             if (val.IsNullOrEmpty)
-            {
                 continue;
-            }
 
             try
             {
                 var dto = JsonConvert.DeserializeObject<DeviceLiveTrackingDto>(val.ToString());
-                if (dto != null)
-                {
-                    result.Add(dto);
-                }
+                if (dto == null)
+                    continue;
+
+                if (orgId.HasValue && dto.OrgId != orgId.Value)
+                    continue;
+
+                result.Add(dto);
             }
             catch (Exception ex)
             {
@@ -101,5 +116,24 @@ public class LiveTrackingController : ControllerBase
         }
 
         return Ok(new { ok = true, data = result });
+    }
+
+    private Task<RedisKey[]> GetDashboardKeysAsync()
+    {
+        var endpoints = _mux.GetEndPoints();
+        var keys = new List<RedisKey>();
+
+        foreach (var endpoint in endpoints)
+        {
+            var server = _mux.GetServer(endpoint);
+            if (!server.IsConnected)
+                continue;
+
+            var endpointKeys = server.Keys(pattern: "dashboard::*").ToArray();
+            if (endpointKeys.Length > 0)
+                keys.AddRange(endpointKeys);
+        }
+
+        return Task.FromResult(keys.Distinct().ToArray());
     }
 }
