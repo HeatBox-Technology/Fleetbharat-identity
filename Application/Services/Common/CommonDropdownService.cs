@@ -228,6 +228,19 @@ public class CommonDropdownService : ICommonDropdownService
             })
             .ToListAsync();
     }
+    public async Task<List<DropdownDto>> GetManufacture()
+    {
+        return await _db.OemManufacturers
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && x.IsEnabled)
+            .OrderBy(x => x.Name)
+            .Select(x => new DropdownDto
+            {
+                Id = x.Id,
+                Value = x.Name
+            })
+            .ToListAsync();
+    }
 }
 
 

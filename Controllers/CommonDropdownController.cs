@@ -95,6 +95,12 @@ public class CommonDropdownController : ControllerBase
 
         return Ok(ApiResponse<object>.Ok(data, "Success", 200));
     }
+    [HttpGet("manufacturers")]
+    public async Task<IActionResult> GetManufacturers()
+    {
+        var data = await _service.GetManufacture();
+        return Ok(ApiResponse<object>.Ok(data, "Success", 200));
+    }
 
 
 }
