@@ -17,6 +17,7 @@ namespace Application.DTOs
         public double Speed { get; set; }
         public double Altitude { get; set; }
         public int Direction { get; set; }
+        public int OrgId { get; set; }
         public int? Rpm { get; set; }
         public string? NorthSouthLatitude { get; set; }
         public string? EastWestLongitude { get; set; }
