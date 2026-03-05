@@ -29,12 +29,12 @@ deploy_to_ec2:
   before_script:
     - apk add --no-cache openssh
     - mkdir -p ~/.ssh
-    - echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
+    - echo "$APP_SSH_KEY" > ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
-    - ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+    - ssh-keyscan -H "$APP_HOST" >> ~/.ssh/known_hosts
   script:
     - |
-      ssh "$EC2_USER@$EC2_HOST" "
+      ssh "$APP_USER@$APP_HOST" "
         docker pull worknggupta/fleetbharat-identity:latest &&
         docker rm -f fleetbharat-identity || true &&
         docker run -d \
