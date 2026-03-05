@@ -24,17 +24,13 @@ build_and_push:
 deploy_to_oci:
   stage: deploy
   image: alpine:latest
-  rules:
-    - when: always
   before_script:
     - apk add --no-cache openssh-client
     - mkdir -p ~/.ssh
-    - printf "%s" "$APP_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
-    - chmod 600 ~/.ssh/id_rsa
-    - ssh-keyscan -H "$APP_HOST" >> ~/.ssh/known_hosts
+    - printf "%s" "$APP_SSH_KEY" > ~/.ssh/vm-access.pem
+    - chmod 600 ~/.ssh/vm-access.pem
   script:
-    - |
-      ssh -o StrictHostKeyChecking=no "$APP_USER@$APP_HOST" "
+    - ssh -o StrictHostKeyChecking=no -i ~/.ssh/vm-access.pem $APP_USER@$APP_HOST "
         docker pull $DOCKER_IMAGE_NAME:latest &&
         docker rm -f fleetbharat-identity || true &&
         docker run -d \
