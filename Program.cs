@@ -34,7 +34,7 @@ builder.Services.AddDbContext<IdentityDbContext>(opt =>
        .EnableSensitiveDataLogging());
 builder.Services.AddHttpClient<IExternalMappingApiService, ExternalMappingApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://47.128.76.211:8083/api/v1/"); // external base url
+    client.BaseAddress = new Uri("http://92.4.76.230:8083/api/v1/"); // external base url
 });
 
 builder.Services.AddVtsServices(builder.Configuration, defaultConnection);
