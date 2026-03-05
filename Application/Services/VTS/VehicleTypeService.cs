@@ -27,10 +27,43 @@ namespace Application.Services
         /// Gets all vehicle types.
         /// </summary>
         /// <returns>List of <see cref="VehicleTypeDto"/>.</returns>
-        public async Task<IEnumerable<VehicleTypeDto>> GetAllAsync()
+        public async Task<IEnumerable<VehicleTypeDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null)
         {
-            var entities = await _context.Set<Domain.Entities.mst_vehicle_type>().ToListAsync();
-            return entities.Select(MapToDto);
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 10;
+
+            var query = _context.Set<Domain.Entities.mst_vehicle_type>().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(x =>
+                    (x.VehicleTypeName ?? "").ToLower().Contains(s) ||
+                    (x.Category ?? "").ToLower().Contains(s) ||
+                    (x.FuelCategory ?? "").ToLower().Contains(s));
+            }
+
+            return await query
+                .OrderByDescending(x => x.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new VehicleTypeDto
+                {
+                    Id = x.Id,
+                    VehicleTypeName = x.VehicleTypeName,
+                    Category = x.Category,
+                    DefaultVehicleIcon = x.DefaultVehicleIcon,
+                    DefaultAlarmIcon = x.DefaultAlarmIcon,
+                    DefaultIconColor = x.DefaultIconColor,
+                    SeatingCapacity = x.SeatingCapacity,
+                    WheelsCount = x.WheelsCount,
+                    FuelCategory = x.FuelCategory,
+                    TankCapacity = x.TankCapacity,
+                    DefaultSpeedLimit = x.DefaultSpeedLimit,
+                    DefaultIdleThreshold = x.DefaultIdleThreshold,
+                    Status = x.Status
+                })
+                .ToListAsync();
         }
 
         /// <summary>

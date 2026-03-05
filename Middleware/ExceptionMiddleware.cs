@@ -39,9 +39,9 @@ public class ExceptionMiddleware
                 {
                     await dbLogger.LogAsync(ex, context);
                 }
-                catch
+                catch (Exception dbEx)
                 {
-                    // never break API if logging fails
+                    _logger.LogError(dbEx, "Failed to log exception to database");
                 }
             }
             await HandleExceptionAsync(context, ex);

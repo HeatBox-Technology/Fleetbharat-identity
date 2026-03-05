@@ -7,19 +7,25 @@ using Microsoft.EntityFrameworkCore;
 public class WhiteLabelService : IWhiteLabelService
 {
     private readonly IdentityDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public WhiteLabelService(IdentityDbContext db)
+    public WhiteLabelService(IdentityDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public async Task<int> CreateAsync(CreateWhiteLabelRequest req)
     {
-        var account = await _db.Accounts.FirstOrDefaultAsync(x => x.AccountId == req.AccountId);
+        var account = await _db.Accounts
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x => x.AccountId == req.AccountId);
         if (account == null)
             throw new KeyNotFoundException("Account not found");
 
-        var exists = await _db.WhiteLabels.AnyAsync(x => x.AccountId == req.AccountId && !x.IsDeleted);
+        var exists = await _db.WhiteLabels
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AnyAsync(x => x.AccountId == req.AccountId && !x.IsDeleted);
         if (exists)
             throw new InvalidOperationException("WhiteLabel already provisioned for this account");
 
@@ -46,7 +52,9 @@ public class WhiteLabelService : IWhiteLabelService
 
     public async Task<bool> UpdateAsync(int id, UpdateWhiteLabelRequest req)
     {
-        var entity = await _db.WhiteLabels.FirstOrDefaultAsync(x => x.WhiteLabelId == id && !x.IsDeleted);
+        var entity = await _db.WhiteLabels
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x => x.WhiteLabelId == id && !x.IsDeleted);
         if (entity == null) return false;
 
         var fqdn = req.CustomEntryFqdn.Trim().ToLower();
@@ -65,7 +73,9 @@ public class WhiteLabelService : IWhiteLabelService
 
     public async Task<bool> DeleteAsync(int id)
     {
-        var entity = await _db.WhiteLabels.FirstOrDefaultAsync(x => x.WhiteLabelId == id);
+        var entity = await _db.WhiteLabels
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x => x.WhiteLabelId == id);
         if (entity == null) return false;
 
         entity.IsDeleted = true;
@@ -78,8 +88,8 @@ public class WhiteLabelService : IWhiteLabelService
     public async Task<WhiteLabelResponseDto?> GetByIdAsync(int id)
     {
         return await (
-            from wl in _db.WhiteLabels.AsNoTracking()
-            join acc in _db.Accounts.AsNoTracking() on wl.AccountId equals acc.AccountId
+            from wl in _db.WhiteLabels.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser)
+            join acc in _db.Accounts.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser) on wl.AccountId equals acc.AccountId
             where wl.WhiteLabelId == id && !wl.IsDeleted
             select new WhiteLabelResponseDto
             {
@@ -102,8 +112,8 @@ public class WhiteLabelService : IWhiteLabelService
     public async Task<WhiteLabelResponseDto?> GetByAccountIdAsync(int accountId)
     {
         return await (
-            from wl in _db.WhiteLabels.AsNoTracking()
-            join acc in _db.Accounts.AsNoTracking() on wl.AccountId equals acc.AccountId
+            from wl in _db.WhiteLabels.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser)
+            join acc in _db.Accounts.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser) on wl.AccountId equals acc.AccountId
             where wl.AccountId == accountId && !wl.IsDeleted
             select new WhiteLabelResponseDto
             {
@@ -133,8 +143,8 @@ public class WhiteLabelService : IWhiteLabelService
         if (pageSize <= 0) pageSize = 10;
 
         var query =
-            from wl in _db.WhiteLabels.AsNoTracking()
-            join acc in _db.Accounts.AsNoTracking() on wl.AccountId equals acc.AccountId
+            from wl in _db.WhiteLabels.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser)
+            join acc in _db.Accounts.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser) on wl.AccountId equals acc.AccountId
             where !wl.IsDeleted
             select new { wl, acc };
 

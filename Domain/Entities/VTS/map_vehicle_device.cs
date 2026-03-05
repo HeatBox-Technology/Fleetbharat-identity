@@ -9,7 +9,7 @@ namespace Domain.Entities
     /// Example: A GPS device installed as 'primary_gps' on a vehicle.
     /// </summary>
     [Table("map_vehicle_device")]
-    public class map_vehicle_device
+    public class map_vehicle_device : IAccountEntity
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]

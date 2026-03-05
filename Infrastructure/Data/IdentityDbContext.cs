@@ -1,10 +1,25 @@
 
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using System;
+using System.Linq;
+using System.Reflection;
 
 public class IdentityDbContext : DbContext
 {
-       public IdentityDbContext(DbContextOptions<IdentityDbContext> opt) : base(opt) { }
+       private readonly ICurrentUserService? _currentUser;
+
+       public IdentityDbContext(
+              DbContextOptions<IdentityDbContext> opt,
+              ICurrentUserService? currentUser = null) : base(opt)
+       {
+              _currentUser = currentUser;
+       }
+
+       private bool IsAuthenticatedUser => _currentUser?.IsAuthenticated == true;
+       private bool IsSystemUser => _currentUser?.IsSystem == true;
+       private int[] AccessibleAccountIds => _currentUser?.AccessibleAccountIds?.ToArray() ?? Array.Empty<int>();
+
        public DbSet<User> Users => Set<User>();
        public DbSet<mst_account> Accounts => Set<mst_account>();
        public DbSet<mst_tax_type> TaxTypes => Set<mst_tax_type>();
@@ -86,6 +101,7 @@ public class IdentityDbContext : DbContext
                      entity.Property(x => x.AccountCode).HasMaxLength(50).IsRequired();
                      entity.Property(x => x.AccountName).HasMaxLength(150).IsRequired();
                      entity.Property(x => x.PrimaryDomain).HasMaxLength(200).IsRequired();
+                     entity.HasIndex(x => x.HierarchyPath).HasDatabaseName("idx_account_hierarchy");
               });
               modelBuilder.Entity<mst_role>()
                 .ToTable("mst_role")
@@ -420,8 +436,37 @@ public class IdentityDbContext : DbContext
              entity.Property(x => x.LastTriedAt)
              .HasColumnName("last_tried_at");
       });
+
+              ApplyAccountHierarchyQueryFilters(modelBuilder);
        }
 
+       private void ApplyAccountHierarchyQueryFilters(ModelBuilder modelBuilder)
+       {
+              var tenantEntityTypes = modelBuilder.Model.GetEntityTypes()
+                     .Where(x => typeof(IAccountEntity).IsAssignableFrom(x.ClrType))
+                     .Select(x => x.ClrType)
+                     .ToList();
+
+              foreach (var clrType in tenantEntityTypes)
+              {
+                     var method = typeof(IdentityDbContext)
+                            .GetMethod(nameof(SetHierarchyFilter), BindingFlags.NonPublic | BindingFlags.Instance);
+
+                     var genericMethod = method?.MakeGenericMethod(clrType);
+                     genericMethod?.Invoke(this, new object[] { modelBuilder });
+              }
+       }
+
+       private void SetHierarchyFilter<TEntity>(ModelBuilder modelBuilder)
+              where TEntity : class, IAccountEntity
+       {
+              modelBuilder.Entity<TEntity>()
+                     .HasQueryFilter(e =>
+                            !IsAuthenticatedUser ||
+                            IsSystemUser ||
+                            (AccessibleAccountIds.Length > 0 &&
+                             AccessibleAccountIds.Contains(e.AccountId)));
+       }
 
 
 

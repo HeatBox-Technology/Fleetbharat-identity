@@ -25,7 +25,7 @@ public interface ISimService
     /// <summary>
     /// Get all SIMs.
     /// </summary>
-    Task<IEnumerable<SimDto>> GetAllAsync();
+    Task<IEnumerable<SimDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null);
 
     /// <summary>
     /// Get SIM by Id.

@@ -19,9 +19,38 @@ public class FormRoleRightService : IFormRoleRightService
         return right;
     }
 
-    public async Task<List<map_FormRole_right>> GetAllAsync()
+    public async Task<List<map_FormRole_right>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null)
     {
-        return await _context.FormRoleRights.ToListAsync();
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 10;
+
+        var query = _context.FormRoleRights.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                x.RoleId.ToString().ToLower().Contains(s) ||
+                x.FormId.ToString().ToLower().Contains(s));
+        }
+
+        return await query
+            .OrderByDescending(x => x.RoleFormRightId)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new map_FormRole_right
+            {
+                RoleFormRightId = x.RoleFormRightId,
+                RoleId = x.RoleId,
+                FormId = x.FormId,
+                CanRead = x.CanRead,
+                CanWrite = x.CanWrite,
+                CanUpdate = x.CanUpdate,
+                CanDelete = x.CanDelete,
+                CanExport = x.CanExport,
+                CanAll = x.CanAll
+            })
+            .ToListAsync();
     }
 
     public async Task<List<map_FormRole_right>> GetByRoleAsync(int roleId)

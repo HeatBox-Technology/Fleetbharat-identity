@@ -55,6 +55,8 @@ builder.Services.AddScoped<IPlanEntitlementService, PlanEntitlementService>();
 builder.Services.AddScoped<IPlanAddonService, PlanAddonService>();
 builder.Services.AddScoped<ICustomerPlanService, CustomerPlanService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ITaxTypeService, TaxTypeService>();
 builder.Services.AddScoped<IAccountConfigurationService, AccountConfigurationService>();

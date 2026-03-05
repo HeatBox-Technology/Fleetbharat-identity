@@ -9,7 +9,7 @@ namespace Domain.Entities
     /// Example: A Jio SIM with ICCID '8991...1234' assigned to an account.
     /// </summary>
     [Table("mst_sim")]
-    public class mst_sim
+public class mst_sim : IAccountEntity
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]

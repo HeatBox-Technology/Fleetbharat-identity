@@ -27,10 +27,34 @@ namespace Application.Services
         /// Gets all device-SIM mappings.
         /// </summary>
         /// <returns>List of <see cref="DeviceSimMapDto"/>.</returns>
-        public async Task<IEnumerable<DeviceSimMapDto>> GetAllAsync()
+        public async Task<IEnumerable<DeviceSimMapDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null)
         {
-            var entities = await _context.Set<Domain.Entities.map_device_sim>().ToListAsync();
-            return entities.Select(MapToDto);
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 10;
+
+            var query = _context.Set<Domain.Entities.map_device_sim>().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(x =>
+                    x.DeviceId.ToString().ToLower().Contains(s) ||
+                    x.SimId.ToString().ToLower().Contains(s));
+            }
+
+            return await query
+                .OrderByDescending(x => x.DeviceSimId)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new DeviceSimMapDto
+                {
+                    DeviceSimId = x.DeviceSimId,
+                    DeviceId = x.DeviceId,
+                    SimId = x.SimId,
+                    FromTs = x.FromTs,
+                    ToTs = x.ToTs
+                })
+                .ToListAsync();
         }
 
         /// <summary>

@@ -15,11 +15,16 @@ public class GeofenceService : IGeofenceService
 {
     private readonly IdentityDbContext _db;
     private readonly IExternalMappingApiService _external;
+    private readonly ICurrentUserService _currentUser;
 
-    public GeofenceService(IdentityDbContext db, IExternalMappingApiService external)
+    public GeofenceService(
+        IdentityDbContext db,
+        IExternalMappingApiService external,
+        ICurrentUserService currentUser)
     {
         _db = db;
         _external = external;
+        _currentUser = currentUser;
     }
 
     public async Task<int> CreateAsync(CreateGeofenceDto dto)
@@ -41,6 +46,7 @@ public class GeofenceService : IGeofenceService
             throw new Exception("Radius must be greater than zero for circle");
 
         var exists = await _db.GeofenceZones
+            .ApplyAccountHierarchyFilter(_currentUser)
             .AnyAsync(x => x.UniqueCode == code &&
                            x.AccountId == dto.AccountId &&
                            !x.IsDeleted);
@@ -119,6 +125,7 @@ public class GeofenceService : IGeofenceService
         if (pageSize <= 0) pageSize = 10;
 
         var query = _db.GeofenceZones
+            .ApplyAccountHierarchyFilter(_currentUser)
             .AsNoTracking()
             .Where(x => !x.IsDeleted);
 
@@ -187,6 +194,7 @@ public class GeofenceService : IGeofenceService
     public async Task<GeofenceDto?> GetByIdAsync(int id)
     {
         var entity = await _db.GeofenceZones
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
         if (entity == null)
@@ -215,6 +223,7 @@ public class GeofenceService : IGeofenceService
     public async Task<bool> UpdateAsync(int id, UpdateGeofenceDto dto)
     {
         var entity = await _db.GeofenceZones
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
         if (entity == null) return false;
@@ -222,6 +231,7 @@ public class GeofenceService : IGeofenceService
         var code = dto.UniqueCode.Trim().ToUpper();
 
         var exists = await _db.GeofenceZones
+            .ApplyAccountHierarchyFilter(_currentUser)
             .AnyAsync(x => x.UniqueCode == code && x.Id != id && !x.IsDeleted);
 
         if (exists)
@@ -250,6 +260,7 @@ public class GeofenceService : IGeofenceService
     public async Task<bool> UpdateStatusAsync(int id, bool isEnabled)
     {
         var entity = await _db.GeofenceZones
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
         if (entity == null) return false;
@@ -263,6 +274,7 @@ public class GeofenceService : IGeofenceService
     public async Task<bool> DeleteAsync(int id)
     {
         var entity = await _db.GeofenceZones
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
         if (entity == null) return false;
@@ -342,6 +354,7 @@ public class GeofenceService : IGeofenceService
             var code = dto.UniqueCode.Trim().ToUpper();
 
             var exists = await _db.GeofenceZones
+                .ApplyAccountHierarchyFilter(_currentUser)
                 .AnyAsync(x => x.UniqueCode == code &&
                                x.AccountId == dto.AccountId &&
                                !x.IsDeleted);

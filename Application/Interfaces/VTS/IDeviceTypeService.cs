@@ -53,6 +53,7 @@ public interface IDeviceTypeService
     /// Bulk create device types
     /// </summary>
     Task<List<DeviceTypeDto>> BulkCreateAsync(List<CreateDeviceTypeDto> items);
+    Task<List<DeviceTypeDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null);
 
 
 }

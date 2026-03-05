@@ -27,10 +27,38 @@ namespace Application.Services
         /// Gets all sensor types.
         /// </summary>
         /// <returns>List of <see cref="SensorTypeDto"/>.</returns>
-        public async Task<IEnumerable<SensorTypeDto>> GetAllAsync()
+        public async Task<IEnumerable<SensorTypeDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null)
         {
-            var entities = await _context.Set<Domain.Entities.lkp_sensor_type>().ToListAsync();
-            return entities.Select(MapToDto);
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 10;
+
+            var query = _context.Set<Domain.Entities.lkp_sensor_type>().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(x =>
+                    (x.Code ?? "").ToLower().Contains(s) ||
+                    (x.Name ?? "").ToLower().Contains(s) ||
+                    (x.Unit ?? "").ToLower().Contains(s));
+            }
+
+            return await query
+                .OrderByDescending(x => x.SensorTypeId)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new SensorTypeDto
+                {
+                    SensorTypeId = x.SensorTypeId,
+                    Code = x.Code,
+                    Name = x.Name,
+                    Unit = x.Unit,
+                    ValueKind = x.ValueKind,
+                    MinValue = x.MinValue,
+                    MaxValue = x.MaxValue,
+                    IsActive = x.IsActive
+                })
+                .ToListAsync();
         }
 
         /// <summary>

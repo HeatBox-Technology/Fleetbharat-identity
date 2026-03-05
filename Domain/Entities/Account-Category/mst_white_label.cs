@@ -1,6 +1,6 @@
 using System;
 
-public class mst_white_label
+public class mst_white_label : IAccountEntity
 {
     public int WhiteLabelId { get; set; }
     public int AccountId { get; set; }                   // FK mst_account

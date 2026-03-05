@@ -66,8 +66,11 @@ public class TaxTypeService : ITaxTypeService
         return true;
     }
 
-    public async Task<List<TaxTypeResponseDto>> GetAllAsync(string? search, int? countryId, bool? isActive)
+    public async Task<List<TaxTypeResponseDto>> GetAllAsync(string? search, int? countryId, bool? isActive, int page = 1, int pageSize = 10)
     {
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 10;
+
         var query = _db.TaxTypes.AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -86,6 +89,8 @@ public class TaxTypeService : ITaxTypeService
 
         return await query
             .OrderBy(x => x.TaxTypeName)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(x => new TaxTypeResponseDto
             {
                 TaxTypeId = x.TaxTypeId,

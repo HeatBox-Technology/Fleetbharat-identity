@@ -8,7 +8,7 @@ namespace Domain.Entities
     /// Driver master table.
     /// </summary>
     [Table("mst_driver")]
-    public class mst_driver
+    public class mst_driver : IAccountEntity
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]

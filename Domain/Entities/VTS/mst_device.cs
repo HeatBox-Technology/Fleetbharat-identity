@@ -8,7 +8,7 @@ namespace Domain.Entities
     /// Device master table, stores device details (IMEI, type, manufacturer, etc.).
     /// </summary>
     [Table("mst_device")]
-    public class mst_device
+    public class mst_device : IAccountEntity
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]

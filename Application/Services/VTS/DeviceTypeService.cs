@@ -118,12 +118,28 @@ public class DeviceTypeService : IDeviceTypeService
         return result.DeviceTypes;
     }
 
-    public async Task<List<DeviceTypeDto>> GetAllAsync()
+    public async Task<List<DeviceTypeDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null)
     {
-        return await _db.DeviceTypes
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 10;
+
+        var query = _db.DeviceTypes
             .AsNoTracking()
             .Where(x => !x.IsDeleted && x.IsActive && x.IsEnabled)
-            .OrderBy(x => x.Name)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                (x.Code ?? "").ToLower().Contains(s) ||
+                (x.Name ?? "").ToLower().Contains(s));
+        }
+
+        return await query
+            .OrderByDescending(x => x.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(x => new DeviceTypeDto
             {
                 Id = x.Id,

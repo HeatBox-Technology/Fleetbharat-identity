@@ -7,10 +7,12 @@ using Microsoft.EntityFrameworkCore;
 public class RoleService : IRoleService
 {
     private readonly IdentityDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public RoleService(IdentityDbContext db)
+    public RoleService(IdentityDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public async Task<int> CreateAsync(CreateRoleRequest req)
@@ -53,6 +55,7 @@ public class RoleService : IRoleService
     public async Task<List<mst_role>> GetByAccountAsync(int accountId)
     {
         return await _db.Roles
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => x.AccountId == accountId && x.IsActive)
             .OrderBy(x => x.RoleName)
             .ToListAsync();
@@ -60,6 +63,17 @@ public class RoleService : IRoleService
 
     public async Task<List<FormRightResponseDto>> GetRoleRightsAsync(int roleId)
     {
+        var role = await _db.Roles
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.RoleId == roleId);
+
+        if (role == null)
+            return new List<FormRightResponseDto>();
+
+        if (IsSystemRole(role))
+            return await BuildFullAccessRightsAsync();
+
         return await (from r in _db.FormRoleRights
                       join f in _db.Forms on r.FormId equals f.FormId
                       where r.RoleId == roleId
@@ -68,6 +82,8 @@ public class RoleService : IRoleService
                           FormId = f.FormId,
                           FormCode = f.FormCode,
                           FormName = f.FormName,
+                          PageUrl = f.PageUrl,
+                          icon = f.IconName,
                           CanRead = r.CanRead,
                           CanWrite = r.CanWrite,
                           CanUpdate = r.CanUpdate,
@@ -79,7 +95,9 @@ public class RoleService : IRoleService
 
     public async Task<bool> UpdateRightsAsync(int roleId, List<RoleFormRightDto> rights)
     {
-        var role = await _db.Roles.FirstOrDefaultAsync(x => x.RoleId == roleId);
+        var role = await _db.Roles
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x => x.RoleId == roleId);
         if (role == null) return false;
 
         var existing = await _db.FormRoleRights.Where(x => x.RoleId == roleId).ToListAsync();
@@ -105,7 +123,9 @@ public class RoleService : IRoleService
 
     public async Task<bool> UpdateAsync(int roleId, UpdateRoleRequest req)
     {
-        var role = await _db.Roles.FirstOrDefaultAsync(x => x.RoleId == roleId);
+        var role = await _db.Roles
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x => x.RoleId == roleId);
         if (role == null) return false;
 
         role.RoleName = req.RoleName.Trim();
@@ -120,7 +140,9 @@ public class RoleService : IRoleService
 
     public async Task<bool> DeleteAsync(int roleId)
     {
-        var role = await _db.Roles.FirstOrDefaultAsync(x => x.RoleId == roleId);
+        var role = await _db.Roles
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x => x.RoleId == roleId);
         if (role == null) return false;
 
         var rights = await _db.FormRoleRights.Where(x => x.RoleId == roleId).ToListAsync();
@@ -140,7 +162,10 @@ public class RoleService : IRoleService
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 10;
 
-        var roleQuery = _db.Roles.AsNoTracking().AsQueryable();
+        var roleQuery = _db.Roles
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AsQueryable();
 
         if (accountId.HasValue)
             roleQuery = roleQuery.Where(x => x.AccountId == accountId.Value);
@@ -168,7 +193,7 @@ public class RoleService : IRoleService
         // ✅ Table data + AssignedUsers Count + AccountName
         var tableQuery =
             from r in roleQuery
-            join a in _db.Accounts.AsNoTracking() on r.AccountId equals a.AccountId
+            join a in _db.Accounts.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser) on r.AccountId equals a.AccountId
             select new
             {
                 Role = r,
@@ -210,31 +235,35 @@ public class RoleService : IRoleService
     }
     public async Task<RoleDetailResponseDto?> GetByRoleIdAsync(int roleId, int accountId)
     {
-        var role = await _db.Roles.AsNoTracking()
+        var role = await _db.Roles
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.RoleId == roleId && x.AccountId == accountId);
 
         if (role == null) return null;
 
-        var rights = await (
-            from rr in _db.FormRoleRights.AsNoTracking()
-            join f in _db.Forms.AsNoTracking() on rr.FormId equals f.FormId
-            where rr.RoleId == roleId
-            orderby f.SortOrder
-            select new FormRightResponseDto
-            {
-                FormId = f.FormId,
-                FormCode = f.FormCode,
-                FormName = f.FormName,
-                PageUrl = f.PageUrl,// ✅ count
-                icon = f.IconName,// ✅ coun
-                CanRead = rr.CanRead,
-                CanWrite = rr.CanWrite,
-                CanUpdate = rr.CanUpdate,
-                CanDelete = rr.CanDelete,
-                CanExport = rr.CanExport,
-                CanAll = rr.CanAll
-            }
-        ).ToListAsync();
+        var rights = IsSystemRole(role)
+            ? await BuildFullAccessRightsAsync()
+            : await (
+                from rr in _db.FormRoleRights.AsNoTracking()
+                join f in _db.Forms.AsNoTracking() on rr.FormId equals f.FormId
+                where rr.RoleId == roleId
+                orderby f.SortOrder
+                select new FormRightResponseDto
+                {
+                    FormId = f.FormId,
+                    FormCode = f.FormCode,
+                    FormName = f.FormName,
+                    PageUrl = f.PageUrl,// ✅ count
+                    icon = f.IconName,// ✅ coun
+                    CanRead = rr.CanRead,
+                    CanWrite = rr.CanWrite,
+                    CanUpdate = rr.CanUpdate,
+                    CanDelete = rr.CanDelete,
+                    CanExport = rr.CanExport,
+                    CanAll = rr.CanAll
+                }
+            ).ToListAsync();
 
         return new RoleDetailResponseDto
         {
@@ -250,11 +279,34 @@ public class RoleService : IRoleService
         };
     }
 
+    private static bool IsSystemRole(mst_role role) =>
+        role.IsSystemRole ||
+        role.RoleName.Equals("System", StringComparison.OrdinalIgnoreCase);
+
+    private Task<List<FormRightResponseDto>> BuildFullAccessRightsAsync() =>
+        _db.Forms.AsNoTracking()
+            .OrderBy(x => x.SortOrder)
+            .Select(f => new FormRightResponseDto
+            {
+                FormId = f.FormId,
+                FormCode = f.FormCode,
+                FormName = f.FormName,
+                PageUrl = f.PageUrl,
+                icon = f.IconName,
+                CanRead = true,
+                CanWrite = true,
+                CanUpdate = true,
+                CanDelete = true,
+                CanExport = true,
+                CanAll = true
+            })
+            .ToListAsync();
+
     public async Task<byte[]> ExportRolesCsvAsync(int? accountId, string? search)
     {
         var query =
-            from r in _db.Roles.AsNoTracking()
-            join a in _db.Accounts.AsNoTracking() on r.AccountId equals a.AccountId
+            from r in _db.Roles.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser)
+            join a in _db.Accounts.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser) on r.AccountId equals a.AccountId
             select new
             {
                 a.AccountName,

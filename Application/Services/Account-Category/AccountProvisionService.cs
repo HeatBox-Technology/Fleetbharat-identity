@@ -9,10 +9,12 @@ public class AccountProvisionService : IAccountProvisionService
 {
 
     private readonly IdentityDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public AccountProvisionService(IdentityDbContext db)
+    public AccountProvisionService(IdentityDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
     public async Task<int> CreateAsync(CreateAccountRequest req)
     {
@@ -21,13 +23,18 @@ public class AccountProvisionService : IAccountProvisionService
         try
         {
             // ✅ validate tax type belongs to country
+            var taxTypeId = req.TaxTypeId;
+
             var validTax = await _db.TaxTypes.AnyAsync(x =>
                 x.TaxTypeId == req.TaxTypeId &&
                 x.CountryId == req.CountryId &&
                 x.IsActive);
 
             if (!validTax)
-                throw new BadHttpRequestException("Invalid TaxType for selected Country");
+            {
+                // fallback to default tax type
+                taxTypeId = 1;
+            }
 
             // ✅ account code
             var accountCode = string.IsNullOrWhiteSpace(req.AccountCode)
@@ -40,9 +47,10 @@ public class AccountProvisionService : IAccountProvisionService
             if (codeExists)
                 throw new InvalidOperationException("AccountCode already exists");
 
-            // -------------------------------------------------
-            // ✅ create account
-            // -------------------------------------------------
+
+            // =====================================================
+            // CREATE ACCOUNT FIRST (WITHOUT HIERARCHY)
+            // =====================================================
 
             var account = new mst_account
             {
@@ -80,8 +88,6 @@ public class AccountProvisionService : IAccountProvisionService
                 share = req.share,
 
                 Fk_userid = req.userId,
-                HierarchyPath = req.HierarchyPath,
-
                 Status = req.Status,
 
                 CreatedOn = DateTime.UtcNow,
@@ -91,12 +97,86 @@ public class AccountProvisionService : IAccountProvisionService
             };
 
             _db.Accounts.Add(account);
+            await _db.SaveChangesAsync();   // ⭐ get AccountId
+
+
+            // =====================================================
+            // GENERATE HIERARCHY PATH
+            // =====================================================
+
+            string hierarchyPath;
+
+            if (account.ParentAccountId.HasValue)
+            {
+                var parent = await _db.Accounts
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x =>
+                        x.AccountId == account.ParentAccountId.Value &&
+                        !x.IsDeleted);
+
+                if (parent == null)
+                    throw new Exception("Parent account not found");
+                if (string.IsNullOrWhiteSpace(parent.HierarchyPath))
+                    throw new Exception("Parent account hierarchy is invalid");
+
+                hierarchyPath = $"{parent.HierarchyPath}{account.AccountId}/";
+            }
+            else
+            {
+                // Root account
+                hierarchyPath = $"/{account.AccountId}/";
+            }
+
+            account.HierarchyPath = hierarchyPath;
+
             await _db.SaveChangesAsync();
 
+            // =====================================================
+            // CREATE DEFAULT ROLE FOR FIRST USER
+            // System creator  -> SuperAdmin
+            // Non-system      -> category-based default role
+            // =====================================================
+            var firstRoleName = "SuperAdmin";
 
-            // -------------------------------------------------
-            // ✅ create first user for this account
-            // -------------------------------------------------
+            if (!_currentUser.IsSystem)
+            {
+                var categoryName = await _db.Categories
+                    .Where(x => x.CategoryId == req.CategoryId && !x.IsDeleted)
+                    .Select(x => x.LabelName)
+                    .FirstOrDefaultAsync();
+
+                firstRoleName = ResolveDefaultRoleByCategory(categoryName);
+                if (string.IsNullOrWhiteSpace(firstRoleName))
+                    throw new BadHttpRequestException("No default role mapping found for selected category");
+            }
+
+            var firstRole = await _db.Roles
+                .FirstOrDefaultAsync(x =>
+                    x.AccountId == account.AccountId &&
+                    x.RoleName == firstRoleName &&
+                    !x.IsDeleted);
+
+            if (firstRole == null)
+            {
+                firstRole = new mst_role
+                {
+                    AccountId = account.AccountId,
+                    RoleName = firstRoleName,
+                    RoleCode = firstRoleName.ToUpperInvariant(),
+                    IsSystemRole = false,
+                    IsActive = true,
+                    CreatedOn = DateTime.UtcNow,
+                    UpdatedOn = DateTime.UtcNow,
+                    CreatedBy = req.userId
+                };
+
+                _db.Roles.Add(firstRole);
+                await _db.SaveChangesAsync();
+            }
+
+            // =====================================================
+            // CREATE FIRST USER
+            // =====================================================
 
             var email = req.email?.Trim().ToLower();
 
@@ -108,19 +188,7 @@ public class AccountProvisionService : IAccountProvisionService
                 if (userExists)
                     throw new InvalidOperationException("User email already exists");
             }
-            int defaultRoleId = 1; // <-- temporary hardcode
-            // 👉 get default role for this category (Admin/Owner role)
-            // var defaultRoleId = await
-            //     (from cr in _db.Categories
-            //      join r in _db.Roles on cr.CategoryId equals r.RoleId
-            //      where cr.CategoryId == req.CategoryId
-            //            && cr.IsActive
-            //            && r.   // 👈 recommended column
-            //      select r.RoleId)
-            //     .FirstOrDefaultAsync();
 
-            if (defaultRoleId == 0)
-                throw new InvalidOperationException("No default role configured for this category");
 
             var user = new User
             {
@@ -132,12 +200,12 @@ public class AccountProvisionService : IAccountProvisionService
                 Password_hash = BCrypt.Net.BCrypt.HashPassword(req.Password),
 
                 AccountId = account.AccountId,
-                roleId = defaultRoleId,
+                roleId = firstRole.RoleId,
 
                 MobileNo = req.phone,
                 Status = true,
-                TwoFactorEnabled = false,
 
+                TwoFactorEnabled = false,
                 EmailVerified = false,
                 MobileVerified = false,
 
@@ -159,7 +227,6 @@ public class AccountProvisionService : IAccountProvisionService
             throw;
         }
     }
-
     public async Task<AccountListWithCardDto> GetAllAsync(
      int page,
      int pageSize,
@@ -375,94 +442,162 @@ public class AccountProvisionService : IAccountProvisionService
 
     public async Task<bool> UpdateAsync(int accountId, UpdateAccountRequest req)
     {
-        var account = await _db.Accounts
-            .FirstOrDefaultAsync(x => x.AccountId == accountId && !x.IsDeleted);
+        using var tx = await _db.Database.BeginTransactionAsync();
 
-        if (account == null)
-            return false;
-
-        // ✅ validate tax type belongs to country
-        var validTax = await _db.TaxTypes.AnyAsync(x =>
-            x.TaxTypeId == req.TaxTypeId &&
-            x.CountryId == req.CountryId &&
-            x.IsActive);
-
-        if (!validTax)
-            throw new BadHttpRequestException("Invalid TaxType for selected Country");
-
-        // ✅ account code check (only if provided)
-        if (!string.IsNullOrWhiteSpace(req.AccountCode))
+        try
         {
-            var code = req.AccountCode.Trim();
+            var account = await _db.Accounts
+                .FirstOrDefaultAsync(x => x.AccountId == accountId && !x.IsDeleted);
 
-            var codeExists = await _db.Accounts.AnyAsync(x =>
-                x.AccountCode == code &&
-                x.AccountId != accountId &&
-                !x.IsDeleted);
+            if (account == null)
+                return false;
 
-            if (codeExists)
-                throw new InvalidOperationException("AccountCode already exists");
 
-            account.AccountCode = code;
+            var validTax = await _db.TaxTypes.AnyAsync(x =>
+                x.TaxTypeId == req.TaxTypeId &&
+                x.CountryId == req.CountryId &&
+                x.IsActive);
+
+            if (!validTax)
+                throw new BadHttpRequestException("Invalid TaxType for selected Country");
+
+
+            // Account Code
+            if (!string.IsNullOrWhiteSpace(req.AccountCode))
+            {
+                var code = req.AccountCode.Trim();
+
+                var codeExists = await _db.Accounts.AnyAsync(x =>
+                    x.AccountCode == code &&
+                    x.AccountId != accountId &&
+                    !x.IsDeleted);
+
+                if (codeExists)
+                    throw new InvalidOperationException("AccountCode already exists");
+
+                account.AccountCode = code;
+            }
+
+
+            // ========================
+            // MAIN FIELDS
+            // ========================
+
+            account.AccountName = req.AccountName.Trim();
+            account.CategoryId = req.CategoryId;
+            account.PrimaryDomain = req.PrimaryDomain.Trim();
+
+            account.CountryId = req.CountryId;
+            account.StateId = req.StateId;
+            account.CityId = req.CityId;
+            account.Zipcode = req.Zipcode;
+
+            account.RefferCode = req.RefferCode;
+            account.TaxTypeId = req.TaxTypeId;
+
+
+            // ========================
+            // CONTACT
+            // ========================
+
+            account.fullname = req.fullname;
+            account.email = req.email;
+            account.phone = req.phone;
+            account.Position = req.Position;
+            account.address = req.address;
+
+
+            // ========================
+            // BUSINESS
+            // ========================
+
+            account.BusinessPhone = req.BusinessPhone;
+            account.BusinessEmail = req.BusinessEmail;
+            account.BusinessAddress = req.BusinessAddress;
+            account.BusinessHours = req.BusinessHours;
+            account.BusinessTimeZone = req.BusinessTimeZone;
+
+
+            // ========================
+            // USER ACCESS
+            // ========================
+
+            account.UserName = req.UserName;
+            account.share = req.share;
+
+            if (!string.IsNullOrWhiteSpace(req.Password))
+                account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password);
+
+
+            // ========================
+            // PARENT CHANGE → UPDATE HIERARCHY
+            // ========================
+
+            if (req.ParentAccountId == account.AccountId)
+                throw new Exception("Account cannot be its own parent");
+
+            if (account.ParentAccountId != req.ParentAccountId)
+            {
+                var oldPath = account.HierarchyPath;
+                if (string.IsNullOrWhiteSpace(oldPath))
+                    oldPath = $"/{account.AccountId}/";
+
+                string newPath;
+
+                if (req.ParentAccountId.HasValue)
+                {
+                    var parent = await _db.Accounts
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(x =>
+                            x.AccountId == req.ParentAccountId.Value &&
+                            !x.IsDeleted);
+
+                    if (parent == null)
+                        throw new Exception("Parent account not found");
+                    if (string.IsNullOrWhiteSpace(parent.HierarchyPath))
+                        throw new Exception("Parent account hierarchy is invalid");
+
+                    // Prevent assigning under own subtree.
+                    if (parent.HierarchyPath.StartsWith(oldPath))
+                        throw new Exception("Circular hierarchy is not allowed");
+
+                    newPath = $"{parent.HierarchyPath}{account.AccountId}/";
+                }
+                else
+                {
+                    newPath = $"/{account.AccountId}/";
+                }
+
+                var descendants = await _db.Accounts
+                    .Where(x => !x.IsDeleted && x.HierarchyPath.StartsWith(oldPath))
+                    .ToListAsync();
+
+                foreach (var child in descendants)
+                {
+                    child.HierarchyPath = newPath + child.HierarchyPath.Substring(oldPath.Length);
+                    child.UpdatedOn = DateTime.UtcNow;
+                    child.UpdatedBy = req.userId;
+                }
+
+                account.ParentAccountId = req.ParentAccountId;
+            }
+
+
+            account.Status = req.Status;
+            account.UpdatedOn = DateTime.UtcNow;
+            account.UpdatedBy = req.userId;
+
+            await _db.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            return true;
         }
-
-        // ------------------------
-        // ✅ main fields
-        // ------------------------
-        account.AccountName = req.AccountName.Trim();
-        account.CategoryId = req.CategoryId;
-        account.PrimaryDomain = req.PrimaryDomain.Trim();
-        account.RefferCode = req.RefferCode;
-        account.CountryId = req.CountryId;
-        account.StateId = req.StateId;
-        account.CityId = req.CityId;
-        account.Zipcode = req.Zipcode;
-
-        account.ParentAccountId = req.ParentAccountId;
-        account.RefferCode = req.RefferCode;
-
-        account.TaxTypeId = req.TaxTypeId;
-
-        // ------------------------
-        // ✅ contact person
-        // ------------------------
-        account.fullname = req.fullname;
-        account.email = req.email;
-        account.phone = req.phone;
-        account.Position = req.Position;
-
-        account.address = req.address;
-
-        // ------------------------
-        // ✅ business profile
-        // ------------------------
-        account.BusinessPhone = req.BusinessPhone;
-        account.BusinessEmail = req.BusinessEmail;
-        account.BusinessAddress = req.BusinessAddress;
-        account.BusinessHours = req.BusinessHours;
-        account.BusinessTimeZone = req.BusinessTimeZone;
-
-        // ------------------------
-        // ✅ user access fields
-        // ------------------------
-        account.UserName = req.UserName;
-        account.share = req.share;
-
-        // password only when provided
-        if (!string.IsNullOrWhiteSpace(req.Password))
-            account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password);
-
-        account.HierarchyPath = req.HierarchyPath;
-
-        account.Status = req.Status;
-
-        account.UpdatedOn = DateTime.UtcNow;
-        account.UpdatedBy = req.userId;
-
-        await _db.SaveChangesAsync();
-        return true;
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
     }
-
 
     public async Task<bool> UpdateStatusAsync(int accountId, bool status)
     {
@@ -484,5 +619,24 @@ public class AccountProvisionService : IAccountProvisionService
         _db.Accounts.Remove(account);
         await _db.SaveChangesAsync();
         return true;
+    }
+
+    private static string ResolveDefaultRoleByCategory(string? categoryName)
+    {
+        if (string.IsNullOrWhiteSpace(categoryName))
+            return string.Empty;
+
+        var normalized = categoryName.Trim().ToLowerInvariant();
+
+        if (normalized.Contains("distributor"))
+            return "DistributorAdmin";
+
+        if (normalized.Contains("reseller"))
+            return "ResellerAdmin";
+
+        if (normalized.Contains("dealer"))
+            return "DealerAdmin";
+
+        return string.Empty;
     }
 }

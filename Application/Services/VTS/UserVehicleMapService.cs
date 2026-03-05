@@ -27,10 +27,34 @@ namespace Application.Services
         /// Gets all user-vehicle mappings.
         /// </summary>
         /// <returns>List of <see cref="UserVehicleMapDto"/>.</returns>
-        public async Task<IEnumerable<UserVehicleMapDto>> GetAllAsync()
+        public async Task<IEnumerable<UserVehicleMapDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null)
         {
-            var entities = await _context.Set<Domain.Entities.map_user_vehicle>().ToListAsync();
-            return entities.Select(MapToDto);
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 10;
+
+            var query = _context.Set<Domain.Entities.map_user_vehicle>().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(x =>
+                    x.UserId.ToString().ToLower().Contains(s) ||
+                    x.VehicleId.ToString().ToLower().Contains(s));
+            }
+
+            return await query
+                .OrderByDescending(x => x.UserVehicleId)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new UserVehicleMapDto
+                {
+                    UserVehicleId = x.UserVehicleId,
+                    UserId = x.UserId,
+                    VehicleId = x.VehicleId,
+                    FromTs = x.FromTs,
+                    ToTs = x.ToTs
+                })
+                .ToListAsync();
         }
 
         /// <summary>

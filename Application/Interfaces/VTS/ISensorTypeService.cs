@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 public interface ISensorTypeService
 {
-    Task<IEnumerable<SensorTypeDto>> GetAllAsync();
+    Task<IEnumerable<SensorTypeDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null);
     Task<SensorTypeDto?> GetByIdAsync(long id);
     Task<SensorTypeDto> CreateAsync(SensorTypeDto dto);
     Task<SensorTypeDto> UpdateAsync(long id, SensorTypeDto dto);

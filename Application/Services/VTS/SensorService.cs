@@ -27,10 +27,38 @@ namespace Application.Services
         /// Gets all sensors.
         /// </summary>
         /// <returns>List of <see cref="SensorDto"/>.</returns>
-        public async Task<IEnumerable<SensorDto>> GetAllAsync()
+        public async Task<IEnumerable<SensorDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null)
         {
-            var entities = await _context.Set<Domain.Entities.mst_sensor>().ToListAsync();
-            return entities.Select(MapToDto);
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 10;
+
+            var query = _context.Set<Domain.Entities.mst_sensor>().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(x =>
+                    (x.Name ?? "").ToLower().Contains(s) ||
+                    (x.SerialNo ?? "").ToLower().Contains(s) ||
+                    (x.MakeModel ?? "").ToLower().Contains(s));
+            }
+
+            return await query
+                .OrderByDescending(x => x.SensorId)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new SensorDto
+                {
+                    SensorId = x.SensorId,
+                    AccountId = x.AccountId,
+                    SensorTypeId = x.SensorTypeId,
+                    Name = x.Name,
+                    MakeModel = x.MakeModel,
+                    SerialNo = x.SerialNo,
+                    StatusKey = x.StatusKey,
+                    CreatedAt = x.CreatedAt
+                })
+                .ToListAsync();
         }
 
         /// <summary>

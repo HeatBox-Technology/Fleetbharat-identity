@@ -204,9 +204,10 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
 
         if (!string.IsNullOrWhiteSpace(search))
         {
+            var s = search.Trim().ToLower();
             query = query.Where(x =>
-                EF.Functions.ILike(x.Vehicle.VehicleNumber, $"%{search}%") ||
-                EF.Functions.ILike(x.Geofence.DisplayName, $"%{search}%"));
+                (x.Vehicle.VehicleNumber ?? "").ToLower().Contains(s) ||
+                (x.Geofence.DisplayName ?? "").ToLower().Contains(s));
         }
 
         var total = await query.CountAsync();
@@ -274,9 +275,10 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
 
         if (!string.IsNullOrWhiteSpace(search))
         {
+            var s = search.Trim().ToLower();
             query = query.Where(x =>
-                EF.Functions.ILike(x.Vehicle.VehicleNumber, $"%{search}%") ||
-                EF.Functions.ILike(x.Geofence.DisplayName, $"%{search}%"));
+                (x.Vehicle.VehicleNumber ?? "").ToLower().Contains(s) ||
+                (x.Geofence.DisplayName ?? "").ToLower().Contains(s));
         }
 
         var total = await query.CountAsync();

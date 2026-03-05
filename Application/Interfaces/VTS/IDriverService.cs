@@ -25,7 +25,7 @@ public interface IDriverService
     /// <summary>
     /// Get all drivers
     /// </summary>
-    Task<IEnumerable<DriverDto>> GetAllAsync();
+    Task<IEnumerable<DriverDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null);
 
     /// <summary>
     /// Get driver by id

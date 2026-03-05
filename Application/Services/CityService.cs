@@ -23,9 +23,35 @@ public class CityService : ICityService
         return city;
     }
 
-    public async Task<List<mst_city>> GetAllAsync()
+    public async Task<List<mst_city>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null)
     {
-        return await _context.Cities.ToListAsync();
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 10;
+
+        var query = _context.Cities.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                (x.CityName ?? "").ToLower().Contains(s) ||
+                (x.StateId.ToString() ?? "").ToLower().Contains(s));
+        }
+
+        return await query
+            .OrderByDescending(x => x.CityId)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new mst_city
+            {
+                CityId = x.CityId,
+                StateId = x.StateId,
+                CityName = x.CityName,
+                IsActive = x.IsActive,
+                CreatedAt = x.CreatedAt,
+                UpdatedAt = x.UpdatedAt
+            })
+            .ToListAsync();
     }
 
     public async Task<List<mst_city>> GetByStateAsync(int stateId)

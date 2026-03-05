@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 using NetTopologySuite.Geometries;
 using StackExchange.Redis;
 
-public class mst_Geofence
+public class mst_Geofence : IAccountEntity
 {
     public int Id { get; set; }
 

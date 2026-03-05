@@ -48,10 +48,10 @@ public class OemManufacturerService : IOemManufacturerService
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var s = search.ToLower();
+            var s = search.Trim().ToLower();
             query = query.Where(x =>
-                x.Code.ToLower().Contains(s) ||
-                x.Name.ToLower().Contains(s));
+                (x.Code ?? "").ToLower().Contains(s) ||
+                (x.Name ?? "").ToLower().Contains(s));
         }
 
         // Summary

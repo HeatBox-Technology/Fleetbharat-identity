@@ -47,9 +47,8 @@ public record CreateAccountRequest
 
     string share,
 
-    int userId,
+    int userId
 
-    string HierarchyPath
 );
 
 public record UpdateAccountRequest
@@ -98,9 +97,7 @@ public record UpdateAccountRequest
 
     string share,
 
-    int userId,
-
-    string HierarchyPath
+    int userId
 );
 
 public class AccountResponseDto

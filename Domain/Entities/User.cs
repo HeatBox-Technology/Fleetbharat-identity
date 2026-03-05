@@ -1,6 +1,6 @@
 
 using System;
-public class User
+public class User : IAccountEntity
 {
     public Guid UserId { get; set; }                 // UUID
     public int AccountId { get; set; }              // FK to Account

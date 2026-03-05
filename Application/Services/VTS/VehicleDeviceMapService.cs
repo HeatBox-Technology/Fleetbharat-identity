@@ -222,7 +222,21 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
         string? search)
     {
         var query = _db.VehicleDeviceMaps
-            .Where(x => !x.IsDeleted);
+            .Where(x => !x.IsDeleted)
+            .AsQueryable();
+
+        if (accountId.HasValue)
+            query = query.Where(x => x.AccountId == accountId.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                (x.Vehicle.VehicleNumber ?? "").ToLower().Contains(s) ||
+                (x.Device.DeviceNo ?? "").ToLower().Contains(s) ||
+                (x.simnno ?? "").ToLower().Contains(s) ||
+                (x.Remarks ?? "").ToLower().Contains(s));
+        }
 
         var total = await query.CountAsync();
         var active = await query.CountAsync(x => x.IsActive);
@@ -275,21 +289,43 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
         int? accountId,
         string? search)
     {
-        var query = _db.VehicleDeviceMaps.Where(x => !x.IsDeleted);
+        var query = _db.VehicleDeviceMaps
+            .Where(x => !x.IsDeleted)
+            .AsQueryable();
+
+        if (accountId.HasValue)
+            query = query.Where(x => x.AccountId == accountId.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                (x.Vehicle.VehicleNumber ?? "").ToLower().Contains(s) ||
+                (x.Device.DeviceNo ?? "").ToLower().Contains(s) ||
+                (x.simnno ?? "").ToLower().Contains(s) ||
+                (x.Remarks ?? "").ToLower().Contains(s));
+        }
 
         var total = await query.CountAsync();
 
         var items = await query
+            .OrderByDescending(x => x.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(x => new VehicleDeviceMapDto
             {
                 Id = x.Id,
+                AccountId = x.AccountId,
                 VehicleId = x.Fk_VehicleId,
+                VehicleNo = x.Vehicle.VehicleNumber,
                 DeviceId = x.Fk_DeviceId,
+                DeviceNo = x.Device.DeviceNo,
                 DeviceTypeId = x.fk_devicetypeid,
                 SimId = x.fk_simid,
-                SimNumber = x.simnno
+                SimNumber = x.simnno,
+                Remarks = x.Remarks,
+                IsActive = x.IsActive,
+                InstallationDate = x.InstallationDate
             })
             .ToListAsync();
 

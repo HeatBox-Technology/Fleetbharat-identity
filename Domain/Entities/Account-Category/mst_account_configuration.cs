@@ -1,6 +1,6 @@
 using System;
 
-public class mst_account_configuration
+public class mst_account_configuration : IAccountEntity
 {
     public int AccountConfigurationId { get; set; }
 

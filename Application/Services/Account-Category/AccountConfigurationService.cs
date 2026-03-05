@@ -7,20 +7,26 @@ using Microsoft.EntityFrameworkCore;
 public class AccountConfigurationService : IAccountConfigurationService
 {
     private readonly IdentityDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public AccountConfigurationService(IdentityDbContext db)
+    public AccountConfigurationService(IdentityDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public async Task<int> CreateAsync(CreateAccountConfigurationRequest req)
     {
         // ✅ check account exists
-        var acc = await _db.Accounts.FirstOrDefaultAsync(x => x.AccountId == req.AccountId);
+        var acc = await _db.Accounts
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x => x.AccountId == req.AccountId);
         if (acc == null) throw new KeyNotFoundException("Account not found");
 
         // ✅ one config per account
-        var exists = await _db.AccountConfigurations.AnyAsync(x => x.AccountId == req.AccountId);
+        var exists = await _db.AccountConfigurations
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AnyAsync(x => x.AccountId == req.AccountId);
         if (exists) throw new InvalidOperationException("Configuration already exists for this account");
 
         var cfg = new mst_account_configuration
@@ -55,7 +61,9 @@ public class AccountConfigurationService : IAccountConfigurationService
 
     public async Task<bool> UpdateAsync(int id, UpdateAccountConfigurationRequest req)
     {
-        var cfg = await _db.AccountConfigurations.FirstOrDefaultAsync(x => x.AccountConfigurationId == id && !x.IsDeleted);
+        var cfg = await _db.AccountConfigurations
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x => x.AccountConfigurationId == id && !x.IsDeleted);
         if (cfg == null) return false;
 
         cfg.MapProvider = req.MapProvider;
@@ -84,7 +92,9 @@ public class AccountConfigurationService : IAccountConfigurationService
 
     public async Task<bool> DeleteAsync(int id)
     {
-        var cfg = await _db.AccountConfigurations.FirstOrDefaultAsync(x => x.AccountConfigurationId == id);
+        var cfg = await _db.AccountConfigurations
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x => x.AccountConfigurationId == id);
         if (cfg == null) return false;
 
         cfg.IsDeleted = true;
@@ -96,8 +106,8 @@ public class AccountConfigurationService : IAccountConfigurationService
 
     public async Task<AccountConfigurationResponseDto?> GetByIdAsync(int id)
     {
-        var data = await (from cfg in _db.AccountConfigurations.AsNoTracking()
-                          join acc in _db.Accounts.AsNoTracking() on cfg.AccountId equals acc.AccountId
+        var data = await (from cfg in _db.AccountConfigurations.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser)
+                          join acc in _db.Accounts.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser) on cfg.AccountId equals acc.AccountId
                           where cfg.AccountConfigurationId == id && !cfg.IsDeleted
                           select new AccountConfigurationResponseDto
                           {
@@ -133,8 +143,8 @@ public class AccountConfigurationService : IAccountConfigurationService
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 10;
 
-        var query = from cfg in _db.AccountConfigurations.AsNoTracking()
-                    join acc in _db.Accounts.AsNoTracking() on cfg.AccountId equals acc.AccountId
+        var query = from cfg in _db.AccountConfigurations.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser)
+                    join acc in _db.Accounts.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser) on cfg.AccountId equals acc.AccountId
                     where !cfg.IsDeleted
                     select new { cfg, acc };
 

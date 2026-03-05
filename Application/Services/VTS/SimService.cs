@@ -116,10 +116,28 @@ public class SimService : ISimService
             .FirstOrDefaultAsync();
     }
 
-    public async Task<IEnumerable<SimDto>> GetAllAsync()
+    public async Task<IEnumerable<SimDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null)
     {
-        return await _db.Sims
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 10;
+
+        var query = _db.Sims
             .Where(x => !x.IsDeleted)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                (x.Iccid ?? "").ToLower().Contains(s) ||
+                (x.Msisdn ?? "").ToLower().Contains(s) ||
+                (x.Imsi ?? "").ToLower().Contains(s));
+        }
+
+        return await query
+            .OrderByDescending(x => x.SimId)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(x => MapToDto(x))
             .ToListAsync();
     }
@@ -142,10 +160,10 @@ public class SimService : ISimService
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var s = search.ToLower();
+            var s = search.Trim().ToLower();
             query = query.Where(x =>
-                x.Iccid.ToLower().Contains(s) ||
-                x.Msisdn!.ToLower().Contains(s));
+                (x.Iccid ?? "").ToLower().Contains(s) ||
+                (x.Msisdn ?? "").ToLower().Contains(s));
         }
 
         var total = await query.CountAsync();

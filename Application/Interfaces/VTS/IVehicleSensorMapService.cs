@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 /// </summary>
 public interface IVehicleSensorMapService
 {
-    Task<IEnumerable<VehicleSensorMapDto>> GetAllAsync();
+    Task<IEnumerable<VehicleSensorMapDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null);
     Task<VehicleSensorMapDto?> GetByIdAsync(long id);
     Task<VehicleSensorMapDto> CreateAsync(VehicleSensorMapDto dto);
     Task<VehicleSensorMapDto> UpdateAsync(long id, VehicleSensorMapDto dto);

@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 public interface IDeviceSimMapService
 {
     /// <summary>Get all device-SIM mappings</summary>
-    Task<IEnumerable<DeviceSimMapDto>> GetAllAsync();
+    Task<IEnumerable<DeviceSimMapDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null);
     /// <summary>Get a device-SIM mapping by ID</summary>
     Task<DeviceSimMapDto?> GetByIdAsync(long id);
     /// <summary>Create a new device-SIM mapping</summary>

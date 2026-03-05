@@ -1,6 +1,6 @@
 using System;
 
-public class map_user_form_right
+public class map_user_form_right : IAccountEntity
 {
     public int UserFormRightId { get; set; }
     public Guid UserId { get; set; }

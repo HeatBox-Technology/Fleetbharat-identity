@@ -8,10 +8,12 @@ using System.IO;
 public class UserService : IUserService
 {
     private readonly IdentityDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public UserService(IdentityDbContext db)
+    public UserService(IdentityDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
     public async Task<Guid> CreateAsync(CreateUserRequest req)
     {
@@ -26,12 +28,46 @@ public class UserService : IUserService
                 throw new InvalidOperationException("Email already exists");
 
             // 2️⃣ Account validation
-            if (!await _db.Accounts.AnyAsync(x => x.AccountId == req.AccountId && !x.IsDeleted))
+            var account = await _db.Accounts
+                .ApplyAccountHierarchyFilter(_currentUser)
+                .FirstOrDefaultAsync(x => x.AccountId == req.AccountId && !x.IsDeleted);
+
+            if (account == null)
                 throw new KeyNotFoundException("Account not found");
 
-            // 3️⃣ Role validation
-            if (!await _db.Roles.AnyAsync(x => x.RoleId == req.RoleId && x.AccountId == req.AccountId))
-                throw new BadHttpRequestException("Role not valid for this account");
+            // 3️⃣ Category based role resolve (find or create)
+            var categoryName = await _db.Categories
+                .Where(x => x.CategoryId == account.CategoryId && !x.IsDeleted)
+                .Select(x => x.LabelName)
+                .FirstOrDefaultAsync();
+
+            var targetRoleName = ResolveDefaultRoleByCategory(categoryName);
+            if (string.IsNullOrWhiteSpace(targetRoleName))
+                throw new BadHttpRequestException("No default role mapping found for account category");
+
+            var role = await _db.Roles
+                .ApplyAccountHierarchyFilter(_currentUser)
+                .FirstOrDefaultAsync(x =>
+                    x.AccountId == req.AccountId &&
+                    x.RoleName == targetRoleName &&
+                    !x.IsDeleted);
+
+            if (role == null)
+            {
+                role = new mst_role
+                {
+                    RoleName = targetRoleName,
+                    RoleCode = targetRoleName.ToUpperInvariant(),
+                    AccountId = req.AccountId,
+                    IsSystemRole = false,
+                    IsActive = true,
+                    CreatedOn = DateTime.UtcNow,
+                    UpdatedOn = DateTime.UtcNow
+                };
+
+                _db.Roles.Add(role);
+                await _db.SaveChangesAsync();
+            }
 
             var userId = Guid.NewGuid();
 
@@ -68,7 +104,7 @@ public class UserService : IUserService
                 Password_hash = BCrypt.Net.BCrypt.HashPassword(req.Password),
 
                 AccountId = req.AccountId,
-                roleId = req.RoleId,
+                roleId = role.RoleId,
                 MobileNo = req.MobileNo,
                 Status = req.Status,
                 TwoFactorEnabled = req.TwoFactorEnabled,
@@ -115,6 +151,25 @@ public class UserService : IUserService
         }
     }
 
+    private static string ResolveDefaultRoleByCategory(string? categoryName)
+    {
+        if (string.IsNullOrWhiteSpace(categoryName))
+            return string.Empty;
+
+        var normalized = categoryName.Trim().ToLowerInvariant();
+
+        if (normalized.Contains("distributor"))
+            return "DistributorAdmin";
+
+        if (normalized.Contains("reseller"))
+            return "ResellerAdmin";
+
+        if (normalized.Contains("dealer"))
+            return "DealerAdmin";
+
+        return string.Empty;
+    }
+
 
     // ✅ 1) GET ALL USERS (UI LIST + SUMMARY)
     public async Task<UserListUiResponseDto> GetUsersForUiAsync(
@@ -130,6 +185,7 @@ public class UserService : IUserService
         if (pageSize <= 0) pageSize = 10;
 
         var baseQuery = _db.Users.AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => !x.IsDeleted)
             .AsQueryable();
 
@@ -172,8 +228,8 @@ public class UserService : IUserService
         // ✅ TABLE DATA (Join Role + Account to show names)
         var tableQuery =
             from u in baseQuery
-            join r in _db.Roles.AsNoTracking() on u.roleId equals r.RoleId
-            join a in _db.Accounts.AsNoTracking() on u.AccountId equals a.AccountId
+            join r in _db.Roles.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser) on u.roleId equals r.RoleId
+            join a in _db.Accounts.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser) on u.AccountId equals a.AccountId
             select new UserListItemDto
             {
                 UserId = u.UserId,
@@ -218,6 +274,7 @@ public class UserService : IUserService
     {
         var u = await _db.Users
             .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
 
         if (u == null)
@@ -225,6 +282,7 @@ public class UserService : IUserService
 
         var permissions = await _db.UserFormRights
             .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => x.UserId == userId && x.AccountId == u.AccountId)
             .Select(x => new UserFormRightDto
             {
@@ -268,6 +326,7 @@ public class UserService : IUserService
         try
         {
             var user = await _db.Users
+                .ApplyAccountHierarchyFilter(_currentUser)
                 .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
 
             if (user == null)
@@ -334,6 +393,7 @@ public class UserService : IUserService
             {
                 // remove old permissions
                 var existing = await _db.UserFormRights
+                    .ApplyAccountHierarchyFilter(_currentUser)
                     .Where(x => x.UserId == userId && x.AccountId == req.AccountId)
                     .ToListAsync();
 
@@ -378,6 +438,7 @@ public class UserService : IUserService
     public async Task<bool> UpdateBasicAsync(Guid userId, UpdateUserBasicRequest req)
     {
         var user = await _db.Users
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
 
         if (user == null) return false;
@@ -394,11 +455,13 @@ public class UserService : IUserService
     public async Task<bool> UpdateRoleAsync(Guid userId, UpdateUserRoleRequest req)
     {
         var user = await _db.Users
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
 
         if (user == null) return false;
 
         var roleExists = await _db.Roles
+            .ApplyAccountHierarchyFilter(_currentUser)
             .AnyAsync(x => x.RoleId == req.RoleId && x.AccountId == req.AccountId);
 
         if (!roleExists)
@@ -417,11 +480,13 @@ public class UserService : IUserService
         using var tx = await _db.Database.BeginTransactionAsync();
 
         var user = await _db.Users
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
 
         if (user == null) return false;
 
         var existing = await _db.UserFormRights
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => x.UserId == userId)
             .ToListAsync();
 
@@ -450,6 +515,7 @@ public class UserService : IUserService
     public async Task<bool> UpdateStatusAsync(Guid userId, bool status)
     {
         var user = await _db.Users
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
 
         if (user == null) return false;
@@ -463,6 +529,7 @@ public class UserService : IUserService
     public async Task<bool> UpdateTwoFactorAsync(Guid userId, bool enabled)
     {
         var user = await _db.Users
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
 
         if (user == null) return false;
@@ -483,6 +550,7 @@ public class UserService : IUserService
     public async Task<bool> UpdateProfileImageAsync(Guid userId, IFormFile file)
     {
         var user = await _db.Users
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
 
         if (user == null) return false;
@@ -512,6 +580,7 @@ public class UserService : IUserService
     public async Task<bool> SendResetPasswordAsync(Guid userId)
     {
         var user = await _db.Users
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
 
         if (user == null) return false;
@@ -529,7 +598,9 @@ public class UserService : IUserService
     // 5) SOFT DELETE
     public async Task<bool> SoftDeleteAsync(Guid userId)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
+        var user = await _db.Users
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
         if (user == null) return false;
 
         user.IsDeleted = true;

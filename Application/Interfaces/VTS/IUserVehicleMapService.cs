@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 public interface IUserVehicleMapService
 {
     /// <summary>Get all user-vehicle mappings</summary>
-    Task<IEnumerable<UserVehicleMapDto>> GetAllAsync();
+    Task<IEnumerable<UserVehicleMapDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null);
     /// <summary>Get a user-vehicle mapping by ID</summary>
     Task<UserVehicleMapDto?> GetByIdAsync(long id);
     /// <summary>Create a new user-vehicle mapping</summary>

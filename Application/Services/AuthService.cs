@@ -85,11 +85,6 @@ public class AuthService : IAuthService
         }
 
         // -------------------------------------------------
-        // ✅ Generate tokens
-        // -------------------------------------------------
-        var tokens = await GenerateTokens(user);
-
-        // -------------------------------------------------
         // ✅ Fetch role, account, white-label
         // -------------------------------------------------
         var role = await _db.Roles
@@ -97,6 +92,18 @@ public class AuthService : IAuthService
 
         var account = await _db.Accounts
             .FirstOrDefaultAsync(a => a.AccountId == user.AccountId && !a.IsDeleted);
+
+        var roleName = ResolveRoleName(role, user);
+        var isSystemRole = ResolveIsSystemRole(role, roleName);
+
+        // -------------------------------------------------
+        // ✅ Generate tokens
+        // -------------------------------------------------
+        var tokens = await GenerateTokens(
+            user,
+            roleName,
+            account?.HierarchyPath ?? string.Empty,
+            isSystemRole);
 
         var whiteLabel = await _db.WhiteLabels
             .AsNoTracking()
@@ -107,24 +114,7 @@ public class AuthService : IAuthService
         // -------------------------------------------------
         // ✅ Fetch role-based form rights
         // -------------------------------------------------
-        var rights = await (
-            from rr in _db.FormRoleRights
-            join f in _db.Forms on rr.FormId equals f.FormId
-            where rr.RoleId == user.roleId
-            select new FormRightResponseDto
-            {
-                FormId = f.FormId,
-                FormCode = f.FormCode,
-                FormName = f.FormName,
-                PageUrl = f.PageUrl,
-                icon = f.IconName,
-                CanRead = rr.CanRead,
-                CanWrite = rr.CanWrite,
-                CanDelete = rr.CanDelete,
-                CanExport = rr.CanExport,
-                CanAll = rr.CanAll
-            }
-        ).ToListAsync();
+        var rights = await GetRoleFormRightsAsync(user.roleId, roleName);
 
         // -------------------------------------------------
         // ✅ Final response
@@ -141,7 +131,7 @@ public class AuthService : IAuthService
             AccountCode = account?.AccountCode ?? "",
 
             RoleId = user.roleId,
-            RoleName = role?.RoleName ?? "",
+            RoleName = roleName,
 
             Token = new LoginResponse(
                 AccessToken: tokens.AccessToken,
@@ -182,12 +172,40 @@ public class AuthService : IAuthService
         if (user.RefreshTokenExpiry <= DateTime.UtcNow)
             throw new UnauthorizedAccessException("Refresh token expired");
 
-        return await GenerateTokens(user);
+        var role = await _db.Roles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.RoleId == user.roleId);
+
+        var account = await _db.Accounts
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.AccountId == user.AccountId && !a.IsDeleted);
+
+        var roleName = ResolveRoleName(role, user);
+
+        return await GenerateTokens(
+            user,
+            roleName,
+            account?.HierarchyPath ?? string.Empty,
+            ResolveIsSystemRole(role, roleName));
     }
 
-    private async Task<LoginResponse> GenerateTokens(User user)
+    private async Task<LoginResponse> GenerateTokens(
+        User user,
+        string roleName,
+        string hierarchyPath,
+        bool isSystemRole)
     {
-        var access = _jwt.GenerateAccessToken(user);
+        var accessibleAccountIds = await BuildAccessibleAccountIdsAsync(
+            hierarchyPath,
+            user.AccountId,
+            isSystemRole);
+
+        var access = _jwt.GenerateAccessToken(
+            user,
+            roleName,
+            hierarchyPath,
+            isSystemRole,
+            accessibleAccountIds);
         var refresh = _jwt.GenerateRefreshToken();
 
         user.RefreshToken = refresh;
@@ -289,7 +307,21 @@ public class AuthService : IAuthService
         await _db.SaveChangesAsync();
 
         // ✅ Auto login: generate JWT token response
-        return await GenerateTokens(user);
+        var role = await _db.Roles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.RoleId == user.roleId);
+
+        var account = await _db.Accounts
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.AccountId == user.AccountId && !a.IsDeleted);
+
+        var roleName = ResolveRoleName(role, user);
+
+        return await GenerateTokens(
+            user,
+            roleName,
+            account?.HierarchyPath ?? string.Empty,
+            ResolveIsSystemRole(role, roleName));
     }
     public async Task<LoginResponse> Verify2FAAsync(Verify2FARequest req)
     {
@@ -320,7 +352,21 @@ public class AuthService : IAuthService
         await _db.SaveChangesAsync();
 
         // ✅ Generate tokens now
-        var tokens = await GenerateTokens(user);
+        var role = await _db.Roles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.RoleId == user.roleId);
+
+        var account = await _db.Accounts
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.AccountId == user.AccountId && !a.IsDeleted);
+
+        var roleName = ResolveRoleName(role, user);
+
+        var tokens = await GenerateTokens(
+            user,
+            roleName,
+            account?.HierarchyPath ?? string.Empty,
+            ResolveIsSystemRole(role, roleName));
 
 
         return new LoginResponse
@@ -331,6 +377,89 @@ public class AuthService : IAuthService
             RefreshToken: tokens.RefreshToken,
             ExpiresAt: tokens.ExpiresAt
         );
+    }
+
+    private static string ResolveRoleName(mst_role? role, User user)
+    {
+        if (role?.IsSystemRole == true)
+            return "System";
+
+        if (!string.IsNullOrWhiteSpace(role?.RoleName))
+            return role.RoleName;
+
+        return user.Role ?? string.Empty;
+    }
+
+    private static bool ResolveIsSystemRole(mst_role? role, string roleName) =>
+        role?.IsSystemRole == true ||
+        roleName.Equals("System", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<IReadOnlyCollection<int>> BuildAccessibleAccountIdsAsync(
+        string hierarchyPath,
+        int accountId,
+        bool isSystemRole)
+    {
+        if (isSystemRole)
+            return Array.Empty<int>();
+
+        if (string.IsNullOrWhiteSpace(hierarchyPath))
+            return new[] { accountId };
+
+        var accountIds = await _db.Accounts
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && x.HierarchyPath.StartsWith(hierarchyPath))
+            .Select(x => x.AccountId)
+            .ToListAsync();
+
+        if (accountIds.Count == 0)
+            accountIds.Add(accountId);
+
+        return accountIds;
+    }
+
+    private async Task<List<FormRightResponseDto>> GetRoleFormRightsAsync(int roleId, string roleName)
+    {
+        if (roleName.Equals("System", StringComparison.OrdinalIgnoreCase))
+        {
+            return await _db.Forms
+                .AsNoTracking()
+                .OrderBy(f => f.SortOrder)
+                .Select(f => new FormRightResponseDto
+                {
+                    FormId = f.FormId,
+                    FormCode = f.FormCode,
+                    FormName = f.FormName,
+                    PageUrl = f.PageUrl,
+                    icon = f.IconName,
+                    CanRead = true,
+                    CanWrite = true,
+                    CanUpdate = true,
+                    CanDelete = true,
+                    CanExport = true,
+                    CanAll = true
+                })
+                .ToListAsync();
+        }
+
+        return await (
+            from rr in _db.FormRoleRights
+            join f in _db.Forms on rr.FormId equals f.FormId
+            where rr.RoleId == roleId
+            select new FormRightResponseDto
+            {
+                FormId = f.FormId,
+                FormCode = f.FormCode,
+                FormName = f.FormName,
+                PageUrl = f.PageUrl,
+                icon = f.IconName,
+                CanRead = rr.CanRead,
+                CanWrite = rr.CanWrite,
+                CanUpdate = rr.CanUpdate,
+                CanDelete = rr.CanDelete,
+                CanExport = rr.CanExport,
+                CanAll = rr.CanAll
+            }
+        ).ToListAsync();
     }
 
 }

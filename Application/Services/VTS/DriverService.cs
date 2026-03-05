@@ -11,16 +11,19 @@ using Microsoft.EntityFrameworkCore;
 public class DriverService : IDriverService
 {
     private readonly IdentityDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public DriverService(IdentityDbContext db)
+    public DriverService(IdentityDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public async Task<int> CreateAsync(CreateDriverDto dto)
     {
         // Account validation
         var accountExists = await _db.Accounts
+            .ApplyAccountHierarchyFilter(_currentUser)
             .AnyAsync(x => x.AccountId == dto.AccountId);
 
         if (!accountExists)
@@ -28,6 +31,7 @@ public class DriverService : IDriverService
 
         // Mobile unique per account
         var mobileExists = await _db.Drivers
+            .ApplyAccountHierarchyFilter(_currentUser)
             .AnyAsync(x => x.Mobile == dto.Mobile &&
                            x.AccountId == dto.AccountId &&
                            !x.IsDeleted);
@@ -37,6 +41,7 @@ public class DriverService : IDriverService
 
         // License unique
         var licenseExists = await _db.Drivers
+            .ApplyAccountHierarchyFilter(_currentUser)
             .AnyAsync(x => x.LicenseNumber == dto.LicenseNumber &&
                            !x.IsDeleted);
 
@@ -68,6 +73,7 @@ public class DriverService : IDriverService
     public async Task<bool> UpdateAsync(int id, UpdateDriverDto dto)
     {
         var entity = await _db.Drivers
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.DriverId == id && !x.IsDeleted);
 
         if (entity == null)
@@ -75,6 +81,7 @@ public class DriverService : IDriverService
 
         // Mobile validation
         var mobileExists = await _db.Drivers
+            .ApplyAccountHierarchyFilter(_currentUser)
             .AnyAsync(x => x.Mobile == dto.Mobile &&
                            x.AccountId == entity.AccountId &&
                            x.DriverId != id &&
@@ -101,6 +108,7 @@ public class DriverService : IDriverService
     public async Task<bool> UpdateStatusAsync(int driverId, bool isActive)
     {
         var entity = await _db.Drivers
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.DriverId == driverId && !x.IsDeleted);
 
         if (entity == null)
@@ -116,6 +124,7 @@ public class DriverService : IDriverService
     public async Task<bool> DeleteAsync(int driverId)
     {
         var entity = await _db.Drivers
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.DriverId == driverId && !x.IsDeleted);
 
         if (entity == null)
@@ -132,15 +141,35 @@ public class DriverService : IDriverService
     public async Task<DriverDto?> GetByIdAsync(int driverId)
     {
         return await _db.Drivers
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => x.DriverId == driverId && !x.IsDeleted)
             .Select(x => MapToDto(x))
             .FirstOrDefaultAsync();
     }
 
-    public async Task<IEnumerable<DriverDto>> GetAllAsync()
+    public async Task<IEnumerable<DriverDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null)
     {
-        return await _db.Drivers
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 10;
+
+        var query = _db.Drivers
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => !x.IsDeleted)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                (x.Name ?? "").ToLower().Contains(s) ||
+                (x.Mobile ?? "").ToLower().Contains(s) ||
+                (x.LicenseNumber ?? "").ToLower().Contains(s));
+        }
+
+        return await query
+            .OrderByDescending(x => x.DriverId)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(x => MapToDto(x))
             .ToListAsync();
     }
@@ -155,6 +184,7 @@ public class DriverService : IDriverService
         if (pageSize < 1) pageSize = 10;
 
         var query = _db.Drivers
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => !x.IsDeleted)
             .AsQueryable();
 
@@ -163,11 +193,11 @@ public class DriverService : IDriverService
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var s = search.ToLower();
+            var s = search.Trim().ToLower();
             query = query.Where(x =>
-                x.Name.ToLower().Contains(s) ||
-                x.Mobile.ToLower().Contains(s) ||
-                x.LicenseNumber.ToLower().Contains(s));
+                (x.Name ?? "").ToLower().Contains(s) ||
+                (x.Mobile ?? "").ToLower().Contains(s) ||
+                (x.LicenseNumber ?? "").ToLower().Contains(s));
         }
 
         var total = await query.CountAsync();
@@ -195,6 +225,7 @@ public class DriverService : IDriverService
         string? search)
     {
         var query = _db.Drivers.Where(x => !x.IsDeleted);
+        query = query.ApplyAccountHierarchyFilter(_currentUser);
 
         var total = await query.CountAsync();
         var active = await query.CountAsync(x => x.IsActive);

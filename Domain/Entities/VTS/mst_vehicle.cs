@@ -9,7 +9,7 @@ namespace Domain.Entities
     /// Example: A truck with vehicle number 'MH12AB1234' and VIN 'XYZ123456789'.
     /// </summary>
     [Table("mst_vehicle")]
-    public class mst_vehicle
+public class mst_vehicle : IAccountEntity
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]

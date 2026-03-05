@@ -73,14 +73,19 @@ public class CategoryService : ICategoryService
     }
 
 
-    public async Task<List<CategoryResponseDto>> GetAllAsync(string? search, bool? isActive)
+    public async Task<List<CategoryResponseDto>> GetAllAsync(string? search, bool? isActive, int page = 1, int pageSize = 10)
     {
+        if (page <= 0) page = 1;
+        if (pageSize <= 0) pageSize = 10;
+
         var query = _db.Categories.AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
-            query = query.Where(x => x.LabelName.ToLower().Contains(s));
+            query = query.Where(x =>
+                (x.LabelName ?? "").ToLower().Contains(s) ||
+                (x.Description ?? "").ToLower().Contains(s));
         }
 
         if (isActive.HasValue)
@@ -90,6 +95,8 @@ public class CategoryService : ICategoryService
 
         return await query
             .OrderByDescending(x => x.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .Select(x => new CategoryResponseDto
             {
                 CategoryId = x.CategoryId,

@@ -27,10 +27,36 @@ namespace Application.Services
         /// Gets all vehicle-sensor mappings.
         /// </summary>
         /// <returns>List of <see cref="VehicleSensorMapDto"/>.</returns>
-        public async Task<IEnumerable<VehicleSensorMapDto>> GetAllAsync()
+        public async Task<IEnumerable<VehicleSensorMapDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null)
         {
-            var entities = await _context.Set<Domain.Entities.map_vehicle_sensor>().ToListAsync();
-            return entities.Select(MapToDto);
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 10;
+
+            var query = _context.Set<Domain.Entities.map_vehicle_sensor>().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                query = query.Where(x =>
+                    x.VehicleId.ToString().ToLower().Contains(s) ||
+                    x.SensorId.ToString().ToLower().Contains(s) ||
+                    (x.MountPoint ?? "").ToLower().Contains(s));
+            }
+
+            return await query
+                .OrderByDescending(x => x.VehicleSensorId)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new VehicleSensorMapDto
+                {
+                    VehicleSensorId = x.VehicleSensorId,
+                    VehicleId = x.VehicleId,
+                    SensorId = x.SensorId,
+                    MountPoint = x.MountPoint,
+                    FromTs = x.FromTs,
+                    ToTs = x.ToTs
+                })
+                .ToListAsync();
         }
 
         /// <summary>

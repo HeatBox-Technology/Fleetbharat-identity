@@ -1,7 +1,7 @@
 using System;
 using Domain.Entities;
 
-public class map_vehicle_geofence
+public class map_vehicle_geofence : IAccountEntity
 {
     public int Id { get; set; }
 

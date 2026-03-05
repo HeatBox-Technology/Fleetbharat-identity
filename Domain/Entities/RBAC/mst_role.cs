@@ -1,7 +1,7 @@
 using System;
 
 
-public class mst_role
+public class mst_role : IAccountEntity
 {
     public int RoleId { get; set; }
     public int AccountId { get; set; }
