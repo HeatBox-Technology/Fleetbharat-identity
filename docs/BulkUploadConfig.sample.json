@@ -1,0 +1,50 @@
+[
+  {
+    "ModuleKey": "device-master",
+    "DtoName": "CreateDeviceDto",
+    "ServiceInterface": "IDeviceService",
+    "ServiceMethod": "BulkCreateAsync",
+    "ColumnsJson": [
+      { "Header": "AccountId", "Required": true },
+      { "Header": "ManufacturerId", "Required": true },
+      { "Header": "DeviceTypeId", "Required": true },
+      { "Header": "DeviceNo", "Required": true },
+      { "Header": "DeviceImeiOrSerial", "Required": true },
+      { "Header": "CreatedBy", "Required": true }
+    ],
+    "ExternalSync": false,
+    "IsActive": true
+  },
+  {
+    "ModuleKey": "geofence-master",
+    "DtoName": "CreateGeofenceDto",
+    "ServiceInterface": "IGeofenceService",
+    "ServiceMethod": "BulkCreateAsync",
+    "ColumnsJson": [
+      { "Header": "AccountId", "Required": true },
+      { "Header": "UniqueCode", "Required": true },
+      { "Header": "DisplayName", "Required": true },
+      { "Header": "GeometryType", "Required": true },
+      { "Header": "CoordinatesJson", "Required": true },
+      { "Header": "RadiusM", "Required": false }
+    ],
+    "ExternalSync": true,
+    "IsActive": true
+  },
+  {
+    "ModuleKey": "vehicle-master",
+    "DtoName": "CreateVehicleDto",
+    "ServiceInterface": "IVehicleService",
+    "ServiceMethod": "BulkCreateAsync",
+    "ColumnsJson": [
+      { "Header": "AccountId", "Required": true },
+      { "Header": "VehicleNumber", "Required": true },
+      { "Header": "DeviceTypeId", "Required": false },
+      { "Header": "VehicleTypeId", "Required": true },
+      { "Header": "Make", "Required": false },
+      { "Header": "Model", "Required": false }
+    ],
+    "ExternalSync": false,
+    "IsActive": true
+  }
+]

@@ -74,6 +74,7 @@ public class IdentityDbContext : DbContext
        public DbSet<bulk_job> bulk_jobs { get; set; }
        public DbSet<bulk_job_row> bulk_job_rows { get; set; }
        public DbSet<bulk_column_config> bulk_column_configs { get; set; }
+       public DbSet<BulkUploadConfig> BulkUploadConfigs { get; set; }
        public DbSet<map_vehicle_geofence> VehicleGeofenceMaps { get; set; }
        public DbSet<map_vehicle_geofence_sync_log> map_vehicle_geofence_sync_logs { get; set; }
        public DbSet<ErrorLog> ErrorLogs { get; set; }
@@ -262,6 +263,19 @@ public class IdentityDbContext : DbContext
                   .HasOne(x => x.MarketPlan)
                   .WithMany(x => x.EntitlementModules)
                   .HasForeignKey(x => x.PlanId);
+
+              modelBuilder.Entity<BulkUploadConfig>(entity =>
+              {
+                     entity.ToTable("bulk_upload_config");
+                     entity.HasKey(x => x.Id);
+
+                     entity.Property(x => x.ModuleKey).HasMaxLength(100).IsRequired();
+                     entity.Property(x => x.DtoName).HasMaxLength(200).IsRequired();
+                     entity.Property(x => x.ServiceInterface).HasMaxLength(200).IsRequired();
+                     entity.Property(x => x.ServiceMethod).HasMaxLength(100).IsRequired();
+                     entity.Property(x => x.ColumnsJson).HasColumnType("jsonb");
+                     entity.HasIndex(x => x.ModuleKey).IsUnique();
+              });
 
               modelBuilder.Entity<mst_vehicle>()
                   .HasKey(x => x.Id);

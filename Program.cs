@@ -67,6 +67,16 @@ builder.Services.AddHostedService<BulkWorker>();
 builder.Services.AddScoped<IBulkService, BulkService>();
 builder.Services.AddScoped<BulkProcessorFactory>();
 builder.Services.AddScoped<IBulkModuleProcessor, GeofenceBulkProcessor>();
+builder.Services.AddSingleton<IBulkUploadQueue, BulkUploadQueue>();
+builder.Services.AddHostedService<BulkUploadWorker>();
+builder.Services.AddScoped<IBulkUploadService, BulkUploadService>();
+builder.Services.AddScoped<ITemplateService, TemplateService>();
+builder.Services.AddScoped<IValidationService, ValidationService>();
+builder.Services.AddScoped<IExcelParser, ExcelParser>();
+builder.Services.AddScoped<ICsvParser, CsvParser>();
+builder.Services.AddScoped<IServiceResolver, ServiceResolver>();
+builder.Services.AddScoped<IBulkProcessor, BulkProcessor>();
+builder.Services.AddHttpClient<IExternalBulkSyncService, ExternalBulkSyncService>();
 builder.Services.AddScoped<DbLogger>();
 
 
