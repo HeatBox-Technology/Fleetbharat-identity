@@ -290,9 +290,15 @@ public class AuthService : IAuthService
         if (req.NewPassword != req.ConfirmPassword)
             throw new BadHttpRequestException("NewPassword and ConfirmPassword do not match");
 
-        var email = req.Email.Trim().ToLower();
+        if (string.IsNullOrWhiteSpace(req.Email))
+            throw new BadHttpRequestException("Email is required");
+        if (string.IsNullOrWhiteSpace(req.Token))
+            throw new BadHttpRequestException("Token is required");
 
-        var user = await _db.Users.FirstOrDefaultAsync(x => x.Email == email);
+        var email = req.Email.Trim().ToLowerInvariant();
+        var token = req.Token.Trim();
+
+        var user = await _db.Users.FirstOrDefaultAsync(x => x.Email == email && !x.IsDeleted);
 
         if (user == null)
             throw new UnauthorizedAccessException("Invalid token or expired");
@@ -303,7 +309,7 @@ public class AuthService : IAuthService
         if (!user.PasswordResetExpiry.HasValue || user.PasswordResetExpiry.Value < DateTime.UtcNow)
             throw new UnauthorizedAccessException("Token expired");
 
-        var isValidToken = BCrypt.Net.BCrypt.Verify(req.Token, user.PasswordResetTokenHash);
+        var isValidToken = BCrypt.Net.BCrypt.Verify(token, user.PasswordResetTokenHash);
 
         if (!isValidToken)
             throw new UnauthorizedAccessException("Invalid token or expired");
