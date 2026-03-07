@@ -54,10 +54,10 @@ public class AuthController : ControllerBase
         ));
     }
     [HttpPost("verify-2fa")]
-    public async Task<IActionResult> Verify2FA(Verify2FARequest req)
+    public async Task<IActionResult> Verify2FA([FromBody] Verify2FARequest req)
     {
         var result = await _service.Verify2FAAsync(req);
-        return Ok(ApiResponse<LoginResponse>.Ok(result, result.Message, 200));
+        return Ok(ApiResponse<object>.Ok(result, result.Token.Message, 200));
     }
 
 

@@ -1,10 +1,11 @@
+using System;
 using System.ComponentModel.DataAnnotations;
 
-public record Verify2FARequest(
+public class Verify2FARequest
+{
     [Required]
-    [EmailAddress]
-    string Email,
+    public Guid UserId { get; set; }
 
     [Required(ErrorMessage = "Code is required")]
-    string Code
-);
+    public string Code { get; set; } = "";
+}

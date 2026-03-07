@@ -8,6 +8,6 @@ public interface IAuthService
     Task RegisterAsync(RegisterRequest req);
     Task ForgotPasswordAsync(string email);
     Task<LoginResponse> ResetPasswordAsync(ResetPasswordRequest req);
-    Task<LoginResponse> Verify2FAAsync(Verify2FARequest req);
+    Task<LoginWithAccessResponse> Verify2FAAsync(Verify2FARequest req);
 
 }

@@ -4,12 +4,18 @@ using Microsoft.EntityFrameworkCore;
 using System.Linq;
 using Microsoft.Extensions.Configuration;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 
 
 public class AuthService : IAuthService
 {
+    private const int MaxTwoFactorAttempts = 5;
+    private static readonly ConcurrentDictionary<Guid, int> TwoFactorAttemptTracker = new();
+
     private readonly IdentityDbContext _db;
     private readonly JwtTokenService _jwt;
     private readonly IEmailService _emailService;
@@ -52,16 +58,23 @@ public class AuthService : IAuthService
         // -------------------------------------------------
         if (user.TwoFactorEnabled)
         {
-            var code = new Random().Next(100000, 999999).ToString();
+            var code = RandomNumberGenerator
+                .GetInt32(100000, 1000000)
+                .ToString();
+
+            TwoFactorAttemptTracker.TryRemove(user.UserId, out _);
 
             user.TwoFactorCodeHash = BCrypt.Net.BCrypt.HashPassword(code);
             user.TwoFactorExpiry = DateTime.UtcNow.AddMinutes(5);
             await _db.SaveChangesAsync();
 
+            var template = await LoadEmailTemplateAsync("fleetbharat-2fa.html");
+            var body = template.Replace("{{CODE}}", code);
+
             await _emailService.SendAsync(
                 user.Email,
-                "Your Login Verification Code",
-                $"<h2>{code}</h2><p>Expires in 5 minutes</p>"
+                "Fleetbharat Login Verification Code",
+                body
             );
 
             return new LoginWithAccessResponse
@@ -76,7 +89,7 @@ public class AuthService : IAuthService
                     RefreshToken: null,
                     ExpiresAt: null,
                     Is2FARequired: true,
-                    Message: "2FA code sent to your email"
+                    Message: "2FA verification required"
                 ),
 
                 FormRights = new List<FormRightResponseDto>(),
@@ -259,18 +272,16 @@ public class AuthService : IAuthService
         var resetBaseUrl = _config["Frontend:ResetPasswordUrl"]!;
         var resetLink = $"{resetBaseUrl}?token={token}&email={email}";
 
-        var subject = "Reset your password";
-        var htmlBody = $@"
-        <h3>Password Reset Request</h3>
-        <p>Hello {user.FirstName},</p>
-        <p>You requested to reset your password. Click below:</p>
-        <p><a href='{resetLink}'>Reset Password</a></p>
-        <p>This link will expire in 15 minutes.</p>
-        <br/>
-        <p>If you did not request this, ignore this email.</p>
-    ";
+        var template = await LoadEmailTemplateAsync("fleetbharat-reset-password.html");
+        var body = template
+            .Replace("{{FIRSTNAME}}", user.FirstName ?? "")
+            .Replace("{{RESET_LINK}}", resetLink);
 
-        await _emailService.SendAsync(email, subject, htmlBody);
+        await _emailService.SendAsync(
+            email,
+            "Fleetbharat Password Reset Request",
+            body
+        );
     }
 
 
@@ -323,11 +334,10 @@ public class AuthService : IAuthService
             account?.HierarchyPath ?? string.Empty,
             ResolveIsSystemRole(role, roleName));
     }
-    public async Task<LoginResponse> Verify2FAAsync(Verify2FARequest req)
+    public async Task<LoginWithAccessResponse> Verify2FAAsync(Verify2FARequest req)
     {
-        var email = req.Email.Trim().ToLower();
-
-        var user = await _db.Users.FirstOrDefaultAsync(x => x.Email.ToLower() == email);
+        var user = await _db.Users
+            .FirstOrDefaultAsync(x => x.UserId == req.UserId && !x.IsDeleted);
 
         if (user == null)
             throw new UnauthorizedAccessException("Invalid request");
@@ -338,16 +348,35 @@ public class AuthService : IAuthService
         if (string.IsNullOrWhiteSpace(user.TwoFactorCodeHash))
             throw new UnauthorizedAccessException("2FA code not found or expired");
 
-        if (!user.TwoFactorExpiry.HasValue || user.TwoFactorExpiry.Value < DateTime.UtcNow)
+        if (!user.TwoFactorExpiry.HasValue)
             throw new UnauthorizedAccessException("2FA code expired");
+
+        if (user.TwoFactorExpiry.Value < DateTime.UtcNow)
+        {
+            TwoFactorAttemptTracker.TryRemove(user.UserId, out _);
+            throw new UnauthorizedAccessException("Verification code expired");
+        }
 
         var isValid = BCrypt.Net.BCrypt.Verify(req.Code, user.TwoFactorCodeHash);
 
         if (!isValid)
-            throw new UnauthorizedAccessException("Invalid 2FA code");
+        {
+            var attempts = TwoFactorAttemptTracker.AddOrUpdate(user.UserId, 1, (_, current) => current + 1);
+            if (attempts >= MaxTwoFactorAttempts)
+            {
+                user.TwoFactorCodeHash = null;
+                user.TwoFactorExpiry = null;
+                await _db.SaveChangesAsync();
+                TwoFactorAttemptTracker.TryRemove(user.UserId, out _);
+                throw new UnauthorizedAccessException("Too many invalid attempts. Request a new verification code.");
+            }
+
+            throw new UnauthorizedAccessException("Invalid verification code");
+        }
         //Clear 2FA code after successful verification
         user.TwoFactorCodeHash = null;
         user.TwoFactorExpiry = null;
+        TwoFactorAttemptTracker.TryRemove(user.UserId, out _);
 
         await _db.SaveChangesAsync();
 
@@ -369,14 +398,49 @@ public class AuthService : IAuthService
             ResolveIsSystemRole(role, roleName));
 
 
-        return new LoginResponse
-        (
-            Is2FARequired: false,
-            Message: "Login successful",
-            AccessToken: tokens.AccessToken,
-            RefreshToken: tokens.RefreshToken,
-            ExpiresAt: tokens.ExpiresAt
-        );
+        var whiteLabel = await _db.WhiteLabels
+            .AsNoTracking()
+            .FirstOrDefaultAsync(w =>
+                w.AccountId == user.AccountId &&
+                w.IsActive);
+
+        var rights = await GetRoleFormRightsAsync(user.roleId, roleName);
+
+        return new LoginWithAccessResponse
+        {
+            UserId = user.UserId,
+            Email = user.Email,
+            FullName = $"{user.FirstName} {user.LastName}".Trim(),
+            ProfileImagePath = user.ProfileImagePath ?? "",
+
+            AccountId = user.AccountId,
+            AccountName = account?.AccountName ?? "",
+            AccountCode = account?.AccountCode ?? "",
+
+            RoleId = user.roleId,
+            RoleName = roleName,
+
+            Token = new LoginResponse(
+                AccessToken: tokens.AccessToken,
+                RefreshToken: tokens.RefreshToken,
+                ExpiresAt: tokens.ExpiresAt,
+                Is2FARequired: false,
+                Message: "Login successful"
+            ),
+
+            WhiteLabel = whiteLabel == null
+                ? new WhiteLabelInfoDto()
+                : new WhiteLabelInfoDto
+                {
+                    WhiteLabelId = whiteLabel.WhiteLabelId,
+                    CustomEntryFqdn = whiteLabel.CustomEntryFqdn,
+                    LogoUrl = whiteLabel.LogoUrl,
+                    PrimaryColorHex = whiteLabel.PrimaryColorHex,
+                    SecondaryColorHex = whiteLabel.SecondaryColorHex
+                },
+
+            FormRights = rights
+        };
     }
 
     private static string ResolveRoleName(mst_role? role, User user)
@@ -460,6 +524,20 @@ public class AuthService : IAuthService
                 CanAll = rr.CanAll
             }
         ).ToListAsync();
+    }
+
+    private static async Task<string> LoadEmailTemplateAsync(string templateName)
+    {
+        var relativePath = Path.Combine("docs", "email-templates", templateName);
+        var contentRootPath = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
+        if (File.Exists(contentRootPath))
+            return await File.ReadAllTextAsync(contentRootPath);
+
+        var baseDirectoryPath = Path.Combine(AppContext.BaseDirectory, relativePath);
+        if (File.Exists(baseDirectoryPath))
+            return await File.ReadAllTextAsync(baseDirectoryPath);
+
+        throw new FileNotFoundException($"Email template not found: {relativePath}");
     }
 
 }

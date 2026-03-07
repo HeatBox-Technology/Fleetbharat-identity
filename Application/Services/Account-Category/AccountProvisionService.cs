@@ -4,17 +4,27 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using System.IO;
 
 public class AccountProvisionService : IAccountProvisionService
 {
 
     private readonly IdentityDbContext _db;
     private readonly ICurrentUserService _currentUser;
+    private readonly IEmailService _emailService;
+    private readonly IConfiguration _config;
 
-    public AccountProvisionService(IdentityDbContext db, ICurrentUserService currentUser)
+    public AccountProvisionService(
+        IdentityDbContext db,
+        ICurrentUserService currentUser,
+        IEmailService emailService,
+        IConfiguration config)
     {
         _db = db;
         _currentUser = currentUser;
+        _emailService = emailService;
+        _config = config;
     }
     public async Task<int> CreateAsync(CreateAccountRequest req)
     {
@@ -218,6 +228,43 @@ public class AccountProvisionService : IAccountProvisionService
             await _db.SaveChangesAsync();
 
             await tx.CommitAsync();
+
+            // =====================================================
+            // SEND ONBOARDING EMAIL (post-commit)
+            // =====================================================
+            var token = Guid.NewGuid().ToString("N");
+            user.PasswordResetTokenHash = BCrypt.Net.BCrypt.HashPassword(token);
+            user.PasswordResetExpiry = DateTime.UtcNow.AddMinutes(30);
+            await _db.SaveChangesAsync();
+
+            var resetBaseUrl = _config["Frontend:ResetPasswordUrl"];
+            if (!string.IsNullOrWhiteSpace(resetBaseUrl))
+            {
+                var resetLink = $"{resetBaseUrl}?token={token}&email={user.Email}";
+
+                var template = await LoadEmailTemplateAsync("fleetbharat-account-onboarding.html");
+                var body = template
+                    .Replace("{{ACCOUNT_NAME}}", account.AccountName ?? "")
+                    .Replace("{{USER_NAME}}", account.UserName ?? "")
+                    .Replace("{{RESET_LINK}}", resetLink);
+
+                var recipients = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                if (!string.IsNullOrWhiteSpace(req.email))
+                    recipients.Add(req.email.Trim());
+
+                if (!string.IsNullOrWhiteSpace(req.BusinessEmail))
+                    recipients.Add(req.BusinessEmail.Trim());
+
+                foreach (var recipient in recipients)
+                {
+                    await _emailService.SendAsync(
+                        recipient,
+                        "Welcome to Fleetbharat - Your Account is Ready",
+                        body
+                    );
+                }
+            }
 
             return account.AccountId;
         }
@@ -638,5 +685,19 @@ public class AccountProvisionService : IAccountProvisionService
             return "DealerAdmin";
 
         return string.Empty;
+    }
+
+    private static async Task<string> LoadEmailTemplateAsync(string templateName)
+    {
+        var relativePath = Path.Combine("docs", "email-templates", templateName);
+        var contentRootPath = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
+        if (File.Exists(contentRootPath))
+            return await File.ReadAllTextAsync(contentRootPath);
+
+        var baseDirectoryPath = Path.Combine(AppContext.BaseDirectory, relativePath);
+        if (File.Exists(baseDirectoryPath))
+            return await File.ReadAllTextAsync(baseDirectoryPath);
+
+        throw new FileNotFoundException($"Email template not found: {relativePath}");
     }
 }
