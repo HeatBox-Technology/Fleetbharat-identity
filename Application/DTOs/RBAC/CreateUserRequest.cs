@@ -16,6 +16,7 @@ public class CreateUserRequest
     public string MobileNo { get; set; } = "";
     public bool Status { get; set; }
     public bool TwoFactorEnabled { get; set; }
+    public string UserName { get; set; } = "";
     public IFormFile? ProfileImage { get; set; } = null;
     public List<UserFormRightDto>? AdditionalPermissions { get; set; }
 }
@@ -56,6 +57,7 @@ public class UserDetailResponseDto
 
     public string FirstName { get; set; } = "";
     public string LastName { get; set; } = "";
+    public string UserName { get; set; } = "";
 
     public string Email { get; set; } = "";
     public string MobileNo { get; set; } = "";

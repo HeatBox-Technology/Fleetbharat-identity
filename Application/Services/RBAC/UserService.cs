@@ -99,9 +99,12 @@ public class UserService : IUserService
             {
                 UserId = userId,
                 Email = email,
+                User_name = string.IsNullOrWhiteSpace(req.UserName) ? email : req.UserName.Trim(),
                 FirstName = req.FirstName.Trim(),
                 LastName = req.LastName.Trim(),
-                Password_hash = BCrypt.Net.BCrypt.HashPassword(req.Password),
+                Password_hash = string.IsNullOrWhiteSpace(req.Password)
+                    ? throw new InvalidOperationException("Password is required")
+                    : BCrypt.Net.BCrypt.HashPassword(req.Password),
 
                 AccountId = req.AccountId,
                 roleId = role.RoleId,
@@ -243,6 +246,7 @@ public class UserService : IUserService
                 AccountName = a.AccountName,
                 profileImagePath = u.ProfileImagePath,
 
+
                 Status = u.Status,
                 TwoFactorEnabled = u.TwoFactorEnabled,
                 LastLoginAt = u.LastLoginAt
@@ -301,6 +305,7 @@ public class UserService : IUserService
             UserId = u.UserId,
             FirstName = u.FirstName,
             LastName = u.LastName,
+            UserName = u.User_name ?? "",
             Email = u.Email,
             MobileNo = u.MobileNo,
             CountryCode = u.CountryCode,
@@ -380,6 +385,17 @@ public class UserService : IUserService
 
             user.Status = req.Status;
             user.TwoFactorEnabled = req.TwoFactorEnabled;
+
+            // Update password only when request contains a non-empty Password field.
+            var passwordProp = req.GetType().GetProperty("Password");
+            if (passwordProp?.PropertyType == typeof(string))
+            {
+                var newPassword = passwordProp.GetValue(req) as string;
+                if (!string.IsNullOrEmpty(newPassword))
+                {
+                    user.Password_hash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+                }
+            }
 
             user.UpdatedAt = DateTime.UtcNow;
 
