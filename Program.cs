@@ -92,21 +92,21 @@ builder.Services.AddScoped<IServiceResolver, ServiceResolver>();
 builder.Services.AddScoped<IBulkProcessor, BulkProcessor>();
 builder.Services.AddHttpClient<IExternalBulkSyncService, ExternalBulkSyncService>();
 builder.Services.AddScoped<DbLogger>();
-builder.Services.Configure<ExternalSyncWorkerOptions>(
-    builder.Configuration.GetSection(ExternalSyncWorkerOptions.SectionName));
-builder.Services.AddScoped<IExternalSyncRepository, ExternalSyncRepository>();
-builder.Services.AddScoped<IExternalSyncQueueService, ExternalSyncQueueService>();
-builder.Services.AddScoped<IExternalSyncRetryPolicy, ExternalSyncRetryPolicyService>();
-builder.Services.AddScoped<IExternalSyncInvoker, ExternalSyncInvoker>();
-builder.Services.AddScoped<IExternalDeadLetterService, ExternalDeadLetterService>();
-builder.Services.AddScoped<IExternalSyncDashboardService, ExternalSyncDashboardService>();
-builder.Services.AddScoped<IExampleExternalSyncService, ExampleExternalSyncService>();
-builder.Services.AddSingleton<IExternalSyncConcurrencyLimiter>(sp =>
-{
-    var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ExternalSyncWorkerOptions>>().Value;
-    return new ExternalSyncConcurrencyLimiter(options.MaxConcurrency);
-});
-builder.Services.AddHostedService<ExternalSyncWorker>();
+// builder.Services.Configure<ExternalSyncWorkerOptions>(
+//     builder.Configuration.GetSection(ExternalSyncWorkerOptions.SectionName));
+// builder.Services.AddScoped<IExternalSyncRepository, ExternalSyncRepository>();
+// builder.Services.AddScoped<IExternalSyncQueueService, ExternalSyncQueueService>();
+// builder.Services.AddScoped<IExternalSyncRetryPolicy, ExternalSyncRetryPolicyService>();
+// builder.Services.AddScoped<IExternalSyncInvoker, ExternalSyncInvoker>();
+// builder.Services.AddScoped<IExternalDeadLetterService, ExternalDeadLetterService>();
+// builder.Services.AddScoped<IExternalSyncDashboardService, ExternalSyncDashboardService>();
+// builder.Services.AddScoped<IExampleExternalSyncService, ExampleExternalSyncService>();
+// builder.Services.AddSingleton<IExternalSyncConcurrencyLimiter>(sp =>
+// {
+//     var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ExternalSyncWorkerOptions>>().Value;
+//     return new ExternalSyncConcurrencyLimiter(options.MaxConcurrency);
+// });
+// builder.Services.AddHostedService<ExternalSyncWorker>();
 
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
