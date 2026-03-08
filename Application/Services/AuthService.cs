@@ -160,7 +160,10 @@ public class AuthService : IAuthService
                 {
                     WhiteLabelId = whiteLabel.WhiteLabelId,
                     CustomEntryFqdn = whiteLabel.CustomEntryFqdn,
+                    BrandName = whiteLabel.BrandName,
                     LogoUrl = whiteLabel.LogoUrl,
+                    LogoName = whiteLabel.LogoName,
+                    LogoPath = whiteLabel.LogoPath,
                     PrimaryColorHex = whiteLabel.PrimaryColorHex,
                     SecondaryColorHex = whiteLabel.SecondaryColorHex
                 },
@@ -440,7 +443,10 @@ public class AuthService : IAuthService
                 {
                     WhiteLabelId = whiteLabel.WhiteLabelId,
                     CustomEntryFqdn = whiteLabel.CustomEntryFqdn,
+                    BrandName = whiteLabel.BrandName,
                     LogoUrl = whiteLabel.LogoUrl,
+                    LogoName = whiteLabel.LogoName,
+                    LogoPath = whiteLabel.LogoPath,
                     PrimaryColorHex = whiteLabel.PrimaryColorHex,
                     SecondaryColorHex = whiteLabel.SecondaryColorHex
                 },
@@ -547,4 +553,6 @@ public class AuthService : IAuthService
     }
 
 }
+
+
 

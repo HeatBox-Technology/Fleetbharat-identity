@@ -21,6 +21,7 @@ public interface ICommonDropdownService
 
     Task<List<DropdownDto>> GetDeviceType();
     Task<List<DropdownDto>> GetManufacture();
+    Task<FormFilterConfigResponseDto?> GetFilterConfigByFormNameAsync(string formName);
 
 
 }

@@ -28,7 +28,7 @@ public interface IUserService
     Task<bool> UpdateStatusAsync(Guid userId, bool status);
     Task<bool> UpdateTwoFactorAsync(Guid userId, bool enabled);
     Task<bool> SendResetPasswordAsync(Guid userId);
-    Task<bool> UpdateProfileImageAsync(Guid userId, IFormFile file);
+    Task<string?> UpdateProfileImageAsync(Guid userId, IFormFile file);
     Task<bool> SoftDeleteAsync(Guid userId);
 }
 

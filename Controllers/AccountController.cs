@@ -19,8 +19,6 @@ public class AccountController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new { accountId = id }, "Account created", 200));
     }
 
-    // ✅ Pagination + Search + Filter
-    // GET /api/accounts?page=1&pageSize=10&search=alpha&status=true
     [HttpGet]
     public async Task<IActionResult> GetAll(
         [FromQuery] int page = 1,
@@ -32,7 +30,6 @@ public class AccountController : ControllerBase
         return Ok(ApiResponse<object>.Ok(result, "Success", 200));
     }
 
-    // ✅ Get by id
     [HttpGet("{accountId}")]
     public async Task<IActionResult> GetById(int accountId)
     {
@@ -44,7 +41,13 @@ public class AccountController : ControllerBase
         return Ok(ApiResponse<object>.Ok(result, "Success", 200));
     }
 
-    // ✅ Update full
+    [HttpGet("hierarchy")]
+    public async Task<IActionResult> GetHierarchy()
+    {
+        var data = await _service.GetHierarchyAsync();
+        return Ok(data);
+    }
+
     [HttpPut("{accountId}")]
     public async Task<IActionResult> Update(int accountId, UpdateAccountRequest req)
     {
@@ -56,8 +59,6 @@ public class AccountController : ControllerBase
         return Ok(ApiResponse<string>.Ok("Updated", "Account updated", 200));
     }
 
-    // ✅ Update only status (toggle)
-    // PATCH /api/accounts/10/status?status=false
     [HttpPatch("{accountId}/status")]
     public async Task<IActionResult> UpdateStatus(int accountId, [FromQuery] bool status)
     {
@@ -68,7 +69,6 @@ public class AccountController : ControllerBase
 
         return Ok(ApiResponse<string>.Ok("Updated", "Status updated", 200));
     }
-
 
     [HttpDelete("{accountId}")]
     public async Task<IActionResult> Delete(int accountId)

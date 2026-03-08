@@ -9,7 +9,9 @@ public record CreateFormRequest(
     int SortOrder,
     bool IsMenu,
     bool IsVisible,
-    bool IsActive
+    bool IsActive,
+    int? FormModuleId = null,
+    string? FilterConfigJson = null
 );
 
 public record UpdateFormRequest(
@@ -21,12 +23,15 @@ public record UpdateFormRequest(
     int SortOrder,
     bool IsMenu,
     bool IsVisible,
-    bool IsActive
+    bool IsActive,
+    int? FormModuleId = null,
+    string? FilterConfigJson = null
 );
 
 public class FormResponseDto
 {
     public int FormId { get; set; }
+    public int? FormModuleId { get; set; }
     public string FormCode { get; set; } = "";
     public string FormName { get; set; } = "";
     public string ModuleName { get; set; } = "";

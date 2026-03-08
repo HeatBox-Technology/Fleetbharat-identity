@@ -158,12 +158,12 @@ public class UsersController : ControllerBase
         if (file == null)
             return BadRequest(ApiResponse<object>.Fail("File is required"));
 
-        var ok = await _service.UpdateProfileImageAsync(id, file);
+        var url = await _service.UpdateProfileImageAsync(id, file);
 
-        if (!ok)
+        if (url == null)
             return NotFound(ApiResponse<object>.Fail("User not found", 404));
 
-        return Ok(ApiResponse<object>.Ok(null, "Profile image updated"));
+        return Ok(ApiResponse<object>.Ok(new { profileImageUrl = url }, "Profile image updated"));
     }
 
     // ----------------------------------------------------

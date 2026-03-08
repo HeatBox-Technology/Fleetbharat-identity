@@ -102,5 +102,18 @@ public class CommonDropdownController : ControllerBase
         return Ok(ApiResponse<object>.Ok(data, "Success", 200));
     }
 
+    [HttpGet("~/api/common/filter-config")]
+    public async Task<IActionResult> GetFilterConfig([FromQuery] string formName)
+    {
+        if (string.IsNullOrWhiteSpace(formName))
+            return BadRequest(ApiResponse<object>.Fail("formName is required", 400));
+
+        var data = await _service.GetFilterConfigByFormNameAsync(formName);
+        if (data == null)
+            return NotFound(ApiResponse<object>.Fail("Filter config not found", 404));
+
+        return Ok(ApiResponse<object>.Ok(data, "Success", 200));
+    }
+
 
 }

@@ -1,21 +1,17 @@
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 
 public class CommonDropdownService : ICommonDropdownService
 {
     private readonly IdentityDbContext _db;
-    private readonly IWebHostEnvironment _env;
-    private List<DropdownDto>? _cache;
+    private readonly IHierarchyService _hierarchyService;
 
-    public CommonDropdownService(IdentityDbContext db, IWebHostEnvironment env)
+    public CommonDropdownService(IdentityDbContext db, IHierarchyService hierarchyService)
     {
         _db = db;
-        _env = env;
+        _hierarchyService = hierarchyService;
     }
 
     public async Task<List<DropdownDto>> GetAccountsAsync(string? search, int limit)
@@ -241,6 +237,9 @@ public class CommonDropdownService : ICommonDropdownService
             })
             .ToListAsync();
     }
+
+    public Task<FormFilterConfigResponseDto?> GetFilterConfigByFormNameAsync(string formName) =>
+        _hierarchyService.GetFilterConfigByFormNameAsync(formName);
 }
 
 

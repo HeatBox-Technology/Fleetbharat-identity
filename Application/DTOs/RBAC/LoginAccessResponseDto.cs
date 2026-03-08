@@ -24,7 +24,10 @@ public class WhiteLabelInfoDto
 {
     public int WhiteLabelId { get; set; }
     public string CustomEntryFqdn { get; set; } = "";
+    public string? BrandName { get; set; }
     public string? LogoUrl { get; set; }
+    public string? LogoName { get; set; }
+    public string? LogoPath { get; set; }
     public string PrimaryColorHex { get; set; } = "";
     public string? SecondaryColorHex { get; set; } = null;
 }

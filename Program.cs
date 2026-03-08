@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -11,6 +12,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using StackExchange.Redis;
 using System;
+using System.IO;
 using System.Text;
 using NetTopologySuite.Geometries;
 
@@ -62,6 +64,9 @@ builder.Services.AddScoped<ITaxTypeService, TaxTypeService>();
 builder.Services.AddScoped<IAccountConfigurationService, AccountConfigurationService>();
 builder.Services.AddScoped<IWhiteLabelService, WhiteLabelService>();
 builder.Services.AddScoped<ICommonDropdownService, CommonDropdownService>();
+builder.Services.AddScoped<IHierarchyRepository, HierarchyRepository>();
+builder.Services.AddScoped<IHierarchyService, HierarchyService>();
+builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddSingleton<BulkQueue>();
 builder.Services.AddHostedService<BulkWorker>();
 builder.Services.AddScoped<IBulkService, BulkService>();
@@ -78,6 +83,14 @@ builder.Services.AddScoped<IServiceResolver, ServiceResolver>();
 builder.Services.AddScoped<IBulkProcessor, BulkProcessor>();
 builder.Services.AddHttpClient<IExternalBulkSyncService, ExternalBulkSyncService>();
 builder.Services.AddScoped<DbLogger>();
+builder.Services.AddScoped<IExternalSyncRepository, ExternalSyncRepository>();
+builder.Services.AddScoped<IExternalSyncQueueService, ExternalSyncQueueService>();
+builder.Services.AddScoped<IExternalSyncRetryPolicy, ExternalSyncRetryPolicyService>();
+builder.Services.AddScoped<IExternalSyncInvoker, ExternalSyncInvoker>();
+builder.Services.AddScoped<IExternalDeadLetterService, ExternalDeadLetterService>();
+builder.Services.AddScoped<IExternalSyncDashboardService, ExternalSyncDashboardService>();
+builder.Services.AddScoped<IExampleExternalSyncService, ExampleExternalSyncService>();
+builder.Services.AddHostedService<ExternalSyncWorker>();
 
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
@@ -198,6 +211,13 @@ builder.Services.AddHostedService<RedisGpsSubscriberHostedService>();
 
 
 var app = builder.Build();
+var uploadsPath = Path.Combine(app.Environment.ContentRootPath, "uploads");
+Directory.CreateDirectory(uploadsPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(uploadsPath),
+    RequestPath = "/uploads"
+});
 
 //
 // ✅ FIXED: enable swagger in Docker (Staging) also

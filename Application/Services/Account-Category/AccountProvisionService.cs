@@ -487,6 +487,52 @@ public class AccountProvisionService : IAccountProvisionService
             .FirstOrDefaultAsync();
     }
 
+    public async Task<List<AccountHierarchyDto>> GetHierarchyAsync()
+    {
+        var accounts = await _db.Accounts
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .OrderBy(x => x.HierarchyPath)
+            .Select(x => new
+            {
+                x.AccountId,
+                x.AccountName,
+                x.AccountCode,
+                x.Status,
+                x.ParentAccountId
+            })
+            .ToListAsync();
+
+        var nodeMap = accounts.ToDictionary(
+            x => x.AccountId,
+            x => new AccountHierarchyDto
+            {
+                AccountId = x.AccountId,
+                AccountName = x.AccountName ?? string.Empty,
+                AccountCode = x.AccountCode ?? string.Empty,
+                Status = x.Status
+            });
+
+        var roots = new List<AccountHierarchyDto>();
+
+        foreach (var account in accounts)
+        {
+            var node = nodeMap[account.AccountId];
+
+            if (account.ParentAccountId.HasValue &&
+                nodeMap.TryGetValue(account.ParentAccountId.Value, out var parentNode))
+            {
+                parentNode.Children.Add(node);
+            }
+            else
+            {
+                roots.Add(node);
+            }
+        }
+
+        return roots;
+    }
+
     public async Task<bool> UpdateAsync(int accountId, UpdateAccountRequest req)
     {
         using var tx = await _db.Database.BeginTransactionAsync();

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 public interface IAccountProvisionService
@@ -11,6 +12,7 @@ public interface IAccountProvisionService
       bool? status);
 
     Task<AccountResponseDto?> GetByIdAsync(int accountId);
+    Task<List<AccountHierarchyDto>> GetHierarchyAsync();
 
     Task<bool> UpdateAsync(int accountId, UpdateAccountRequest req);
 

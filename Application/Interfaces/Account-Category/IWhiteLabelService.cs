@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 
 public interface IWhiteLabelService
 {
@@ -14,4 +15,6 @@ public interface IWhiteLabelService
         int pageSize,
         string? search,
         bool? isActive);
+
+    Task<WhiteLabelLogoUploadResponseDto> UploadLogoAsync(int accountId, IFormFile file);
 }

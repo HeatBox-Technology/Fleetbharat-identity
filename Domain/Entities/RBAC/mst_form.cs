@@ -3,6 +3,7 @@ using System;
 public class mst_form
 {
     public int FormId { get; set; }
+    public int? FormModuleId { get; set; }
 
     public string FormCode { get; set; }           // USER_MGMT
 
@@ -39,4 +40,7 @@ public class mst_form
     public int? CreatedBy { get; set; }
     public int? UpdatedBy { get; set; }
     public int? DeletedBy { get; set; }
+    public string? FilterConfigJson { get; set; }
+
+    public FormModule? FormModule { get; set; }
 }

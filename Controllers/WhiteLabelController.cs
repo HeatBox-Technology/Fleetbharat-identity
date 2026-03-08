@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
@@ -68,5 +69,16 @@ public class WhiteLabelController : ControllerBase
             return NotFound(ApiResponse<object>.Fail("WhiteLabel not found", 404));
 
         return Ok(ApiResponse<string>.Ok("Deleted", "WhiteLabel deleted", 200));
+    }
+
+    [HttpPost("{accountId}/logo")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadLogo(int accountId, IFormFile file)
+    {
+        if (file == null)
+            return BadRequest(ApiResponse<object>.Fail("File is required", 400));
+
+        var data = await _service.UploadLogoAsync(accountId, file);
+        return Ok(ApiResponse<object>.Ok(data, "Logo uploaded", 200));
     }
 }

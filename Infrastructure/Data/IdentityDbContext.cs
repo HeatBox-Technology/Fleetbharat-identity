@@ -43,6 +43,7 @@ public class IdentityDbContext : DbContext
        public DbSet<PlanUnitLicense> PlanUnitLicenses => Set<PlanUnitLicense>();
        public DbSet<Currency> Currencies => Set<Currency>();
        public DbSet<FormModule> FormModules => Set<FormModule>();
+       public DbSet<SolutionMaster> Solutions => Set<SolutionMaster>();
        public DbSet<PlanEntitlementModule> EntitlementModules => Set<PlanEntitlementModule>();
 
        /// <summary>
@@ -78,6 +79,9 @@ public class IdentityDbContext : DbContext
        public DbSet<map_vehicle_geofence> VehicleGeofenceMaps { get; set; }
        public DbSet<map_vehicle_geofence_sync_log> map_vehicle_geofence_sync_logs { get; set; }
        public DbSet<ErrorLog> ErrorLogs { get; set; }
+       public DbSet<external_sync_config> external_sync_configs { get; set; }
+       public DbSet<external_sync_queue> external_sync_queues { get; set; }
+       public DbSet<external_sync_dead_letter> external_sync_dead_letters { get; set; }
 
 
 
@@ -107,9 +111,20 @@ public class IdentityDbContext : DbContext
               modelBuilder.Entity<mst_role>()
                 .ToTable("mst_role")
                 .HasKey(x => x.RoleId);
-              modelBuilder.Entity<mst_form>()
-                .ToTable("mst_form")
-                .HasKey(x => x.FormId);
+              modelBuilder.Entity<mst_form>(entity =>
+              {
+                     entity.ToTable("mst_form");
+                     entity.HasKey(x => x.FormId);
+
+                     entity.Property(x => x.FilterConfigJson);
+
+                     entity.HasOne(x => x.FormModule)
+                           .WithMany(x => x.Forms)
+                           .HasForeignKey(x => x.FormModuleId)
+                           .OnDelete(DeleteBehavior.Restrict);
+
+                     entity.HasIndex(x => x.FormModuleId);
+              });
               modelBuilder.Entity<mst_country>()
              .ToTable("mst_country")
              .HasKey(x => x.CountryId);
@@ -184,6 +199,15 @@ public class IdentityDbContext : DbContext
                      entity.ToTable("mst_white_label");
                      entity.HasKey(x => x.WhiteLabelId);
 
+                     entity.Property(x => x.BrandName)
+                     .HasMaxLength(200);
+
+                     entity.Property(x => x.LogoName)
+                     .HasMaxLength(255);
+
+                     entity.Property(x => x.LogoPath)
+                     .HasMaxLength(500);
+
                      entity.Property(x => x.CustomEntryFqdn)
                      .HasMaxLength(200)
                      .IsRequired();
@@ -244,6 +268,7 @@ public class IdentityDbContext : DbContext
                      e.HasKey(x => x.FormModuleId);
 
                      e.Property(x => x.FormModuleId).HasColumnName("FormModuleId");
+                     e.Property(x => x.SolutionId).HasColumnName("SolutionId");
                      e.Property(x => x.ModuleCode).HasColumnName("ModuleCode");
                      e.Property(x => x.ModuleName).HasColumnName("ModuleName");
                      e.Property(x => x.Description).HasColumnName("Description");
@@ -252,6 +277,26 @@ public class IdentityDbContext : DbContext
                      e.Property(x => x.UpdatedAt).HasColumnName("UpdatedAt");
                      e.Property(x => x.CreatedBy).HasColumnName("CreatedBy");
                      e.Property(x => x.UpdatedBy).HasColumnName("UpdatedBy");
+
+                     e.HasOne(x => x.Solution)
+                      .WithMany(x => x.Modules)
+                      .HasForeignKey(x => x.SolutionId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                     e.HasIndex(x => x.SolutionId);
+              });
+
+              modelBuilder.Entity<SolutionMaster>(e =>
+              {
+                     e.ToTable("mst_solution_master");
+
+                     e.HasKey(x => x.Id);
+
+                     e.Property(x => x.Id).HasColumnName("Id");
+                     e.Property(x => x.Name).HasColumnName("Name").HasMaxLength(200).IsRequired();
+                     e.Property(x => x.Description).HasColumnName("Description").HasMaxLength(500);
+                     e.Property(x => x.IsActive).HasColumnName("IsActive").HasDefaultValue(true);
+                     e.Property(x => x.CreatedAt).HasColumnName("CreatedAt");
               });
               modelBuilder.Entity<PlanEntitlementModule>()
            .ToTable("plan_entitlement_module", "public");
@@ -450,6 +495,55 @@ public class IdentityDbContext : DbContext
              entity.Property(x => x.LastTriedAt)
              .HasColumnName("last_tried_at");
       });
+
+              modelBuilder.Entity<external_sync_config>(entity =>
+              {
+                     entity.ToTable("external_sync_config");
+                     entity.HasKey(x => x.Id);
+                     entity.Property(x => x.Id).HasColumnName("id");
+                     entity.Property(x => x.ModuleName).HasColumnName("module_name").HasMaxLength(100).IsRequired();
+                     entity.Property(x => x.ServiceInterface).HasColumnName("service_interface").HasMaxLength(200).IsRequired();
+                     entity.Property(x => x.ServiceMethod).HasColumnName("service_method").HasMaxLength(100).IsRequired();
+                     entity.Property(x => x.MaxRetryCount).HasColumnName("max_retry_count").HasDefaultValue(5);
+                     entity.Property(x => x.RetryIntervalMinutes).HasColumnName("retry_interval_minutes").HasDefaultValue(5);
+                     entity.Property(x => x.RetryEnabled).HasColumnName("retry_enabled").HasDefaultValue(true);
+                     entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+                     entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                     entity.HasIndex(x => x.ModuleName).IsUnique();
+              });
+
+              modelBuilder.Entity<external_sync_queue>(entity =>
+              {
+                     entity.ToTable("external_sync_queue");
+                     entity.HasKey(x => x.Id);
+                     entity.Property(x => x.Id).HasColumnName("id");
+                     entity.Property(x => x.ModuleName).HasColumnName("module_name").HasMaxLength(100).IsRequired();
+                     entity.Property(x => x.EntityId).HasColumnName("entity_id").HasMaxLength(100).IsRequired();
+                     entity.Property(x => x.PayloadJson).HasColumnName("payload_json").HasColumnType("jsonb").IsRequired();
+                     entity.Property(x => x.Status).HasColumnName("status").HasMaxLength(20).IsRequired();
+                     entity.Property(x => x.RetryCount).HasColumnName("retry_count");
+                     entity.Property(x => x.NextRetryTime).HasColumnName("next_retry_time");
+                     entity.Property(x => x.ErrorMessage).HasColumnName("error_message").HasMaxLength(2000);
+                     entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                     entity.Property(x => x.LastAttemptAt).HasColumnName("last_attempt_at");
+                     entity.HasIndex(x => new { x.Status, x.NextRetryTime });
+                     entity.HasIndex(x => x.ModuleName);
+              });
+
+              modelBuilder.Entity<external_sync_dead_letter>(entity =>
+              {
+                     entity.ToTable("external_sync_dead_letter");
+                     entity.HasKey(x => x.Id);
+                     entity.Property(x => x.Id).HasColumnName("id");
+                     entity.Property(x => x.ModuleName).HasColumnName("module_name").HasMaxLength(100).IsRequired();
+                     entity.Property(x => x.EntityId).HasColumnName("entity_id").HasMaxLength(100).IsRequired();
+                     entity.Property(x => x.PayloadJson).HasColumnName("payload_json").HasColumnType("jsonb").IsRequired();
+                     entity.Property(x => x.ErrorMessage).HasColumnName("error_message").HasMaxLength(2000).IsRequired();
+                     entity.Property(x => x.RetryCount).HasColumnName("retry_count");
+                     entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                     entity.Property(x => x.MovedToDLQAt).HasColumnName("moved_to_dlq_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                     entity.HasIndex(x => x.ModuleName);
+              });
 
               ApplyAccountHierarchyQueryFilters(modelBuilder);
        }

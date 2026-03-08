@@ -24,9 +24,10 @@ public class FormsController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
         [FromQuery] string? search = null,
-        [FromQuery] bool? isActive = null)
+        [FromQuery] bool? isActive = null,
+        [FromQuery] int? moduleId = null)
     {
-        var data = await _service.GetAllAsync(page, pageSize, search, isActive);
+        var data = await _service.GetAllAsync(page, pageSize, search, isActive, moduleId);
         return Ok(ApiResponse<object>.Ok(data, "Success", 200));
     }
 

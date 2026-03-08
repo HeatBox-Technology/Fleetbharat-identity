@@ -4,16 +4,17 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
-using System.IO;
 public class UserService : IUserService
 {
     private readonly IdentityDbContext _db;
     private readonly ICurrentUserService _currentUser;
+    private readonly IFileStorageService _fileStorage;
 
-    public UserService(IdentityDbContext db, ICurrentUserService currentUser)
+    public UserService(IdentityDbContext db, ICurrentUserService currentUser, IFileStorageService fileStorage)
     {
         _db = db;
         _currentUser = currentUser;
+        _fileStorage = fileStorage;
     }
     public async Task<Guid> CreateAsync(CreateUserRequest req)
     {
@@ -76,22 +77,7 @@ public class UserService : IUserService
 
             if (req.ProfileImage != null && req.ProfileImage.Length > 0)
             {
-                var allowedTypes = new[] { "image/jpeg", "image/png" };
-                if (!allowedTypes.Contains(req.ProfileImage.ContentType))
-                    throw new InvalidOperationException("Only JPG and PNG images are allowed");
-
-                if (req.ProfileImage.Length > 2 * 1024 * 1024)
-                    throw new InvalidOperationException("Image size must be less than 2MB");
-
-                var uploadsRoot = Path.Combine("uploads", "users", userId.ToString());
-                Directory.CreateDirectory(uploadsRoot);
-
-                var filePath = Path.Combine(uploadsRoot, "profile.jpg");
-
-                using var stream = new FileStream(filePath, FileMode.Create);
-                await req.ProfileImage.CopyToAsync(stream);
-
-                imagePath = "/" + filePath.Replace("\\", "/"); // for URL use
+                imagePath = await _fileStorage.SaveProfileImageAsync(userId, req.ProfileImage);
             }
 
             // 5️⃣ Create user
@@ -352,23 +338,7 @@ public class UserService : IUserService
             // -------------------------
             if (req.ProfileImage != null && req.ProfileImage.Length > 0)
             {
-                var allowedTypes = new[] { "image/jpeg", "image/png" };
-
-                if (!allowedTypes.Contains(req.ProfileImage.ContentType))
-                    throw new InvalidOperationException("Only JPG and PNG images are allowed");
-
-                if (req.ProfileImage.Length > 2 * 1024 * 1024)
-                    throw new InvalidOperationException("Image size must be less than 2MB");
-
-                var uploadsRoot = Path.Combine("uploads", "users", user.UserId.ToString());
-                Directory.CreateDirectory(uploadsRoot);
-
-                var filePath = Path.Combine(uploadsRoot, "profile.jpg");
-
-                using var stream = new FileStream(filePath, FileMode.Create);
-                await req.ProfileImage.CopyToAsync(stream);
-
-                user.ProfileImagePath = "/" + filePath.Replace("\\", "/");
+                user.ProfileImagePath = await _fileStorage.SaveProfileImageAsync(user.UserId, req.ProfileImage);
             }
 
 
@@ -563,35 +533,19 @@ public class UserService : IUserService
         await _db.SaveChangesAsync();
         return true;
     }
-    public async Task<bool> UpdateProfileImageAsync(Guid userId, IFormFile file)
+    public async Task<string?> UpdateProfileImageAsync(Guid userId, IFormFile file)
     {
         var user = await _db.Users
             .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.UserId == userId && !x.IsDeleted);
 
-        if (user == null) return false;
+        if (user == null) return null;
 
-        var allowed = new[] { "image/jpeg", "image/png" };
-
-        if (!allowed.Contains(file.ContentType))
-            throw new InvalidOperationException("Invalid image type");
-
-        if (file.Length > 2 * 1024 * 1024)
-            throw new InvalidOperationException("Image too large");
-
-        var root = Path.Combine("uploads", "users", userId.ToString());
-        Directory.CreateDirectory(root);
-
-        var filePath = Path.Combine(root, "profile.jpg");
-
-        using var fs = new FileStream(filePath, FileMode.Create);
-        await file.CopyToAsync(fs);
-
-        user.ProfileImagePath = "/" + filePath.Replace("\\", "/");
+        user.ProfileImagePath = await _fileStorage.SaveProfileImageAsync(userId, file);
         user.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
-        return true;
+        return user.ProfileImagePath;
     }
     public async Task<bool> SendResetPasswordAsync(Guid userId)
     {

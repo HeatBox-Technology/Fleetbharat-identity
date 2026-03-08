@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 public record CreateAccountRequest
@@ -156,4 +157,14 @@ public class AccountListWithCardDto
 {
     public PagedResultDto<AccountResponseDto> PageData { get; set; } = new();
     public AccountCardCountDto CardCounts { get; set; } = new();
+}
+
+public class AccountHierarchyDto
+{
+    public int AccountId { get; set; }
+    public string AccountName { get; set; } = "";
+    public string AccountCode { get; set; } = "";
+    public bool Status { get; set; }
+
+    public List<AccountHierarchyDto> Children { get; set; } = new();
 }

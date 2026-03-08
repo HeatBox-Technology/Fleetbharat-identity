@@ -6,10 +6,12 @@ using Microsoft.EntityFrameworkCore;
 public class FormService : IFormService
 {
     private readonly IdentityDbContext _db;
+    private readonly IHierarchyRepository _hierarchyRepository;
 
-    public FormService(IdentityDbContext db)
+    public FormService(IdentityDbContext db, IHierarchyRepository hierarchyRepository)
     {
         _db = db;
+        _hierarchyRepository = hierarchyRepository;
     }
 
     public async Task<int> CreateAsync(CreateFormRequest req)
@@ -23,6 +25,7 @@ public class FormService : IFormService
         {
             FormCode = code,
             FormName = req.FormName.Trim(),
+            FormModuleId = req.FormModuleId,
             ModuleName = req.ModuleName.Trim(),
             PageUrl = req.PageUrl.Trim(),
             IconName = req.IconName,
@@ -30,6 +33,7 @@ public class FormService : IFormService
             IsMenu = req.IsMenu,
             IsVisible = req.IsVisible,
             IsActive = req.IsActive,
+            FilterConfigJson = req.FilterConfigJson,
             CreatedOn = DateTime.UtcNow,
             UpdatedOn = DateTime.UtcNow
         };
@@ -40,71 +44,11 @@ public class FormService : IFormService
         return form.FormId;
     }
 
-    public async Task<PagedResultDto<FormResponseDto>> GetAllAsync(int page, int pageSize, string? search, bool? isActive)
+    public async Task<PagedResultDto<FormResponseDto>> GetAllAsync(int page, int pageSize, string? search, bool? isActive, int? moduleId)
     {
-        var query = _db.Forms.AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var s = search.Trim().ToLower();
-            query = query.Where(x => x.FormName.ToLower().Contains(s) || x.FormCode.ToLower().Contains(s));
-        }
-
-        if (isActive.HasValue)
-            query = query.Where(x => x.IsActive == isActive.Value);
-
-        var total = await query.CountAsync();
-
-        // If pageSize <= 0 → return all data
-        if (pageSize <= 0)
-        {
-            var allItems = await query
-                .OrderBy(x => x.SortOrder)
-                .Select(x => new FormResponseDto
-                {
-                    FormId = x.FormId,
-                    FormCode = x.FormCode,
-                    FormName = x.FormName,
-                    ModuleName = x.ModuleName,
-                    PageUrl = x.PageUrl,
-                    IsActive = x.IsActive
-                })
-                .ToListAsync();
-
-            return new PagedResultDto<FormResponseDto>
-            {
-                Page = 1,
-                PageSize = total,
-                TotalRecords = total,
-                Items = allItems
-            };
-        }
-
-        if (page <= 0) page = 1;
-
-        var items = await query
-            .OrderBy(x => x.SortOrder)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(x => new FormResponseDto
-            {
-                FormId = x.FormId,
-                FormCode = x.FormCode,
-                FormName = x.FormName,
-                ModuleName = x.ModuleName,
-                PageUrl = x.PageUrl,
-                IsActive = x.IsActive
-            })
-            .ToListAsync();
-
-        return new PagedResultDto<FormResponseDto>
-        {
-            Page = page,
-            PageSize = pageSize,
-            TotalRecords = total,
-            Items = items
-        };
+        return await _hierarchyRepository.GetFormsAsync(page, pageSize, search, isActive, moduleId);
     }
+
     public async Task<FormResponseDto?> GetByIdAsync(int id)
     {
         return await _db.Forms
@@ -112,6 +56,7 @@ public class FormService : IFormService
             .Select(x => new FormResponseDto
             {
                 FormId = x.FormId,
+                FormModuleId = x.FormModuleId,
                 FormCode = x.FormCode,
                 FormName = x.FormName,
                 ModuleName = x.ModuleName,
@@ -133,6 +78,7 @@ public class FormService : IFormService
 
         form.FormCode = code;
         form.FormName = req.FormName.Trim();
+        form.FormModuleId = req.FormModuleId;
         form.ModuleName = req.ModuleName.Trim();
         form.PageUrl = req.PageUrl.Trim();
         form.IconName = req.IconName;
@@ -140,6 +86,7 @@ public class FormService : IFormService
         form.IsMenu = req.IsMenu;
         form.IsVisible = req.IsVisible;
         form.IsActive = req.IsActive;
+        form.FilterConfigJson = req.FilterConfigJson;
         form.UpdatedOn = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
