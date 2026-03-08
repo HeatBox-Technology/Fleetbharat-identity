@@ -28,4 +28,9 @@ public class ExternalDeadLetterService : IExternalDeadLetterService
         await _repo.RemoveQueueAsync(queueItem, ct);
         await _repo.SaveChangesAsync(ct);
     }
+
+    public Task<bool> MoveToDeadLetterByQueueIdAsync(long queueId, string errorMessage, CancellationToken ct = default)
+    {
+        return _repo.MoveToDeadLetterByQueueIdAsync(queueId, errorMessage, ct);
+    }
 }

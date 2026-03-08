@@ -30,10 +30,14 @@ var jwtAudience = builder.Configuration["Jwt:Audience"]
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key is missing.");
 
-builder.Services.AddDbContext<IdentityDbContext>(opt =>
+builder.Services.Configure<AuditLoggingOptions>(
+    builder.Configuration.GetSection("AuditLogging"));
+
+builder.Services.AddDbContext<IdentityDbContext>((sp, opt) =>
     opt.UseNpgsql(defaultConnection, x => x.UseNetTopologySuite())
        .EnableDetailedErrors()
-       .EnableSensitiveDataLogging());
+       .EnableSensitiveDataLogging()
+       .AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>()));
 builder.Services.AddHttpClient<IExternalMappingApiService, ExternalMappingApiService>(client =>
 {
     client.BaseAddress = new Uri("http://92.4.76.230:8083/api/v1/"); // external base url
@@ -59,6 +63,11 @@ builder.Services.AddScoped<ICustomerPlanService, CustomerPlanService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<AuditSaveChangesInterceptor>();
+builder.Services.AddSingleton<AuditQueue>();
+builder.Services.AddSingleton<IAuditLogger, AuditLogger>();
+builder.Services.AddScoped<IAuditLogStore, DatabaseAuditLogStore>();
+builder.Services.AddHostedService<AuditWorker>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ITaxTypeService, TaxTypeService>();
 builder.Services.AddScoped<IAccountConfigurationService, AccountConfigurationService>();
@@ -83,6 +92,8 @@ builder.Services.AddScoped<IServiceResolver, ServiceResolver>();
 builder.Services.AddScoped<IBulkProcessor, BulkProcessor>();
 builder.Services.AddHttpClient<IExternalBulkSyncService, ExternalBulkSyncService>();
 builder.Services.AddScoped<DbLogger>();
+builder.Services.Configure<ExternalSyncWorkerOptions>(
+    builder.Configuration.GetSection(ExternalSyncWorkerOptions.SectionName));
 builder.Services.AddScoped<IExternalSyncRepository, ExternalSyncRepository>();
 builder.Services.AddScoped<IExternalSyncQueueService, ExternalSyncQueueService>();
 builder.Services.AddScoped<IExternalSyncRetryPolicy, ExternalSyncRetryPolicyService>();
@@ -90,6 +101,11 @@ builder.Services.AddScoped<IExternalSyncInvoker, ExternalSyncInvoker>();
 builder.Services.AddScoped<IExternalDeadLetterService, ExternalDeadLetterService>();
 builder.Services.AddScoped<IExternalSyncDashboardService, ExternalSyncDashboardService>();
 builder.Services.AddScoped<IExampleExternalSyncService, ExampleExternalSyncService>();
+builder.Services.AddSingleton<IExternalSyncConcurrencyLimiter>(sp =>
+{
+    var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ExternalSyncWorkerOptions>>().Value;
+    return new ExternalSyncConcurrencyLimiter(options.MaxConcurrency);
+});
 builder.Services.AddHostedService<ExternalSyncWorker>();
 
 
@@ -229,6 +245,7 @@ app.UseMiddleware<ExceptionMiddleware>();
 app.UseCors("AppCors");
 
 app.UseAuthentication();
+app.UseMiddleware<AuditMiddleware>();
 app.UseAuthorization();
 
 

@@ -21,14 +21,132 @@ public class ExternalSyncRepository : IExternalSyncRepository
             .FirstOrDefaultAsync(x => x.ModuleName == moduleName && x.IsActive, ct);
     }
 
-    public Task<List<external_sync_queue>> GetDuePendingQueueItemsAsync(int take, DateTime nowUtc, CancellationToken ct = default)
+    public async Task<Dictionary<string, external_sync_config>> GetActiveConfigsByModuleAsync(IEnumerable<string> moduleNames, CancellationToken ct = default)
+    {
+        var modules = moduleNames
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (modules.Count == 0)
+        {
+            return new Dictionary<string, external_sync_config>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var configs = await _db.external_sync_configs
+            .AsNoTracking()
+            .Where(x => x.IsActive && modules.Contains(x.ModuleName))
+            .ToListAsync(ct);
+
+        return configs.ToDictionary(x => x.ModuleName, x => x, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public Task<List<ExternalSyncQueueBatchItem>> GetDuePendingQueueItemsAsync(int take, DateTime nowUtc, CancellationToken ct = default)
     {
         return _db.external_sync_queues
+            .AsNoTracking()
             .Where(x => x.Status == ExternalSyncStatus.Pending &&
                         (!x.NextRetryTime.HasValue || x.NextRetryTime <= nowUtc))
             .OrderBy(x => x.CreatedAt)
             .Take(take)
+            .Select(x => new ExternalSyncQueueBatchItem
+            {
+                Id = x.Id,
+                ModuleName = x.ModuleName,
+                EntityId = x.EntityId,
+                PayloadJson = x.PayloadJson,
+                RetryCount = x.RetryCount,
+                CreatedAt = x.CreatedAt
+            })
             .ToListAsync(ct);
+    }
+
+    public async Task<bool> TryMarkProcessingAsync(long queueId, DateTime processingAtUtc, CancellationToken ct = default)
+    {
+        var rows = await _db.Database.ExecuteSqlInterpolatedAsync(
+            $@"UPDATE external_sync_queue
+               SET status = {ExternalSyncStatus.Processing},
+                   last_attempt_at = {processingAtUtc},
+                   error_message = NULL
+               WHERE id = {queueId}
+                 AND status = {ExternalSyncStatus.Pending};", ct);
+
+        return rows == 1;
+    }
+
+    public async Task MarkSuccessAsync(long queueId, DateTime processedAtUtc, CancellationToken ct = default)
+    {
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $@"UPDATE external_sync_queue
+               SET status = {ExternalSyncStatus.Success},
+                   error_message = NULL,
+                   next_retry_time = NULL,
+                   last_attempt_at = {processedAtUtc}
+               WHERE id = {queueId};", ct);
+    }
+
+    public async Task MarkRetryAsync(long queueId, int retryCount, DateTime nextRetryTimeUtc, string errorMessage, CancellationToken ct = default)
+    {
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $@"UPDATE external_sync_queue
+               SET status = {ExternalSyncStatus.Pending},
+                   retry_count = {retryCount},
+                   next_retry_time = {nextRetryTimeUtc},
+                   error_message = {errorMessage},
+                   last_attempt_at = {DateTime.UtcNow}
+               WHERE id = {queueId};", ct);
+    }
+
+    public async Task MarkFailedAsync(long queueId, string errorMessage, DateTime failedAtUtc, CancellationToken ct = default)
+    {
+        await _db.Database.ExecuteSqlInterpolatedAsync(
+            $@"UPDATE external_sync_queue
+               SET status = {ExternalSyncStatus.Failed},
+                   error_message = {errorMessage},
+                   last_attempt_at = {failedAtUtc}
+               WHERE id = {queueId};", ct);
+    }
+
+    public async Task<bool> MoveToDeadLetterByQueueIdAsync(long queueId, string errorMessage, CancellationToken ct = default)
+    {
+        var queueItem = await _db.external_sync_queues
+            .FirstOrDefaultAsync(x => x.Id == queueId, ct);
+
+        if (queueItem == null)
+        {
+            return false;
+        }
+
+        var dlq = new external_sync_dead_letter
+        {
+            ModuleName = queueItem.ModuleName,
+            EntityId = queueItem.EntityId,
+            PayloadJson = queueItem.PayloadJson,
+            ErrorMessage = errorMessage,
+            RetryCount = queueItem.RetryCount,
+            CreatedAt = queueItem.CreatedAt,
+            MovedToDLQAt = DateTime.UtcNow
+        };
+
+        await _db.external_sync_dead_letters.AddAsync(dlq, ct);
+        _db.external_sync_queues.Remove(queueItem);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public Task<int> CleanupSuccessfulQueueItemsAsync(DateTime olderThanUtc, int take, CancellationToken ct = default)
+    {
+        return _db.Database.ExecuteSqlInterpolatedAsync(
+            $@"DELETE FROM external_sync_queue
+               WHERE id IN (
+                   SELECT id
+                   FROM external_sync_queue
+                   WHERE status = {ExternalSyncStatus.Success}
+                     AND created_at < {olderThanUtc}
+                   ORDER BY created_at
+                   LIMIT {take}
+               );", ct);
     }
 
     public Task<external_sync_queue?> GetQueueByIdAsync(long id, CancellationToken ct = default)

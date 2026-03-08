@@ -1,9 +1,11 @@
 using System;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
 public class ExternalSyncQueueService : IExternalSyncQueueService
 {
+    private const int MaxPayloadLength = 2048;
     private readonly IExternalSyncRepository _repo;
 
     public ExternalSyncQueueService(IExternalSyncRepository repo)
@@ -21,7 +23,7 @@ public class ExternalSyncQueueService : IExternalSyncQueueService
         {
             ModuleName = request.ModuleName,
             EntityId = request.EntityId,
-            PayloadJson = request.PayloadJson,
+            PayloadJson = BuildCompactPayload(request.EntityId, request.PayloadJson),
             Status = ExternalSyncStatus.Pending,
             RetryCount = 0,
             NextRetryTime = DateTime.UtcNow,
@@ -30,5 +32,20 @@ public class ExternalSyncQueueService : IExternalSyncQueueService
 
         await _repo.AddQueueAsync(queueItem, ct);
         await _repo.SaveChangesAsync(ct);
+    }
+
+    private static string BuildCompactPayload(string entityId, string? payloadJson)
+    {
+        if (!string.IsNullOrWhiteSpace(payloadJson) && payloadJson.Length <= MaxPayloadLength)
+        {
+            return payloadJson;
+        }
+
+        return JsonSerializer.Serialize(new
+        {
+            entityId,
+            hasPayload = !string.IsNullOrWhiteSpace(payloadJson),
+            compacted = true
+        });
     }
 }

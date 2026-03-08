@@ -79,6 +79,7 @@ public class IdentityDbContext : DbContext
        public DbSet<map_vehicle_geofence> VehicleGeofenceMaps { get; set; }
        public DbSet<map_vehicle_geofence_sync_log> map_vehicle_geofence_sync_logs { get; set; }
        public DbSet<ErrorLog> ErrorLogs { get; set; }
+       public DbSet<AuditLog> AuditLogs { get; set; }
        public DbSet<external_sync_config> external_sync_configs { get; set; }
        public DbSet<external_sync_queue> external_sync_queues { get; set; }
        public DbSet<external_sync_dead_letter> external_sync_dead_letters { get; set; }
@@ -245,6 +246,27 @@ public class IdentityDbContext : DbContext
               {
                      entity.Property(x => x.ProfileImagePath)
                      .HasMaxLength(500);
+              });
+              modelBuilder.Entity<AuditLog>(entity =>
+              {
+                     entity.ToTable("AuditLogs");
+
+                     entity.HasKey(x => x.Id);
+                     entity.Property(x => x.ServiceName).HasMaxLength(100).IsRequired();
+                     entity.Property(x => x.Module).HasMaxLength(100);
+                     entity.Property(x => x.Action).HasMaxLength(100);
+                     entity.Property(x => x.Endpoint).HasMaxLength(500).IsRequired();
+                     entity.Property(x => x.EventType).HasMaxLength(50).IsRequired();
+                     entity.Property(x => x.IpAddress).HasMaxLength(64);
+                     entity.Property(x => x.UserAgent).HasMaxLength(500);
+                     entity.Property(x => x.CorrelationId).HasMaxLength(100);
+                     entity.Property(x => x.Email).HasMaxLength(256);
+                     entity.Property(x => x.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                     entity.HasIndex(x => x.CreatedAt).HasDatabaseName("IX_AuditLogs_CreatedAt");
+                     entity.HasIndex(x => x.UserId).HasDatabaseName("IX_AuditLogs_UserId");
+                     entity.HasIndex(x => x.AccountId).HasDatabaseName("IX_AuditLogs_AccountId");
+                     entity.HasIndex(x => x.ServiceName).HasDatabaseName("IX_AuditLogs_ServiceName");
               });
               modelBuilder.Entity<Currency>(entity =>
           {
@@ -526,8 +548,12 @@ public class IdentityDbContext : DbContext
                      entity.Property(x => x.ErrorMessage).HasColumnName("error_message").HasMaxLength(2000);
                      entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
                      entity.Property(x => x.LastAttemptAt).HasColumnName("last_attempt_at");
-                     entity.HasIndex(x => new { x.Status, x.NextRetryTime });
-                     entity.HasIndex(x => x.ModuleName);
+                     entity.HasIndex(x => new { x.Status, x.NextRetryTime })
+                           .HasDatabaseName("IX_external_sync_queue_status_retry");
+                     entity.HasIndex(x => x.CreatedAt)
+                           .HasDatabaseName("IX_external_sync_queue_created");
+                     entity.HasIndex(x => x.ModuleName)
+                           .HasDatabaseName("IX_external_sync_queue_module");
               });
 
               modelBuilder.Entity<external_sync_dead_letter>(entity =>
