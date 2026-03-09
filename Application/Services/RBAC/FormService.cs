@@ -31,6 +31,7 @@ public class FormService : IFormService
             IconName = req.IconName,
             SortOrder = req.SortOrder,
             IsMenu = req.IsMenu,
+            IsBulk = req.IsBulk,
             IsVisible = req.IsVisible,
             IsActive = req.IsActive,
             FilterConfigJson = req.FilterConfigJson,
@@ -61,6 +62,7 @@ public class FormService : IFormService
                 FormName = x.FormName,
                 ModuleName = x.ModuleName,
                 PageUrl = x.PageUrl,
+                IsBulk = x.IsBulk,
                 IsActive = x.IsActive
             })
             .FirstOrDefaultAsync();
@@ -84,6 +86,7 @@ public class FormService : IFormService
         form.IconName = req.IconName;
         form.SortOrder = req.SortOrder;
         form.IsMenu = req.IsMenu;
+        form.IsBulk = req.IsBulk;
         form.IsVisible = req.IsVisible;
         form.IsActive = req.IsActive;
         form.FilterConfigJson = req.FilterConfigJson;

@@ -18,23 +18,20 @@ public class AuditMiddleware
     private readonly RequestDelegate _next;
     private readonly IAuditLogger _auditLogger;
     private readonly AuditLoggingOptions _options;
-    private readonly ICurrentUserService _currentUser;
     private readonly string _serviceName;
 
     public AuditMiddleware(
         RequestDelegate next,
         IAuditLogger auditLogger,
-        ICurrentUserService currentUser,
         IOptions<AuditLoggingOptions> options)
     {
         _next = next;
         _auditLogger = auditLogger;
-        _currentUser = currentUser;
         _options = options.Value;
         _serviceName = AppDomain.CurrentDomain.FriendlyName;
     }
 
-    public async Task Invoke(HttpContext context)
+    public async Task Invoke(HttpContext context, ICurrentUserService currentUser)
     {
         if (!_options.Enabled || ShouldSkip(context))
         {
@@ -50,8 +47,8 @@ public class AuditMiddleware
         finally
         {
             sw.Stop();
-            var accountId = ResolveAccountId(context.User, _currentUser.AccountId);
-            var userId = ResolveUserId(context.User, _currentUser.UserId);
+            var accountId = ResolveAccountId(context.User, currentUser.AccountId);
+            var userId = ResolveUserId(context.User, currentUser.UserId);
 
             var log = new AuditLog
             {

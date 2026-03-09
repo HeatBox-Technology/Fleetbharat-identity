@@ -28,4 +28,5 @@ public class BillingPlan : IAccountEntity
     public bool IsDeleted { get; set; }
 
     public List<PlanFeature> Features { get; set; } = new();
+    public List<PlanSolution> Solutions { get; set; } = new();
 }

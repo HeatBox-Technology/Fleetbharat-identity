@@ -35,10 +35,34 @@ public class FileStorageService : IFileStorageService
 
     public async Task<string> SaveWhiteLabelLogoAsync(int accountId, IFormFile file)
     {
-        var allowed = new[] { "image/png" };
+        return await SavePrimaryLogoAsync(accountId, file);
+    }
+
+    public Task<string> SavePrimaryLogoAsync(int accountId, IFormFile file) =>
+        SaveWhiteLabelVariantAsync(accountId, "primary", file);
+
+    public Task<string> SaveAppLogoAsync(int accountId, IFormFile file) =>
+        SaveWhiteLabelVariantAsync(accountId, "app", file);
+
+    public Task<string> SaveMobileLogoAsync(int accountId, IFormFile file) =>
+        SaveWhiteLabelVariantAsync(accountId, "mobile", file);
+
+    public Task<string> SaveFaviconAsync(int accountId, IFormFile file) =>
+        SaveWhiteLabelVariantAsync(accountId, "favicon", file);
+
+    public Task<string> SaveDarkLogoAsync(int accountId, IFormFile file) =>
+        SaveWhiteLabelVariantAsync(accountId, "dark", file);
+
+    public Task<string> SaveLightLogoAsync(int accountId, IFormFile file) =>
+        SaveWhiteLabelVariantAsync(accountId, "light", file);
+
+    private async Task<string> SaveWhiteLabelVariantAsync(int accountId, string variant, IFormFile file)
+    {
+        var allowed = new[] { "image/jpeg", "image/jpg", "image/png" };
         ValidateFile(file, allowed);
 
-        var relativePath = Path.Combine("uploads", "whitelabel", $"{accountId}.png");
+        var extension = file.ContentType.Contains("png", StringComparison.OrdinalIgnoreCase) ? "png" : "jpg";
+        var relativePath = Path.Combine("storage", "whitelabel", accountId.ToString(), variant, $"{accountId}.{extension}");
         var physicalPath = Path.Combine(_env.ContentRootPath, relativePath);
 
         var dir = Path.GetDirectoryName(physicalPath)!;
@@ -62,4 +86,3 @@ public class FileStorageService : IFileStorageService
             throw new InvalidOperationException("File size must be less than 2MB");
     }
 }
-

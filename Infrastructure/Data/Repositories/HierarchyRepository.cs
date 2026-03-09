@@ -81,6 +81,7 @@ public class HierarchyRepository : IHierarchyRepository
                     FormName = x.FormName,
                     ModuleName = x.ModuleName,
                     PageUrl = x.PageUrl,
+                    IsBulk = x.IsBulk,
                     IsActive = x.IsActive
                 })
                 .ToListAsync();
@@ -108,6 +109,7 @@ public class HierarchyRepository : IHierarchyRepository
                 FormName = x.FormName,
                 ModuleName = x.ModuleName,
                 PageUrl = x.PageUrl,
+                IsBulk = x.IsBulk,
                 IsActive = x.IsActive
             })
             .ToListAsync();
@@ -155,4 +157,3 @@ public class HierarchyRepository : IHierarchyRepository
         }
     }
 }
-

@@ -9,6 +9,18 @@ public class mst_white_label : IAccountEntity
     public string? LogoPath { get; set; }
     public string CustomEntryFqdn { get; set; } = "";    // portal.partner.com
     public string? LogoUrl { get; set; }                 // uploaded image url (S3/local)
+    public string? PrimaryLogoPath { get; set; }
+    public string? PrimaryLogoUrl { get; set; }
+    public string? AppLogoPath { get; set; }
+    public string? AppLogoUrl { get; set; }
+    public string? MobileLogoPath { get; set; }
+    public string? MobileLogoUrl { get; set; }
+    public string? FaviconPath { get; set; }
+    public string? FaviconUrl { get; set; }
+    public string? LogoDarkPath { get; set; }
+    public string? LogoDarkUrl { get; set; }
+    public string? LogoLightPath { get; set; }
+    public string? LogoLightUrl { get; set; }
     public string PrimaryColorHex { get; set; } = "#843811";
     public string? SecondaryColorHex { get; set; } = null;
     public bool IsActive { get; set; } = true;

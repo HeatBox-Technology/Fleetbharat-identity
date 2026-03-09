@@ -20,6 +20,7 @@ public class CreatePlanDto
     public decimal DiscountPercentage { get; set; }
     public decimal RecurringPlatformFee { get; set; }
     public decimal RecurringAmcFee { get; set; }
+    public List<int> SolutionIds { get; set; } = new();
     public int? CreatedBy { get; set; }
     public int? UpdatedBy { get; set; }
     public DateTime CreatedDate { get; set; }
@@ -50,6 +51,8 @@ public class PlanResponseDto
     public decimal DiscountPercentage { get; set; }
     public decimal RecurringPlatformFee { get; set; }
     public decimal RecurringAmcFee { get; set; }
+    public List<int> SolutionIds { get; set; } = new();
+    public List<string> SolutionNames { get; set; } = new();
     public int? CreatedBy { get; set; }
     public int? UpdatedBy { get; set; }
     public DateTime CreatedDate { get; set; }

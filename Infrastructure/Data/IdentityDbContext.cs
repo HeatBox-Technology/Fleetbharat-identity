@@ -85,6 +85,7 @@ public class IdentityDbContext : DbContext
        public DbSet<external_sync_dead_letter> external_sync_dead_letters { get; set; }
        public DbSet<BillingPlan> BillingPlans { get; set; }
        public DbSet<PlanFeature> PlanFeatures { get; set; }
+       public DbSet<PlanSolution> PlanSolutions { get; set; }
        public DbSet<AccountSubscription> AccountSubscriptions { get; set; }
        public DbSet<UsageRecord> UsageRecords { get; set; }
        public DbSet<BillingInvoice> BillingInvoices { get; set; }
@@ -220,6 +221,19 @@ public class IdentityDbContext : DbContext
 
                      entity.Property(x => x.LogoUrl)
                      .HasMaxLength(500);
+
+                     entity.Property(x => x.PrimaryLogoPath).HasMaxLength(500);
+                     entity.Property(x => x.PrimaryLogoUrl).HasMaxLength(500);
+                     entity.Property(x => x.AppLogoPath).HasMaxLength(500);
+                     entity.Property(x => x.AppLogoUrl).HasMaxLength(500);
+                     entity.Property(x => x.MobileLogoPath).HasMaxLength(500);
+                     entity.Property(x => x.MobileLogoUrl).HasMaxLength(500);
+                     entity.Property(x => x.FaviconPath).HasMaxLength(500);
+                     entity.Property(x => x.FaviconUrl).HasMaxLength(500);
+                     entity.Property(x => x.LogoDarkPath).HasMaxLength(500);
+                     entity.Property(x => x.LogoDarkUrl).HasMaxLength(500);
+                     entity.Property(x => x.LogoLightPath).HasMaxLength(500);
+                     entity.Property(x => x.LogoLightUrl).HasMaxLength(500);
 
                      entity.Property(x => x.PrimaryColorHex)
                      .HasMaxLength(10)
@@ -603,6 +617,24 @@ public class IdentityDbContext : DbContext
                            .WithMany(x => x.Features)
                            .HasForeignKey(x => x.PlanId)
                            .OnDelete(DeleteBehavior.Cascade);
+              });
+
+              modelBuilder.Entity<PlanSolution>(entity =>
+              {
+                     entity.ToTable("billing_plan_solution");
+                     entity.HasKey(x => x.Id);
+                     entity.HasIndex(x => new { x.PlanId, x.SolutionId }).IsUnique();
+                     entity.HasIndex(x => new { x.AccountId, x.PlanId });
+
+                     entity.HasOne(x => x.Plan)
+                           .WithMany(x => x.Solutions)
+                           .HasForeignKey(x => x.PlanId)
+                           .OnDelete(DeleteBehavior.Cascade);
+
+                     entity.HasOne(x => x.Solution)
+                           .WithMany()
+                           .HasForeignKey(x => x.SolutionId)
+                           .OnDelete(DeleteBehavior.Restrict);
               });
 
               modelBuilder.Entity<AccountSubscription>(entity =>

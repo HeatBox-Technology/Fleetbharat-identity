@@ -21,7 +21,7 @@ public class BillingPlanService : IBillingPlanService
         skip = Math.Max(0, skip);
         take = Math.Clamp(take, 1, 200);
 
-        return await _repo.Query<BillingPlan>()
+        var items = await _repo.Query<BillingPlan>()
             .AsNoTracking()
             .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => !x.IsDeleted)
@@ -54,11 +54,47 @@ public class BillingPlanService : IBillingPlanService
                 UpdatedDate = x.UpdatedDate
             })
             .ToListAsync(ct);
+
+        if (!items.Any())
+        {
+            return items;
+        }
+
+        var planIds = items.Select(x => x.Id).ToList();
+
+        var mappings = await _repo.Query<PlanSolution>()
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => planIds.Contains(x.PlanId))
+            .Select(x => new { x.PlanId, x.SolutionId })
+            .ToListAsync(ct);
+
+        var solutionIds = mappings.Select(x => x.SolutionId).Distinct().ToList();
+
+        var solutionNames = await _repo.Query<SolutionMaster>()
+            .AsNoTracking()
+            .Where(x => solutionIds.Contains(x.Id))
+            .Select(x => new { x.Id, x.Name })
+            .ToDictionaryAsync(x => x.Id, x => x.Name, ct);
+
+        foreach (var item in items)
+        {
+            var ids = mappings
+                .Where(x => x.PlanId == item.Id)
+                .Select(x => x.SolutionId)
+                .Distinct()
+                .ToList();
+
+            item.SolutionIds = ids;
+            item.SolutionNames = ids.Where(solutionNames.ContainsKey).Select(id => solutionNames[id]).ToList();
+        }
+
+        return items;
     }
 
     public async Task<PlanResponseDto?> GetPlanByIdAsync(int id, CancellationToken ct = default)
     {
-        return await _repo.Query<BillingPlan>()
+        var item = await _repo.Query<BillingPlan>()
             .AsNoTracking()
             .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => !x.IsDeleted && x.Id == id)
@@ -88,12 +124,36 @@ public class BillingPlanService : IBillingPlanService
                 UpdatedDate = x.UpdatedDate
             })
             .FirstOrDefaultAsync(ct);
+
+        if (item == null)
+        {
+            return null;
+        }
+
+        var solutionIds = await _repo.Query<PlanSolution>()
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => x.PlanId == id)
+            .Select(x => x.SolutionId)
+            .Distinct()
+            .ToListAsync(ct);
+
+        item.SolutionIds = solutionIds;
+
+        item.SolutionNames = await _repo.Query<SolutionMaster>()
+            .AsNoTracking()
+            .Where(x => solutionIds.Contains(x.Id))
+            .Select(x => x.Name)
+            .ToListAsync(ct);
+
+        return item;
     }
 
     public async Task<int> CreatePlanAsync(CreatePlanDto dto, CancellationToken ct = default)
     {
         var actor = _currentUser.AccountId > 0 ? _currentUser.AccountId : (int?)null;
         var accountId = ResolveAccount(dto.AccountId);
+        var solutionIds = await ValidateAndNormalizeSolutionIdsAsync(dto.SolutionIds, ct);
 
         var entity = new BillingPlan
         {
@@ -122,6 +182,22 @@ public class BillingPlanService : IBillingPlanService
 
         await _repo.AddAsync(entity, ct);
         await _repo.SaveChangesAsync(ct);
+
+        var now = DateTime.UtcNow;
+        foreach (var solutionId in solutionIds)
+        {
+            await _repo.AddAsync(new PlanSolution
+            {
+                PlanId = entity.Id,
+                SolutionId = solutionId,
+                AccountId = accountId,
+                CreatedDate = now,
+                UpdatedDate = now
+            }, ct);
+        }
+
+        await _repo.SaveChangesAsync(ct);
+
         return entity.Id;
     }
 
@@ -135,6 +211,8 @@ public class BillingPlanService : IBillingPlanService
         {
             return false;
         }
+
+        var solutionIds = await ValidateAndNormalizeSolutionIdsAsync(dto.SolutionIds, ct);
 
         entity.PlanName = dto.PlanName.Trim();
         entity.Description = dto.Description;
@@ -154,6 +232,28 @@ public class BillingPlanService : IBillingPlanService
         entity.RecurringAmcFee = dto.RecurringAmcFee;
         entity.UpdatedBy = _currentUser.AccountId > 0 ? _currentUser.AccountId : null;
         entity.UpdatedDate = DateTime.UtcNow;
+
+        var existingSolutions = await _repo.Query<PlanSolution>()
+            .Where(x => x.PlanId == id && x.AccountId == entity.AccountId)
+            .ToListAsync(ct);
+
+        foreach (var row in existingSolutions)
+        {
+            _repo.Remove(row);
+        }
+
+        var now = DateTime.UtcNow;
+        foreach (var solutionId in solutionIds)
+        {
+            await _repo.AddAsync(new PlanSolution
+            {
+                PlanId = id,
+                SolutionId = solutionId,
+                AccountId = entity.AccountId,
+                CreatedDate = now,
+                UpdatedDate = now
+            }, ct);
+        }
 
         await _repo.SaveChangesAsync(ct);
         return true;
@@ -227,5 +327,35 @@ public class BillingPlanService : IBillingPlanService
         }
 
         return _currentUser.AccountId;
+    }
+
+    private async Task<List<int>> ValidateAndNormalizeSolutionIdsAsync(List<int>? rawSolutionIds, CancellationToken ct)
+    {
+        rawSolutionIds ??= new List<int>();
+
+        var solutionIds = rawSolutionIds.Where(x => x > 0).ToList();
+
+        if (solutionIds.Count != solutionIds.Distinct().Count())
+        {
+            throw new InvalidOperationException("Duplicate SolutionIds are not allowed.");
+        }
+
+        if (!solutionIds.Any())
+        {
+            return solutionIds;
+        }
+
+        var existingSolutionIds = await _repo.Query<SolutionMaster>()
+            .AsNoTracking()
+            .Where(x => solutionIds.Contains(x.Id) && x.IsActive)
+            .Select(x => x.Id)
+            .ToListAsync(ct);
+
+        if (existingSolutionIds.Count != solutionIds.Count)
+        {
+            throw new InvalidOperationException("One or more SolutionIds are invalid.");
+        }
+
+        return solutionIds;
     }
 }

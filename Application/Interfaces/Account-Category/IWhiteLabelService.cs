@@ -17,4 +17,5 @@ public interface IWhiteLabelService
         bool? isActive);
 
     Task<WhiteLabelLogoUploadResponseDto> UploadLogoAsync(int accountId, IFormFile file);
+    Task<WhiteLabelLogoUploadResponseDto> UploadLogosAsync(WhiteLabelLogoUploadRequest req);
 }

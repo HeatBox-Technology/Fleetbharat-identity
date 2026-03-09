@@ -20,6 +20,7 @@ public class mst_form
     public int? SortOrder { get; set; }
 
     public bool IsMenu { get; set; }
+    public bool IsBulk { get; set; }
 
     public bool IsActive { get; set; }
 

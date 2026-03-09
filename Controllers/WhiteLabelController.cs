@@ -81,4 +81,12 @@ public class WhiteLabelController : ControllerBase
         var data = await _service.UploadLogoAsync(accountId, file);
         return Ok(ApiResponse<object>.Ok(data, "Logo uploaded", 200));
     }
+
+    [HttpPost("logos")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadLogos([FromForm] WhiteLabelLogoUploadRequest req)
+    {
+        var data = await _service.UploadLogosAsync(req);
+        return Ok(ApiResponse<object>.Ok(data, "Logos uploaded", 200));
+    }
 }

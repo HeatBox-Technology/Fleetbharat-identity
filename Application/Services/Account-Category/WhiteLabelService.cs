@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -7,6 +8,14 @@ using Microsoft.EntityFrameworkCore;
 
 public class WhiteLabelService : IWhiteLabelService
 {
+    private const long MaxLogoFileSizeBytes = 2 * 1024 * 1024; // 2 MB
+    private static readonly HashSet<string> AllowedLogoContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/png",
+        "image/jpg",
+        "image/jpeg"
+    };
+
     private readonly IdentityDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly IFileStorageService _fileStorage;
@@ -111,6 +120,18 @@ public class WhiteLabelService : IWhiteLabelService
                 LogoUrl = wl.LogoUrl,
                 LogoName = wl.LogoName,
                 LogoPath = wl.LogoPath,
+                PrimaryLogoPath = wl.PrimaryLogoPath,
+                PrimaryLogoUrl = wl.PrimaryLogoUrl,
+                AppLogoPath = wl.AppLogoPath,
+                AppLogoUrl = wl.AppLogoUrl,
+                MobileLogoPath = wl.MobileLogoPath,
+                MobileLogoUrl = wl.MobileLogoUrl,
+                FaviconPath = wl.FaviconPath,
+                FaviconUrl = wl.FaviconUrl,
+                LogoDarkPath = wl.LogoDarkPath,
+                LogoDarkUrl = wl.LogoDarkUrl,
+                LogoLightPath = wl.LogoLightPath,
+                LogoLightUrl = wl.LogoLightUrl,
                 PrimaryColorHex = wl.PrimaryColorHex,
                 SecondaryColorHex = wl.SecondaryColorHex,
 
@@ -138,6 +159,18 @@ public class WhiteLabelService : IWhiteLabelService
                 LogoUrl = wl.LogoUrl,
                 LogoName = wl.LogoName,
                 LogoPath = wl.LogoPath,
+                PrimaryLogoPath = wl.PrimaryLogoPath,
+                PrimaryLogoUrl = wl.PrimaryLogoUrl,
+                AppLogoPath = wl.AppLogoPath,
+                AppLogoUrl = wl.AppLogoUrl,
+                MobileLogoPath = wl.MobileLogoPath,
+                MobileLogoUrl = wl.MobileLogoUrl,
+                FaviconPath = wl.FaviconPath,
+                FaviconUrl = wl.FaviconUrl,
+                LogoDarkPath = wl.LogoDarkPath,
+                LogoDarkUrl = wl.LogoDarkUrl,
+                LogoLightPath = wl.LogoLightPath,
+                LogoLightUrl = wl.LogoLightUrl,
                 PrimaryColorHex = wl.PrimaryColorHex,
                 SecondaryColorHex = wl.SecondaryColorHex,
 
@@ -190,6 +223,18 @@ public class WhiteLabelService : IWhiteLabelService
                 LogoUrl = x.wl.LogoUrl,
                 LogoName = x.wl.LogoName,
                 LogoPath = x.wl.LogoPath,
+                PrimaryLogoPath = x.wl.PrimaryLogoPath,
+                PrimaryLogoUrl = x.wl.PrimaryLogoUrl,
+                AppLogoPath = x.wl.AppLogoPath,
+                AppLogoUrl = x.wl.AppLogoUrl,
+                MobileLogoPath = x.wl.MobileLogoPath,
+                MobileLogoUrl = x.wl.MobileLogoUrl,
+                FaviconPath = x.wl.FaviconPath,
+                FaviconUrl = x.wl.FaviconUrl,
+                LogoDarkPath = x.wl.LogoDarkPath,
+                LogoDarkUrl = x.wl.LogoDarkUrl,
+                LogoLightPath = x.wl.LogoLightPath,
+                LogoLightUrl = x.wl.LogoLightUrl,
                 PrimaryColorHex = x.wl.PrimaryColorHex,
                 SecondaryColorHex = x.wl.SecondaryColorHex,
                 IsActive = x.wl.IsActive,
@@ -209,22 +254,34 @@ public class WhiteLabelService : IWhiteLabelService
 
     public async Task<WhiteLabelLogoUploadResponseDto> UploadLogoAsync(int accountId, IFormFile file)
     {
+        return await UploadLogosAsync(new WhiteLabelLogoUploadRequest
+        {
+            AccountId = accountId,
+            PrimaryLogo = file
+        });
+    }
+
+    public async Task<WhiteLabelLogoUploadResponseDto> UploadLogosAsync(WhiteLabelLogoUploadRequest req)
+    {
+        if (!HasAnyLogo(req))
+            throw new InvalidOperationException("At least one logo file is required.");
+
         var account = await _db.Accounts
             .ApplyAccountHierarchyFilter(_currentUser)
-            .FirstOrDefaultAsync(x => x.AccountId == accountId && !x.IsDeleted);
+            .FirstOrDefaultAsync(x => x.AccountId == req.AccountId && !x.IsDeleted);
 
         if (account == null)
             throw new KeyNotFoundException("Account not found");
 
         var whiteLabel = await _db.WhiteLabels
             .ApplyAccountHierarchyFilter(_currentUser)
-            .FirstOrDefaultAsync(x => x.AccountId == accountId && !x.IsDeleted);
+            .FirstOrDefaultAsync(x => x.AccountId == req.AccountId && !x.IsDeleted);
 
         if (whiteLabel == null)
         {
             whiteLabel = new mst_white_label
             {
-                AccountId = accountId,
+                AccountId = req.AccountId,
                 CustomEntryFqdn = account.PrimaryDomain,
                 BrandName = account.AccountName,
                 IsActive = true,
@@ -235,12 +292,60 @@ public class WhiteLabelService : IWhiteLabelService
             await _db.SaveChangesAsync();
         }
 
-        var logoPath = await _fileStorage.SaveWhiteLabelLogoAsync(accountId, file);
+        if (req.PrimaryLogo != null && req.PrimaryLogo.Length > 0)
+        {
+            ValidateLogoFile(req.PrimaryLogo, "PrimaryLogo", 1024, 1024);
+            var path = await _fileStorage.SavePrimaryLogoAsync(req.AccountId, req.PrimaryLogo);
+            whiteLabel.PrimaryLogoPath = path;
+            whiteLabel.PrimaryLogoUrl = path;
+
+            // Backward compatibility with legacy single-logo fields.
+            whiteLabel.LogoPath = path;
+            whiteLabel.LogoUrl = path;
+            whiteLabel.LogoName = Path.GetFileName(path);
+        }
+
+        if (req.AppLogo != null && req.AppLogo.Length > 0)
+        {
+            ValidateLogoFile(req.AppLogo, "AppLogo", 512, 512);
+            var path = await _fileStorage.SaveAppLogoAsync(req.AccountId, req.AppLogo);
+            whiteLabel.AppLogoPath = path;
+            whiteLabel.AppLogoUrl = path;
+        }
+
+        if (req.MobileLogo != null && req.MobileLogo.Length > 0)
+        {
+            ValidateLogoFile(req.MobileLogo, "MobileLogo", 256, 256);
+            var path = await _fileStorage.SaveMobileLogoAsync(req.AccountId, req.MobileLogo);
+            whiteLabel.MobileLogoPath = path;
+            whiteLabel.MobileLogoUrl = path;
+        }
+
+        if (req.Favicon != null && req.Favicon.Length > 0)
+        {
+            ValidateLogoFile(req.Favicon, "Favicon", 64, 64);
+            var path = await _fileStorage.SaveFaviconAsync(req.AccountId, req.Favicon);
+            whiteLabel.FaviconPath = path;
+            whiteLabel.FaviconUrl = path;
+        }
+
+        if (req.LogoDark != null && req.LogoDark.Length > 0)
+        {
+            ValidateLogoFile(req.LogoDark, "LogoDark");
+            var path = await _fileStorage.SaveDarkLogoAsync(req.AccountId, req.LogoDark);
+            whiteLabel.LogoDarkPath = path;
+            whiteLabel.LogoDarkUrl = path;
+        }
+
+        if (req.LogoLight != null && req.LogoLight.Length > 0)
+        {
+            ValidateLogoFile(req.LogoLight, "LogoLight");
+            var path = await _fileStorage.SaveLightLogoAsync(req.AccountId, req.LogoLight);
+            whiteLabel.LogoLightPath = path;
+            whiteLabel.LogoLightUrl = path;
+        }
 
         whiteLabel.BrandName ??= account.AccountName;
-        whiteLabel.LogoPath = logoPath;
-        whiteLabel.LogoName = $"{accountId}.png";
-        whiteLabel.LogoUrl = logoPath;
         whiteLabel.UpdatedOn = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -248,11 +353,157 @@ public class WhiteLabelService : IWhiteLabelService
         return new WhiteLabelLogoUploadResponseDto
         {
             WhiteLabelId = whiteLabel.WhiteLabelId,
-            AccountId = accountId,
-            BrandName = whiteLabel.BrandName,
-            LogoName = whiteLabel.LogoName,
-            LogoPath = whiteLabel.LogoPath,
-            FileUrl = whiteLabel.LogoPath
+            AccountId = req.AccountId,
+            PrimaryLogoUrl = whiteLabel.PrimaryLogoUrl,
+            AppLogoUrl = whiteLabel.AppLogoUrl,
+            MobileLogoUrl = whiteLabel.MobileLogoUrl,
+            FaviconUrl = whiteLabel.FaviconUrl,
+            LogoDarkUrl = whiteLabel.LogoDarkUrl,
+            LogoLightUrl = whiteLabel.LogoLightUrl
         };
+    }
+
+    private static void ValidateLogoFile(IFormFile file, string logoType, int? recommendedWidth = null, int? recommendedHeight = null)
+    {
+        if (file == null || file.Length == 0)
+            throw new InvalidOperationException($"{logoType} file is required.");
+
+        if (!AllowedLogoContentTypes.Contains(file.ContentType))
+            throw new InvalidOperationException($"{logoType} format is invalid. Allowed formats: PNG, JPG, JPEG.");
+
+        if (file.Length > MaxLogoFileSizeBytes)
+            throw new InvalidOperationException($"{logoType} file size must be 2 MB or less.");
+
+        if (recommendedWidth.HasValue &&
+            recommendedHeight.HasValue &&
+            TryGetImageDimensions(file, out var width, out var height) &&
+            (width != recommendedWidth.Value || height != recommendedHeight.Value))
+        {
+            throw new InvalidOperationException($"{logoType} should be {recommendedWidth.Value}x{recommendedHeight.Value}.");
+        }
+    }
+
+    private static bool HasAnyLogo(WhiteLabelLogoUploadRequest req)
+    {
+        return (req.PrimaryLogo?.Length ?? 0) > 0 ||
+               (req.AppLogo?.Length ?? 0) > 0 ||
+               (req.MobileLogo?.Length ?? 0) > 0 ||
+               (req.Favicon?.Length ?? 0) > 0 ||
+               (req.LogoDark?.Length ?? 0) > 0 ||
+               (req.LogoLight?.Length ?? 0) > 0;
+    }
+
+    private static bool TryGetImageDimensions(IFormFile file, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+
+        try
+        {
+            using var stream = file.OpenReadStream();
+
+            if (stream.Length < 10)
+                return false;
+
+            if (file.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase))
+                return TryReadPngDimensions(stream, out width, out height);
+
+            if (file.ContentType.Equals("image/jpg", StringComparison.OrdinalIgnoreCase) ||
+                file.ContentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase))
+                return TryReadJpegDimensions(stream, out width, out height);
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryReadPngDimensions(Stream stream, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+
+        var header = new byte[24];
+        var bytesRead = stream.Read(header, 0, header.Length);
+
+        if (bytesRead < 24)
+            return false;
+
+        var pngSignature = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 };
+        for (var i = 0; i < pngSignature.Length; i++)
+        {
+            if (header[i] != pngSignature[i])
+                return false;
+        }
+
+        width = ReadInt32BigEndian(header, 16);
+        height = ReadInt32BigEndian(header, 20);
+
+        return width > 0 && height > 0;
+    }
+
+    private static bool TryReadJpegDimensions(Stream stream, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+
+        using var reader = new BinaryReader(stream);
+
+        if (reader.ReadByte() != 0xFF || reader.ReadByte() != 0xD8)
+            return false;
+
+        while (stream.Position < stream.Length)
+        {
+            if (reader.ReadByte() != 0xFF)
+                continue;
+
+            var marker = reader.ReadByte();
+
+            while (marker == 0xFF)
+                marker = reader.ReadByte();
+
+            if (marker == 0xD9 || marker == 0xDA)
+                break;
+
+            var segmentLength = ReadUInt16BigEndian(reader);
+            if (segmentLength < 2)
+                return false;
+
+            if (IsSofMarker(marker))
+            {
+                _ = reader.ReadByte(); // sample precision
+                height = ReadUInt16BigEndian(reader);
+                width = ReadUInt16BigEndian(reader);
+                return width > 0 && height > 0;
+            }
+
+            stream.Seek(segmentLength - 2, SeekOrigin.Current);
+        }
+
+        return false;
+    }
+
+    private static bool IsSofMarker(byte marker)
+    {
+        return marker is 0xC0 or 0xC1 or 0xC2 or 0xC3 or 0xC5 or 0xC6 or 0xC7 or 0xC9 or 0xCA or 0xCB or 0xCD or 0xCE or 0xCF;
+    }
+
+    private static int ReadInt32BigEndian(byte[] bytes, int index)
+    {
+        return (bytes[index] << 24) |
+               (bytes[index + 1] << 16) |
+               (bytes[index + 2] << 8) |
+               bytes[index + 3];
+    }
+
+    private static ushort ReadUInt16BigEndian(BinaryReader reader)
+    {
+        var bytes = reader.ReadBytes(2);
+        if (bytes.Length < 2)
+            return 0;
+
+        return (ushort)((bytes[0] << 8) | bytes[1]);
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
 
 public class CreateWhiteLabelRequest
 {
@@ -46,6 +47,18 @@ public class WhiteLabelResponseDto
     public string? LogoUrl { get; set; }
     public string? LogoName { get; set; }
     public string? LogoPath { get; set; }
+    public string? PrimaryLogoPath { get; set; }
+    public string? PrimaryLogoUrl { get; set; }
+    public string? AppLogoPath { get; set; }
+    public string? AppLogoUrl { get; set; }
+    public string? MobileLogoPath { get; set; }
+    public string? MobileLogoUrl { get; set; }
+    public string? FaviconPath { get; set; }
+    public string? FaviconUrl { get; set; }
+    public string? LogoDarkPath { get; set; }
+    public string? LogoDarkUrl { get; set; }
+    public string? LogoLightPath { get; set; }
+    public string? LogoLightUrl { get; set; }
     public string PrimaryColorHex { get; set; } = "";
     public string? SecondaryColorHex { get; set; } = null;
 
@@ -55,12 +68,27 @@ public class WhiteLabelResponseDto
     public DateTime? UpdatedOn { get; set; }
 }
 
+public class WhiteLabelLogoUploadRequest
+{
+    [Required]
+    public int AccountId { get; set; }
+
+    public IFormFile? PrimaryLogo { get; set; }
+    public IFormFile? AppLogo { get; set; }
+    public IFormFile? MobileLogo { get; set; }
+    public IFormFile? Favicon { get; set; }
+    public IFormFile? LogoDark { get; set; }
+    public IFormFile? LogoLight { get; set; }
+}
+
 public class WhiteLabelLogoUploadResponseDto
 {
     public int WhiteLabelId { get; set; }
     public int AccountId { get; set; }
-    public string? BrandName { get; set; }
-    public string? LogoName { get; set; }
-    public string? LogoPath { get; set; }
-    public string? FileUrl { get; set; }
+    public string? PrimaryLogoUrl { get; set; }
+    public string? AppLogoUrl { get; set; }
+    public string? MobileLogoUrl { get; set; }
+    public string? FaviconUrl { get; set; }
+    public string? LogoDarkUrl { get; set; }
+    public string? LogoLightUrl { get; set; }
 }

@@ -8,6 +8,7 @@ public record CreateFormRequest(
     string? IconName,
     int SortOrder,
     bool IsMenu,
+    bool IsBulk,
     bool IsVisible,
     bool IsActive,
     int? FormModuleId = null,
@@ -22,6 +23,7 @@ public record UpdateFormRequest(
     string? IconName,
     int SortOrder,
     bool IsMenu,
+    bool IsBulk,
     bool IsVisible,
     bool IsActive,
     int? FormModuleId = null,
@@ -36,5 +38,6 @@ public class FormResponseDto
     public string FormName { get; set; } = "";
     public string ModuleName { get; set; } = "";
     public string PageUrl { get; set; } = "";
+    public bool IsBulk { get; set; }
     public bool IsActive { get; set; }
 }
