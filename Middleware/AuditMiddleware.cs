@@ -50,11 +50,13 @@ public class AuditMiddleware
         finally
         {
             sw.Stop();
+            var accountId = ResolveAccountId(context.User, _currentUser.AccountId);
+            var userId = ResolveUserId(context.User, _currentUser.UserId);
 
             var log = new AuditLog
             {
-                AccountId = _currentUser.AccountId > 0 ? _currentUser.AccountId : null,
-                UserId = _currentUser.UserId != Guid.Empty ? _currentUser.UserId : null,
+                AccountId = accountId,
+                UserId = userId,
                 Email = GetEmail(context),
                 ServiceName = _serviceName,
                 Module = context.GetRouteValue("controller")?.ToString(),
@@ -71,6 +73,38 @@ public class AuditMiddleware
 
             _ = _auditLogger.LogAsync(log, context.RequestAborted);
         }
+    }
+
+    private static int? ResolveAccountId(ClaimsPrincipal? user, int fallbackAccountId)
+    {
+        var claimValue =
+            user?.FindFirstValue("AccountId") ??
+            user?.FindFirstValue("accountId") ??
+            user?.FindFirstValue("account_id") ??
+            user?.FindFirstValue("tenant_id");
+
+        if (int.TryParse(claimValue, out var parsed) && parsed > 0)
+        {
+            return parsed;
+        }
+
+        return fallbackAccountId > 0 ? fallbackAccountId : null;
+    }
+
+    private static Guid? ResolveUserId(ClaimsPrincipal? user, Guid fallbackUserId)
+    {
+        var claimValue =
+            user?.FindFirstValue("UserId") ??
+            user?.FindFirstValue("userId") ??
+            user?.FindFirstValue(ClaimTypes.NameIdentifier) ??
+            user?.FindFirstValue("sub");
+
+        if (Guid.TryParse(claimValue, out var parsed))
+        {
+            return parsed;
+        }
+
+        return fallbackUserId != Guid.Empty ? fallbackUserId : null;
     }
 
     private bool ShouldSkip(HttpContext context)

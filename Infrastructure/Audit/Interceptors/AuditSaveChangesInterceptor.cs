@@ -49,14 +49,17 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
             return base.SavingChangesAsync(eventData, result, cancellationToken);
 
         var email = GetEmail();
+        var user = _httpContextAccessor.HttpContext?.User;
+        var accountId = ResolveAccountId(user, _currentUser.AccountId);
+        var userId = ResolveUserId(user, _currentUser.UserId);
         var now = DateTime.UtcNow;
 
         foreach (var entry in entries)
         {
             var log = new AuditLog
             {
-                AccountId = _currentUser.AccountId > 0 ? _currentUser.AccountId : null,
-                UserId = _currentUser.UserId != Guid.Empty ? _currentUser.UserId : null,
+                AccountId = accountId,
+                UserId = userId,
                 Email = email,
                 ServiceName = _serviceName,
                 Module = entry.Metadata.ClrType.Name,
@@ -108,5 +111,37 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
         return user.FindFirstValue(ClaimTypes.Email)
                ?? user.FindFirstValue("Email")
                ?? user.FindFirstValue("email");
+    }
+
+    private static int? ResolveAccountId(ClaimsPrincipal? user, int fallbackAccountId)
+    {
+        var claimValue =
+            user?.FindFirstValue("AccountId") ??
+            user?.FindFirstValue("accountId") ??
+            user?.FindFirstValue("account_id") ??
+            user?.FindFirstValue("tenant_id");
+
+        if (int.TryParse(claimValue, out var parsed) && parsed > 0)
+        {
+            return parsed;
+        }
+
+        return fallbackAccountId > 0 ? fallbackAccountId : null;
+    }
+
+    private static Guid? ResolveUserId(ClaimsPrincipal? user, Guid fallbackUserId)
+    {
+        var claimValue =
+            user?.FindFirstValue("UserId") ??
+            user?.FindFirstValue("userId") ??
+            user?.FindFirstValue(ClaimTypes.NameIdentifier) ??
+            user?.FindFirstValue("sub");
+
+        if (Guid.TryParse(claimValue, out var parsed))
+        {
+            return parsed;
+        }
+
+        return fallbackUserId != Guid.Empty ? fallbackUserId : null;
     }
 }
