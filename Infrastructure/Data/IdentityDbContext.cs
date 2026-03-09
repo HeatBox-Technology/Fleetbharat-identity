@@ -83,6 +83,11 @@ public class IdentityDbContext : DbContext
        public DbSet<external_sync_config> external_sync_configs { get; set; }
        public DbSet<external_sync_queue> external_sync_queues { get; set; }
        public DbSet<external_sync_dead_letter> external_sync_dead_letters { get; set; }
+       public DbSet<BillingPlan> BillingPlans { get; set; }
+       public DbSet<PlanFeature> PlanFeatures { get; set; }
+       public DbSet<AccountSubscription> AccountSubscriptions { get; set; }
+       public DbSet<UsageRecord> UsageRecords { get; set; }
+       public DbSet<BillingInvoice> BillingInvoices { get; set; }
 
 
 
@@ -569,6 +574,80 @@ public class IdentityDbContext : DbContext
                      entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
                      entity.Property(x => x.MovedToDLQAt).HasColumnName("moved_to_dlq_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
                      entity.HasIndex(x => x.ModuleName);
+              });
+
+              modelBuilder.Entity<BillingPlan>(entity =>
+              {
+                     entity.ToTable("billing_plan");
+                     entity.HasKey(x => x.Id);
+                     entity.Property(x => x.PlanName).HasMaxLength(200).IsRequired();
+                     entity.Property(x => x.Description).HasMaxLength(1000);
+                     entity.Property(x => x.PricingModel).HasMaxLength(30).IsRequired();
+                     entity.Property(x => x.PlanStatus).HasMaxLength(20).IsRequired();
+                     entity.Property(x => x.BaseRate).HasColumnType("numeric(18,2)");
+                     entity.Property(x => x.LicensePricePerUnit).HasColumnType("numeric(18,2)");
+                     entity.Property(x => x.DiscountPercentage).HasColumnType("numeric(5,2)");
+                     entity.Property(x => x.RecurringPlatformFee).HasColumnType("numeric(18,2)");
+                     entity.Property(x => x.RecurringAmcFee).HasColumnType("numeric(18,2)");
+                     entity.HasIndex(x => new { x.AccountId, x.PlanStatus });
+                     entity.HasIndex(x => x.CreatedDate);
+              });
+
+              modelBuilder.Entity<PlanFeature>(entity =>
+              {
+                     entity.ToTable("billing_plan_feature");
+                     entity.HasKey(x => x.Id);
+                     entity.Property(x => x.FeatureName).HasMaxLength(200).IsRequired();
+                     entity.HasIndex(x => new { x.AccountId, x.PlanId });
+                     entity.HasOne(x => x.Plan)
+                           .WithMany(x => x.Features)
+                           .HasForeignKey(x => x.PlanId)
+                           .OnDelete(DeleteBehavior.Cascade);
+              });
+
+              modelBuilder.Entity<AccountSubscription>(entity =>
+              {
+                     entity.ToTable("billing_account_subscription");
+                     entity.HasKey(x => x.Id);
+                     entity.Property(x => x.Status).HasMaxLength(30).IsRequired();
+                     entity.HasIndex(x => new { x.AccountId, x.Status });
+                     entity.HasIndex(x => x.NextBillingDate);
+                     entity.HasOne(x => x.Plan)
+                           .WithMany()
+                           .HasForeignKey(x => x.PlanId)
+                           .OnDelete(DeleteBehavior.Restrict);
+              });
+
+              modelBuilder.Entity<UsageRecord>(entity =>
+              {
+                     entity.ToTable("billing_usage_record");
+                     entity.HasKey(x => x.Id);
+                     entity.Property(x => x.UsageType).HasMaxLength(100).IsRequired();
+                     entity.Property(x => x.UnitsConsumed).HasColumnType("numeric(18,4)");
+                     entity.HasIndex(x => new { x.AccountId, x.UsageDate });
+                     entity.HasIndex(x => x.SubscriptionId);
+                     entity.HasOne(x => x.Subscription)
+                           .WithMany()
+                           .HasForeignKey(x => x.SubscriptionId)
+                           .OnDelete(DeleteBehavior.Cascade);
+              });
+
+              modelBuilder.Entity<BillingInvoice>(entity =>
+              {
+                     entity.ToTable("billing_invoice");
+                     entity.HasKey(x => x.Id);
+                     entity.Property(x => x.InvoiceNumber).HasMaxLength(80).IsRequired();
+                     entity.Property(x => x.Amount).HasColumnType("numeric(18,2)");
+                     entity.Property(x => x.Currency).HasMaxLength(20).IsRequired();
+                     entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+                     entity.HasIndex(x => x.InvoiceNumber).IsUnique();
+                     entity.HasIndex(x => new { x.AccountId, x.Status });
+                     entity.HasIndex(x => new { x.SubscriptionId, x.InvoiceDate });
+                     entity.HasIndex(x => x.NextRetryDate);
+                     entity.HasOne(x => x.Subscription)
+                           .WithMany()
+                           .HasForeignKey(x => x.SubscriptionId)
+                           .OnDelete(DeleteBehavior.Restrict);
               });
 
               ApplyAccountHierarchyQueryFilters(modelBuilder);
