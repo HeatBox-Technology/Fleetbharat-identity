@@ -294,7 +294,7 @@ public class WhiteLabelService : IWhiteLabelService
 
         if (req.PrimaryLogo != null && req.PrimaryLogo.Length > 0)
         {
-            ValidateLogoFile(req.PrimaryLogo, "PrimaryLogo", 1024, 1024);
+            ValidateLogoFile(req.PrimaryLogo, "PrimaryLogo");
             var path = await _fileStorage.SavePrimaryLogoAsync(req.AccountId, req.PrimaryLogo);
             whiteLabel.PrimaryLogoPath = path;
             whiteLabel.PrimaryLogoUrl = path;
@@ -307,7 +307,7 @@ public class WhiteLabelService : IWhiteLabelService
 
         if (req.AppLogo != null && req.AppLogo.Length > 0)
         {
-            ValidateLogoFile(req.AppLogo, "AppLogo", 512, 512);
+            ValidateLogoFile(req.AppLogo, "AppLogo");
             var path = await _fileStorage.SaveAppLogoAsync(req.AccountId, req.AppLogo);
             whiteLabel.AppLogoPath = path;
             whiteLabel.AppLogoUrl = path;
@@ -315,7 +315,7 @@ public class WhiteLabelService : IWhiteLabelService
 
         if (req.MobileLogo != null && req.MobileLogo.Length > 0)
         {
-            ValidateLogoFile(req.MobileLogo, "MobileLogo", 256, 256);
+            ValidateLogoFile(req.MobileLogo, "MobileLogo");
             var path = await _fileStorage.SaveMobileLogoAsync(req.AccountId, req.MobileLogo);
             whiteLabel.MobileLogoPath = path;
             whiteLabel.MobileLogoUrl = path;
@@ -323,7 +323,7 @@ public class WhiteLabelService : IWhiteLabelService
 
         if (req.Favicon != null && req.Favicon.Length > 0)
         {
-            ValidateLogoFile(req.Favicon, "Favicon", 64, 64);
+            ValidateLogoFile(req.Favicon, "Favicon");
             var path = await _fileStorage.SaveFaviconAsync(req.AccountId, req.Favicon);
             whiteLabel.FaviconPath = path;
             whiteLabel.FaviconUrl = path;
@@ -363,7 +363,7 @@ public class WhiteLabelService : IWhiteLabelService
         };
     }
 
-    private static void ValidateLogoFile(IFormFile file, string logoType, int? recommendedWidth = null, int? recommendedHeight = null)
+    private static void ValidateLogoFile(IFormFile file, string logoType)
     {
         if (file == null || file.Length == 0)
             throw new InvalidOperationException($"{logoType} file is required.");
@@ -373,14 +373,6 @@ public class WhiteLabelService : IWhiteLabelService
 
         if (file.Length > MaxLogoFileSizeBytes)
             throw new InvalidOperationException($"{logoType} file size must be 2 MB or less.");
-
-        if (recommendedWidth.HasValue &&
-            recommendedHeight.HasValue &&
-            TryGetImageDimensions(file, out var width, out var height) &&
-            (width != recommendedWidth.Value || height != recommendedHeight.Value))
-        {
-            throw new InvalidOperationException($"{logoType} should be {recommendedWidth.Value}x{recommendedHeight.Value}.");
-        }
     }
 
     private static bool HasAnyLogo(WhiteLabelLogoUploadRequest req)
@@ -393,117 +385,4 @@ public class WhiteLabelService : IWhiteLabelService
                (req.LogoLight?.Length ?? 0) > 0;
     }
 
-    private static bool TryGetImageDimensions(IFormFile file, out int width, out int height)
-    {
-        width = 0;
-        height = 0;
-
-        try
-        {
-            using var stream = file.OpenReadStream();
-
-            if (stream.Length < 10)
-                return false;
-
-            if (file.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase))
-                return TryReadPngDimensions(stream, out width, out height);
-
-            if (file.ContentType.Equals("image/jpg", StringComparison.OrdinalIgnoreCase) ||
-                file.ContentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase))
-                return TryReadJpegDimensions(stream, out width, out height);
-
-            return false;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static bool TryReadPngDimensions(Stream stream, out int width, out int height)
-    {
-        width = 0;
-        height = 0;
-
-        var header = new byte[24];
-        var bytesRead = stream.Read(header, 0, header.Length);
-
-        if (bytesRead < 24)
-            return false;
-
-        var pngSignature = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 };
-        for (var i = 0; i < pngSignature.Length; i++)
-        {
-            if (header[i] != pngSignature[i])
-                return false;
-        }
-
-        width = ReadInt32BigEndian(header, 16);
-        height = ReadInt32BigEndian(header, 20);
-
-        return width > 0 && height > 0;
-    }
-
-    private static bool TryReadJpegDimensions(Stream stream, out int width, out int height)
-    {
-        width = 0;
-        height = 0;
-
-        using var reader = new BinaryReader(stream);
-
-        if (reader.ReadByte() != 0xFF || reader.ReadByte() != 0xD8)
-            return false;
-
-        while (stream.Position < stream.Length)
-        {
-            if (reader.ReadByte() != 0xFF)
-                continue;
-
-            var marker = reader.ReadByte();
-
-            while (marker == 0xFF)
-                marker = reader.ReadByte();
-
-            if (marker == 0xD9 || marker == 0xDA)
-                break;
-
-            var segmentLength = ReadUInt16BigEndian(reader);
-            if (segmentLength < 2)
-                return false;
-
-            if (IsSofMarker(marker))
-            {
-                _ = reader.ReadByte(); // sample precision
-                height = ReadUInt16BigEndian(reader);
-                width = ReadUInt16BigEndian(reader);
-                return width > 0 && height > 0;
-            }
-
-            stream.Seek(segmentLength - 2, SeekOrigin.Current);
-        }
-
-        return false;
-    }
-
-    private static bool IsSofMarker(byte marker)
-    {
-        return marker is 0xC0 or 0xC1 or 0xC2 or 0xC3 or 0xC5 or 0xC6 or 0xC7 or 0xC9 or 0xCA or 0xCB or 0xCD or 0xCE or 0xCF;
-    }
-
-    private static int ReadInt32BigEndian(byte[] bytes, int index)
-    {
-        return (bytes[index] << 24) |
-               (bytes[index + 1] << 16) |
-               (bytes[index + 2] << 8) |
-               bytes[index + 3];
-    }
-
-    private static ushort ReadUInt16BigEndian(BinaryReader reader)
-    {
-        var bytes = reader.ReadBytes(2);
-        if (bytes.Length < 2)
-            return 0;
-
-        return (ushort)((bytes[0] << 8) | bytes[1]);
-    }
 }
