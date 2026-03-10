@@ -49,7 +49,7 @@ builder.Services.AddDbContext<IdentityDbContext>((sp, opt) =>
        .AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>()));
 builder.Services.AddHttpClient<IExternalMappingApiService, ExternalMappingApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://92.4.76.230:8083/api/v1/"); // external base url
+    client.BaseAddress = new Uri("http://47.128.76.211:8083/api/v1/"); // external base url
 });
 
 builder.Services.AddVtsServices(builder.Configuration, defaultConnection);
@@ -87,9 +87,6 @@ builder.Services.AddScoped<IHierarchyService, HierarchyService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddSingleton<BulkQueue>();
 builder.Services.AddHostedService<BulkWorker>();
-builder.Services.AddScoped<IBulkService, BulkService>();
-builder.Services.AddScoped<BulkProcessorFactory>();
-builder.Services.AddScoped<IBulkModuleProcessor, GeofenceBulkProcessor>();
 builder.Services.AddSingleton<IBulkUploadQueue, BulkUploadQueue>();
 builder.Services.AddHostedService<BulkUploadWorker>();
 builder.Services.AddScoped<IBulkUploadService, BulkUploadService>();
