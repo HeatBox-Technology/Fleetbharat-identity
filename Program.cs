@@ -85,8 +85,6 @@ builder.Services.AddScoped<ICommonDropdownService, CommonDropdownService>();
 builder.Services.AddScoped<IHierarchyRepository, HierarchyRepository>();
 builder.Services.AddScoped<IHierarchyService, HierarchyService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
-builder.Services.AddSingleton<BulkQueue>();
-builder.Services.AddHostedService<BulkWorker>();
 builder.Services.AddSingleton<IBulkUploadQueue, BulkUploadQueue>();
 builder.Services.AddHostedService<BulkUploadWorker>();
 builder.Services.AddScoped<IBulkUploadService, BulkUploadService>();
