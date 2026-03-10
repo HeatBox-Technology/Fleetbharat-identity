@@ -62,7 +62,7 @@ public class FileStorageService : IFileStorageService
         ValidateFile(file, allowed);
 
         var extension = file.ContentType.Contains("png", StringComparison.OrdinalIgnoreCase) ? "png" : "jpg";
-        var relativePath = Path.Combine("storage", "whitelabel", accountId.ToString(), variant, $"{accountId}.{extension}");
+        var relativePath = Path.Combine("uploads", "whitelabel", accountId.ToString(), variant, $"{accountId}.{extension}");
         var physicalPath = Path.Combine(_env.ContentRootPath, relativePath);
 
         var dir = Path.GetDirectoryName(physicalPath)!;

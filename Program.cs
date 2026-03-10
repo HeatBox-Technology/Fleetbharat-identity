@@ -242,11 +242,18 @@ builder.Services.AddHostedService<RedisGpsSubscriberHostedService>();
 
 var app = builder.Build();
 var uploadsPath = Path.Combine(app.Environment.ContentRootPath, "uploads");
+var storagePath = Path.Combine(app.Environment.ContentRootPath, "storage");
 Directory.CreateDirectory(uploadsPath);
+Directory.CreateDirectory(storagePath);
 app.UseStaticFiles(new StaticFileOptions
 {
     FileProvider = new PhysicalFileProvider(uploadsPath),
     RequestPath = "/uploads"
+});
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(storagePath),
+    RequestPath = "/storage"
 });
 
 //

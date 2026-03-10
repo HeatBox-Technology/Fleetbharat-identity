@@ -10,6 +10,7 @@ public class FormRightResponseDto
     public int FormId { get; set; }
     public string FormCode { get; set; } = "";
     public string FormName { get; set; } = "";
+    public bool IsBulk { get; set; }
 
     public string PageUrl { get; set; } = "";// ✅ count
     public string icon { get; set; } = "";// ✅ count

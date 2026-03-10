@@ -32,13 +32,15 @@ public class SimService : ISimService
         if (exists)
             throw new Exception("ICCID already exists");
 
+        var normalizedNetworkProviderId = await NormalizeAndValidateNetworkProviderIdAsync(dto.NetworkProviderId);
+
         var entity = new mst_sim
         {
             AccountId = dto.AccountId,
             Iccid = dto.Iccid,
             Msisdn = dto.Msisdn,
             Imsi = dto.Imsi,
-            NetworkProviderId = dto.NetworkProviderId,
+            NetworkProviderId = normalizedNetworkProviderId,
             StatusKey = dto.StatusKey,
             ActivatedAt = dto.ActivatedAt,
             ExpiryAt = dto.ExpiryAt,
@@ -62,10 +64,12 @@ public class SimService : ISimService
         if (entity == null)
             throw new Exception("SIM not found");
 
+        var normalizedNetworkProviderId = await NormalizeAndValidateNetworkProviderIdAsync(dto.NetworkProviderId);
+
         entity.Iccid = dto.Iccid;
         entity.Msisdn = dto.Msisdn;
         entity.Imsi = dto.Imsi;
-        entity.NetworkProviderId = dto.NetworkProviderId;
+        entity.NetworkProviderId = normalizedNetworkProviderId;
         entity.StatusKey = dto.StatusKey;
         entity.ActivatedAt = dto.ActivatedAt;
         entity.ExpiryAt = dto.ExpiryAt;
@@ -215,13 +219,39 @@ public class SimService : ISimService
 
     public async Task<List<SimDto>> BulkCreateAsync(List<CreateSimDto> sims)
     {
+        var requestedProviderIds = sims
+            .Select(x => x.NetworkProviderId)
+            .Where(x => x.HasValue && x.Value > 0)
+            .Select(x => x!.Value)
+            .Distinct()
+            .ToList();
+
+        if (requestedProviderIds.Count > 0)
+        {
+            var existingProviderIds = await _db.NetworkProviders
+                .AsNoTracking()
+                .Where(x => requestedProviderIds.Contains(x.Id))
+                .Select(x => x.Id)
+                .ToListAsync();
+
+            var missingProviderIds = requestedProviderIds
+                .Except(existingProviderIds)
+                .OrderBy(x => x)
+                .ToList();
+
+            if (missingProviderIds.Count > 0)
+                throw new Exception($"Invalid NetworkProviderId(s): {string.Join(", ", missingProviderIds)}");
+        }
+
         var entities = sims.Select(dto => new mst_sim
         {
             AccountId = dto.AccountId,
             Iccid = dto.Iccid,
             Msisdn = dto.Msisdn,
             Imsi = dto.Imsi,
-            NetworkProviderId = dto.NetworkProviderId,
+            NetworkProviderId = dto.NetworkProviderId.HasValue && dto.NetworkProviderId.Value > 0
+                ? dto.NetworkProviderId
+                : null,
             StatusKey = dto.StatusKey,
             ActivatedAt = dto.ActivatedAt,
             ExpiryAt = dto.ExpiryAt,
@@ -257,5 +287,20 @@ public class SimService : ISimService
             IsActive = x.IsActive,
             IsDeleted = x.IsDeleted
         };
+    }
+
+    private async Task<int?> NormalizeAndValidateNetworkProviderIdAsync(int? networkProviderId)
+    {
+        if (!networkProviderId.HasValue || networkProviderId.Value <= 0)
+            return null;
+
+        var exists = await _db.NetworkProviders
+            .AsNoTracking()
+            .AnyAsync(x => x.Id == networkProviderId.Value);
+
+        if (!exists)
+            throw new Exception($"Invalid NetworkProviderId: {networkProviderId.Value}");
+
+        return networkProviderId.Value;
     }
 }
