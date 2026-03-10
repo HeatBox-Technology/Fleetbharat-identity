@@ -88,7 +88,7 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
 
         var request = new ExternalVehicleMappingRequest
         {
-            vehicleid = vehicle.Id,
+            VehicleId = vehicle.Id.ToString(),
             VehicleNo = vehicle.VehicleNumber,
             DeviceNo = device.DeviceNo,
             Imei = device.DeviceImeiOrSerial,
@@ -96,13 +96,14 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
             OrgName = account.AccountName,
             OrgId = entity.AccountId
         };
+        var payload = new List<ExternalVehicleMappingRequest> { request };
 
         var success = false;
         string? error = null;
 
         try
         {
-            success = await _externalApi.SendVehicleMappingAsync(request);
+            success = await _externalApi.SendVehicleMappingAsync(payload);
         }
         catch (Exception ex)
         {
@@ -112,7 +113,7 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
         var log = new map_vehicle_device_sync_log
         {
             MappingId = entity.Id,
-            PayloadJson = JsonSerializer.Serialize(request),
+            PayloadJson = JsonSerializer.Serialize(payload),
             IsSynced = success,
             ErrorMessage = error,
             RetryCount = success ? 0 : 1,

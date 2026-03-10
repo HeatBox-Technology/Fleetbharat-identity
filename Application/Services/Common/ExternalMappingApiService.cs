@@ -12,10 +12,8 @@ public class ExternalMappingApiService : IExternalMappingApiService
         _http = http;
     }
 
-    public async Task<bool> SendVehicleMappingAsync(ExternalVehicleMappingRequest request)
+    public async Task<bool> SendVehicleMappingAsync(List<ExternalVehicleMappingRequest> payload)
     {
-        var payload = new List<ExternalVehicleMappingRequest> { request };
-
         var response = await _http.PostAsJsonAsync(
             "/api/v1/mapping/vehicle-mapping",
             payload);
