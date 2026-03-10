@@ -164,6 +164,7 @@ public class AccountHierarchyDto
     public int AccountId { get; set; }
     public string AccountName { get; set; } = "";
     public string AccountCode { get; set; } = "";
+    public string CategoryName { get; set; } = "";
     public bool Status { get; set; }
 
     public List<AccountHierarchyDto> Children { get; set; } = new();

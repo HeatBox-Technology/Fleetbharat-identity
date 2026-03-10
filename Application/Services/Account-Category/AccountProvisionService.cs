@@ -489,17 +489,21 @@ public class AccountProvisionService : IAccountProvisionService
 
     public async Task<List<AccountHierarchyDto>> GetHierarchyAsync()
     {
-        var accounts = await _db.Accounts
-            .AsNoTracking()
-            .Where(x => !x.IsDeleted)
-            .OrderBy(x => x.HierarchyPath)
-            .Select(x => new
+        var accounts = await (
+            from a in _db.Accounts.AsNoTracking()
+            join cat in _db.Categories.AsNoTracking()
+                on a.CategoryId equals cat.CategoryId into catGroup
+            from cat in catGroup.DefaultIfEmpty()
+            where !a.IsDeleted
+            orderby a.HierarchyPath
+            select new
             {
-                x.AccountId,
-                x.AccountName,
-                x.AccountCode,
-                x.Status,
-                x.ParentAccountId
+                a.AccountId,
+                a.AccountName,
+                a.AccountCode,
+                a.Status,
+                a.ParentAccountId,
+                CategoryName = cat != null ? cat.LabelName : string.Empty
             })
             .ToListAsync();
 
@@ -510,6 +514,7 @@ public class AccountProvisionService : IAccountProvisionService
                 AccountId = x.AccountId,
                 AccountName = x.AccountName ?? string.Empty,
                 AccountCode = x.AccountCode ?? string.Empty,
+                CategoryName = x.CategoryName ?? string.Empty,
                 Status = x.Status
             });
 
