@@ -1,58 +1,82 @@
-image: docker:24
-
-services:
-  - docker:24-dind
-
-variables:
-  DOCKER_TLS_CERTDIR: ""
-
 stages:
   - build
   - deploy
 
-before_script:
-  - test -n "$DOCKERHUB_USERNAME" || (echo "DOCKERHUB_USERNAME is not set" && exit 1)
-  - test -n "$DOCKERHUB_PASSWORD" || (echo "DOCKERHUB_PASSWORD is not set" && exit 1)
-  - test -n "$DOCKER_IMAGE_NAME" || (echo "DOCKER_IMAGE_NAME is not set" && exit 1)
-  - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+variables:
+  IMAGE_NAME: "worknggupta/fleetbharat-identity"
+  CONTAINER_NAME: "fleetbharat-identity"
+  CONTAINER_PORT: "8080"
+  HOST_PORT: "8080"
 
 build_and_push:
   stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_TLS_CERTDIR: ""
   rules:
-    - when: always
+    - if: '$CI_COMMIT_BRANCH == "main"'
   script:
-    - docker build -t $DOCKER_IMAGE_NAME:latest .
-    - docker push $DOCKER_IMAGE_NAME:latest
+    - echo "Logging in to DockerHub..."
+    - test -n "$DOCKERHUB_USERNAME" || (echo "DOCKERHUB_USERNAME is not set" && exit 1)
+    - test -n "$DOCKERHUB_PASSWORD" || (echo "DOCKERHUB_PASSWORD is not set" && exit 1)
+    - docker logout || true
+    - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+    - echo "Building Docker image..."
+    - docker build -t "$IMAGE_NAME:$CI_COMMIT_SHORT_SHA" .
+
+    - echo "Tagging Docker image..."
+    - docker tag "$IMAGE_NAME:$CI_COMMIT_SHORT_SHA" "$IMAGE_NAME:latest"
+
+    - echo "Pushing Docker image..."
+    - docker push "$IMAGE_NAME:$CI_COMMIT_SHORT_SHA"
+    - docker push "$IMAGE_NAME:latest"
 
 deploy_to_ec2:
   stage: deploy
   image: alpine:latest
   rules:
-    - when: always
+    - if: '$CI_COMMIT_BRANCH == "main"'
   before_script:
-    - apk add --no-cache openssh
+    - apk add --no-cache openssh-client
     - test -n "$EC2_HOST" || (echo "EC2_HOST is not set" && exit 1)
     - test -n "$EC2_USER" || (echo "EC2_USER is not set" && exit 1)
     - test -n "$EC2_SSH_KEY" || (echo "EC2_SSH_KEY is not set" && exit 1)
     - test -n "$PROD_CONN" || (echo "PROD_CONN is not set" && exit 1)
     - mkdir -p ~/.ssh
-    - printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/id_rsa
+    - echo "$EC2_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
-    - touch ~/.ssh/known_hosts
-    - ssh-keyscan -T 10 -H "$EC2_HOST" >> ~/.ssh/known_hosts || echo "ssh-keyscan failed, continuing with StrictHostKeyChecking=accept-new"
+    - ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
   script:
+    - echo "Deploying backend to EC2..."
     - |
-      ssh -o StrictHostKeyChecking=accept-new "$EC2_USER@$EC2_HOST" "
-        docker pull worknggupta/fleetbharat-identity:latest &&
-        docker rm -f fleetbharat-identity || true &&
-        docker run -d \
-          --name fleetbharat-identity \
-          --network fleetbharat-net \
-          -p 8080:8080 \
-          -v /var/www/fleetbharat/uploads:/app/uploads \
-          -e ASPNETCORE_ENVIRONMENT=Production \
-          -e ASPNETCORE_URLS=http://+:8080 \
-          -e ConnectionStrings__Default='$PROD_CONN' \
-          --restart always \
-          worknggupta/fleetbharat-identity:latest
+      ssh "$EC2_USER@$EC2_HOST" "
+      set -e
+
+      echo 'Cleaning Docker cache...'
+      docker system prune -af || true
+      docker volume prune -f || true
+      docker builder prune -af || true
+      df -h || true
+
+      echo 'Pulling latest image...'
+      docker pull $IMAGE_NAME:latest
+
+      echo 'Replacing container...'
+      docker rm -f $CONTAINER_NAME >/dev/null 2>&1 || true
+
+      docker run -d \
+        --name $CONTAINER_NAME \
+        --network fleetbharat-net \
+        -p $HOST_PORT:$CONTAINER_PORT \
+        -v /var/www/fleetbharat/uploads:/app/uploads \
+        --restart always \
+        -e ASPNETCORE_ENVIRONMENT=Production \
+        -e ASPNETCORE_URLS=http://+:$CONTAINER_PORT \
+        -e ConnectionStrings__Default='$PROD_CONN' \
+        $IMAGE_NAME:latest
+
+      echo 'Backend deployment successful!'
       "
