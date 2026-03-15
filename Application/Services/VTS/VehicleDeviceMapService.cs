@@ -207,6 +207,10 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
                 DeviceNo = x.Device.DeviceNo,
 
                 DeviceTypeId = x.fk_devicetypeid,
+                DeviceTypeName = _db.DeviceTypes
+                    .Where(dt => dt.Id == x.fk_devicetypeid)
+                    .Select(dt => dt.Name)
+                    .FirstOrDefault(),
                 SimId = x.fk_simid,
                 SimNumber = x.simnno,
                 Remarks = x.Remarks,
@@ -264,6 +268,10 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
         DeviceNo = x.Device.DeviceNo,
 
         DeviceTypeId = x.fk_devicetypeid,
+        DeviceTypeName = _db.DeviceTypes
+            .Where(dt => dt.Id == x.fk_devicetypeid)
+            .Select(dt => dt.Name)
+            .FirstOrDefault(),
         SimId = x.fk_simid,
         SimNumber = x.simnno,
         Remarks = x.Remarks,
@@ -322,6 +330,10 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
                 DeviceId = x.Fk_DeviceId,
                 DeviceNo = x.Device.DeviceNo,
                 DeviceTypeId = x.fk_devicetypeid,
+                DeviceTypeName = _db.DeviceTypes
+                    .Where(dt => dt.Id == x.fk_devicetypeid)
+                    .Select(dt => dt.Name)
+                    .FirstOrDefault(),
                 SimId = x.fk_simid,
                 SimNumber = x.simnno,
                 Remarks = x.Remarks,
@@ -359,11 +371,17 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
         _db.VehicleDeviceMaps.AddRange(entities);
         await _db.SaveChangesAsync();
 
+        var deviceTypeNames = await _db.DeviceTypes
+            .Where(x => items.Select(i => i.DeviceTypeId).Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, x => x.Name);
+
         return entities.Select(x => new VehicleDeviceMapDto
         {
             Id = x.Id,
             VehicleId = x.Fk_VehicleId,
-            DeviceId = x.Fk_DeviceId
+            DeviceId = x.Fk_DeviceId,
+            DeviceTypeId = x.fk_devicetypeid,
+            DeviceTypeName = deviceTypeNames.GetValueOrDefault(x.fk_devicetypeid)
         }).ToList();
     }
 }

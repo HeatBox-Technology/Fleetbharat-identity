@@ -83,4 +83,3 @@ public class VehicleTypeController : ControllerBase
         return NoContent();
     }
 }
-

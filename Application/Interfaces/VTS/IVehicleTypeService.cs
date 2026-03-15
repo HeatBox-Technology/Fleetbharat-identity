@@ -10,4 +10,3 @@ public interface IVehicleTypeService
     Task<VehicleTypeDto> UpdateAsync(int id, VehicleTypeDto dto);
     Task<bool> DeleteAsync(int id);
 }
-

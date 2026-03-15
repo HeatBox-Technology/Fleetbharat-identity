@@ -36,6 +36,7 @@ public class VehicleDeviceMapDto
     public DateTime? UpdatedAt { get; set; }
     public string? VehicleNo { get; set; }
     public string? DeviceNo { get; set; }
+    public string? DeviceTypeName { get; set; }
 }
 public class CreateVehicleDeviceMapDto
 {
