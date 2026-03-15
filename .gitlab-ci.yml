@@ -11,7 +11,10 @@ stages:
   - deploy
 
 before_script:
-  - docker login -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_PASSWORD"
+  - test -n "$DOCKERHUB_USERNAME" || (echo "DOCKERHUB_USERNAME is not set" && exit 1)
+  - test -n "$DOCKERHUB_PASSWORD" || (echo "DOCKERHUB_PASSWORD is not set" && exit 1)
+  - test -n "$DOCKER_IMAGE_NAME" || (echo "DOCKER_IMAGE_NAME is not set" && exit 1)
+  - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 
 build_and_push:
   stage: build
@@ -28,13 +31,18 @@ deploy_to_ec2:
     - when: always
   before_script:
     - apk add --no-cache openssh
+    - test -n "$EC2_HOST" || (echo "EC2_HOST is not set" && exit 1)
+    - test -n "$EC2_USER" || (echo "EC2_USER is not set" && exit 1)
+    - test -n "$EC2_SSH_KEY" || (echo "EC2_SSH_KEY is not set" && exit 1)
+    - test -n "$PROD_CONN" || (echo "PROD_CONN is not set" && exit 1)
     - mkdir -p ~/.ssh
-    - echo "$EC2_SSH_KEY" > ~/.ssh/id_rsa
+    - printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
-    - ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+    - touch ~/.ssh/known_hosts
+    - ssh-keyscan -T 10 -H "$EC2_HOST" >> ~/.ssh/known_hosts || echo "ssh-keyscan failed, continuing with StrictHostKeyChecking=accept-new"
   script:
     - |
-      ssh "$EC2_USER@$EC2_HOST" "
+      ssh -o StrictHostKeyChecking=accept-new "$EC2_USER@$EC2_HOST" "
         docker pull worknggupta/fleetbharat-identity:latest &&
         docker rm -f fleetbharat-identity || true &&
         docker run -d \
