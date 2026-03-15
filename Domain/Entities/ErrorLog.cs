@@ -7,10 +7,10 @@ public class ErrorLog
 {
     [Key]
     public int id { get; set; }
-    public string message { get; set; }
-    public string stack_trace { get; set; }
-    public string inner_exception { get; set; }
-    public string path { get; set; }
-    public string method { get; set; }
+    public string message { get; set; } = string.Empty;
+    public string stack_trace { get; set; } = string.Empty;
+    public string inner_exception { get; set; } = string.Empty;
+    public string path { get; set; } = string.Empty;
+    public string method { get; set; } = string.Empty;
     public DateTime created_at { get; set; }
 }

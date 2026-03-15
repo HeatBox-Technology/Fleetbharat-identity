@@ -27,11 +27,11 @@ public class DbLogger
 
             var log = new ErrorLog
             {
-                message = ex.Message,
-                stack_trace = ex.StackTrace,
-                inner_exception = ex.InnerException?.Message,
-                path = context?.Request?.Path,
-                method = context?.Request?.Method,
+                message = ex.Message ?? "Unknown error",
+                stack_trace = ex.StackTrace ?? string.Empty,
+                inner_exception = ex.InnerException?.ToString() ?? string.Empty,
+                path = context?.Request?.Path.Value ?? string.Empty,
+                method = context?.Request?.Method ?? string.Empty,
                 created_at = DateTime.UtcNow
             };
 
@@ -40,8 +40,8 @@ public class DbLogger
         }
         catch (Exception dbEx)
         {
-            // 🔥 Important: Logging failure should NOT break API
-            _logger.LogError(dbEx.Message, "Failed to write error log to database");
+            // Logging failure should never break the API response path.
+            _logger.LogError(dbEx, "Failed to write error log to database");
         }
     }
 }

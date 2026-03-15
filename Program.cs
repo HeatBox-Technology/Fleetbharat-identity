@@ -3,6 +3,7 @@ using Infrastructure.Redis;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Configuration;
@@ -22,6 +23,17 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 
+bool IsHostedServiceEnabled(string key, bool productionDefault = true)
+{
+    var configured = builder.Configuration.GetValue<bool?>($"HostedServices:{key}");
+    if (configured.HasValue)
+    {
+        return configured.Value;
+    }
+
+    return builder.Environment.IsDevelopment() ? false : productionDefault;
+}
+
 builder.Services.Configure<HostOptions>(options =>
 {
     options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
@@ -38,6 +50,13 @@ var jwtAudience = builder.Configuration["Jwt:Audience"]
 
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key is missing.");
+
+var dataProtectionPath = Path.Combine(builder.Environment.ContentRootPath, "storage", "keys");
+Directory.CreateDirectory(dataProtectionPath);
+
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionPath))
+    .SetApplicationName("FleetBharat.IdentityService");
 
 builder.Services.Configure<AuditLoggingOptions>(
     builder.Configuration.GetSection("AuditLogging"));
@@ -118,9 +137,20 @@ builder.Services.AddSingleton<IExternalSyncConcurrencyLimiter>(sp =>
     var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ExternalSyncWorkerOptions>>().Value;
     return new ExternalSyncConcurrencyLimiter(options.MaxConcurrency);
 });
-builder.Services.AddHostedService<ExternalSyncWorker>();
-builder.Services.AddHostedService<BillingSchedulerService>();
-builder.Services.AddHostedService<InvoiceWorker>();
+if (IsHostedServiceEnabled("ExternalSyncWorker"))
+{
+    builder.Services.AddHostedService<ExternalSyncWorker>();
+}
+
+if (IsHostedServiceEnabled("BillingScheduler"))
+{
+    builder.Services.AddHostedService<BillingSchedulerService>();
+}
+
+if (IsHostedServiceEnabled("InvoiceWorker"))
+{
+    builder.Services.AddHostedService<InvoiceWorker>();
+}
 
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
@@ -235,9 +265,12 @@ builder.Services.AddSwaggerGen(options =>
 
 
 // ✅ Live tracking simulator for animation demo
-builder.Services.AddHostedService<Infrastructure.LiveTracking.LiveTrackingSimulatorService>();
 // ✅ Redis subscriber -> SignalR broadcaster (must be resilient too)
-builder.Services.AddHostedService<RedisGpsSubscriberHostedService>();
+if (IsHostedServiceEnabled("RedisGpsSubscriber"))
+{
+    builder.Services.AddHostedService<RedisGpsSubscriberHostedService>();
+}
+// builder.Services.AddHostedService<Infrastructure.LiveTracking.LiveTrackingSimulatorService>();
 
 
 var app = builder.Build();

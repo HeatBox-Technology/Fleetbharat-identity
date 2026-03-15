@@ -32,7 +32,7 @@ namespace Application.Services
             if (page <= 0) page = 1;
             if (pageSize <= 0) pageSize = 10;
 
-            var query = _context.Set<Domain.Entities.mst_vehicle_type>().AsQueryable();
+            var query = _context.Set<Domain.Entities.mst_vehicle_type>().AsNoTracking().AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
             {

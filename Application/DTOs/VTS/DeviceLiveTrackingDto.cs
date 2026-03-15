@@ -47,6 +47,11 @@ namespace Application.DTOs
         public bool PowerDisplayFault { get; set; }
         public bool TtsFault { get; set; }
         public bool Rollover { get; set; }
+        public int? VehicleId { get; set; }
+        public int? DeviceId { get; set; }
+        public string? DriverName { get; set; }
+        public bool DriverMapped { get; set; }
+        public string DataSource { get; set; } = "redis";
 
         [JsonConverter(typeof(FlexibleNullableDateTimeConverter))]
         public DateTime? ReceivedAt { get; set; }
