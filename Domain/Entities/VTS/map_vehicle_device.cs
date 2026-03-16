@@ -44,9 +44,9 @@ namespace Domain.Entities
         public int? updatedBy { get; set; }
         public DateTime? updatedAt { get; set; }
         [ForeignKey("Fk_VehicleId")]
-        public mst_vehicle Vehicle { get; set; }
+        public mst_vehicle? Vehicle { get; set; }
 
         [ForeignKey("Fk_DeviceId")]
-        public mst_device Device { get; set; }
+        public mst_device? Device { get; set; }
     }
 }

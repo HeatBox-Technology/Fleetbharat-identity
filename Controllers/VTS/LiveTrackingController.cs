@@ -103,7 +103,7 @@ public class LiveTrackingController : ControllerBase
         if (!string.IsNullOrWhiteSpace(vehicleNos))
         {
             var vehicles = vehicleNos.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            keys = vehicles.Select(v => (RedisKey)$"dashboard::{v}").ToArray();
+            keys = await GetDashboardKeysByVehicleNosAsync(vehicles);
             _logger.LogInformation(
                 "LiveTracking batch requested by vehicleNos. Requested vehicles: {Vehicles}. Redis keys: {Keys}",
                 vehicles,
@@ -243,6 +243,29 @@ public class LiveTrackingController : ControllerBase
             .ToArray();
     }
 
+    private async Task<RedisKey[]> GetDashboardKeysByVehicleNosAsync(IEnumerable<string> vehicleNos)
+    {
+        var normalizedVehicleNos = vehicleNos
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (normalizedVehicleNos.Count == 0)
+            return Array.Empty<RedisKey>();
+
+        var vehicleIds = await _db.VehicleDeviceMaps
+            .AsNoTracking()
+            .Where(x => x.IsActive && !x.IsDeleted && normalizedVehicleNos.Contains(x.Vehicle.VehicleNumber))
+            .Select(x => x.Fk_VehicleId)
+            .Distinct()
+            .ToListAsync();
+
+        return vehicleIds
+            .Select(x => (RedisKey)$"dashboard::{x}")
+            .ToArray();
+    }
+
     private async Task<RedisValue[]> FetchRedisValuesAsync(RedisKey[] keys)
     {
         var db = _mux.GetDatabase();
@@ -281,7 +304,11 @@ public class LiveTrackingController : ControllerBase
 
         var suffix = key[prefix.Length..].Trim();
         if (int.TryParse(suffix, out var vehicleId))
+        {
             dto.VehicleId = vehicleId;
+            if (string.IsNullOrWhiteSpace(dto.Id))
+                dto.Id = vehicleId.ToString();
+        }
     }
 
     private static void PopulateVehicleNoFromKey(DeviceLiveTrackingDto? dto, RedisKey key)
@@ -417,12 +444,15 @@ public class LiveTrackingController : ControllerBase
         {
             dto.DriverMapped = false;
             dto.DataSource = "redis";
+            if (dto.VehicleId.HasValue && string.IsNullOrWhiteSpace(dto.Id))
+                dto.Id = dto.VehicleId.Value.ToString();
             return;
         }
 
         dto.OrgId = match.AccountId;
         dto.VehicleId = match.VehicleId;
         dto.DeviceId = match.DeviceId;
+        dto.Id = match.VehicleId.ToString();
         dto.VehicleNo = match.VehicleNo;
         dto.DeviceNo = match.DeviceNo;
         dto.Imei = match.Imei;

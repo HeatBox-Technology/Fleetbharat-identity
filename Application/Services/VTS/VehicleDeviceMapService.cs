@@ -55,7 +55,7 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
             Fk_DeviceId = dto.DeviceId,
             fk_devicetypeid = dto.DeviceTypeId,
             fk_simid = dto.SimId,
-            simnno = dto.SimNumber,
+            simnno = dto.SimNumber ?? string.Empty,
             Remarks = dto.Remarks,
             InstallationDate = DateTime.UtcNow,
             IsActive = true,
@@ -199,13 +199,10 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
             {
                 Id = x.Id,
                 AccountId = x.AccountId,
-
                 VehicleId = x.Fk_VehicleId,
                 VehicleNo = x.Vehicle.VehicleNumber,
-
                 DeviceId = x.Fk_DeviceId,
                 DeviceNo = x.Device.DeviceNo,
-
                 DeviceTypeId = x.fk_devicetypeid,
                 DeviceTypeName = _db.DeviceTypes
                     .Where(dt => dt.Id == x.fk_devicetypeid)
@@ -215,7 +212,12 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
                 SimNumber = x.simnno,
                 Remarks = x.Remarks,
                 IsActive = x.IsActive,
-                InstallationDate = x.InstallationDate
+                IsDeleted = x.IsDeleted,
+                InstallationDate = x.InstallationDate,
+                CreatedBy = x.createdBy,
+                CreatedAt = x.createdAt,
+                UpdatedBy = x.updatedBy,
+                UpdatedAt = x.updatedAt
             })
             .FirstOrDefaultAsync();
     }
@@ -260,13 +262,10 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
     {
         Id = x.Id,
         AccountId = x.AccountId,
-
         VehicleId = x.Fk_VehicleId,
         VehicleNo = x.Vehicle.VehicleNumber,
-
         DeviceId = x.Fk_DeviceId,
         DeviceNo = x.Device.DeviceNo,
-
         DeviceTypeId = x.fk_devicetypeid,
         DeviceTypeName = _db.DeviceTypes
             .Where(dt => dt.Id == x.fk_devicetypeid)
@@ -276,7 +275,12 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
         SimNumber = x.simnno,
         Remarks = x.Remarks,
         IsActive = x.IsActive,
-        InstallationDate = x.InstallationDate
+        IsDeleted = x.IsDeleted,
+        InstallationDate = x.InstallationDate,
+        CreatedBy = x.createdBy,
+        CreatedAt = x.createdAt,
+        UpdatedBy = x.updatedBy,
+        UpdatedAt = x.updatedAt
     })
     .ToListAsync();
         return new VehicleDeviceAssignmentListUiResponseDto
@@ -338,7 +342,12 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
                 SimNumber = x.simnno,
                 Remarks = x.Remarks,
                 IsActive = x.IsActive,
-                InstallationDate = x.InstallationDate
+                IsDeleted = x.IsDeleted,
+                InstallationDate = x.InstallationDate,
+                CreatedBy = x.createdBy,
+                CreatedAt = x.createdAt,
+                UpdatedBy = x.updatedBy,
+                UpdatedAt = x.updatedAt
             })
             .ToListAsync();
 
@@ -378,10 +387,21 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
         return entities.Select(x => new VehicleDeviceMapDto
         {
             Id = x.Id,
+            AccountId = x.AccountId,
             VehicleId = x.Fk_VehicleId,
             DeviceId = x.Fk_DeviceId,
             DeviceTypeId = x.fk_devicetypeid,
-            DeviceTypeName = deviceTypeNames.GetValueOrDefault(x.fk_devicetypeid)
+            DeviceTypeName = deviceTypeNames.GetValueOrDefault(x.fk_devicetypeid),
+            SimId = x.fk_simid,
+            SimNumber = x.simnno,
+            Remarks = x.Remarks,
+            IsActive = x.IsActive,
+            IsDeleted = x.IsDeleted,
+            InstallationDate = x.InstallationDate,
+            CreatedBy = x.createdBy,
+            CreatedAt = x.createdAt,
+            UpdatedBy = x.updatedBy,
+            UpdatedAt = x.updatedAt
         }).ToList();
     }
 }

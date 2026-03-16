@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 
 public class ExceptionMiddleware
 {
@@ -33,7 +35,7 @@ public class ExceptionMiddleware
             _logger.LogError(ex, "Unhandled Exception");
 
             var dbLogger = context.RequestServices.GetService<DbLogger>();
-            if (dbLogger != null)
+            if (dbLogger != null && !IsDatabaseConnectivityFailure(ex))
             {
                 try
                 {
@@ -60,6 +62,8 @@ public class ExceptionMiddleware
             statusCode = 401;
         else if (ex is KeyNotFoundException)
             statusCode = 404;
+        else if (IsDatabaseConnectivityFailure(ex))
+            statusCode = StatusCodes.Status503ServiceUnavailable;
         else if (ex is InvalidOperationException)
             statusCode = 409;
 
@@ -72,4 +76,12 @@ public class ExceptionMiddleware
         await context.Response.WriteAsync(
             JsonSerializer.Serialize(response));
     }
+
+    private static bool IsDatabaseConnectivityFailure(Exception ex) =>
+        ex is TimeoutException ||
+        ex is NpgsqlException ||
+        ex is DbUpdateException ||
+        (ex is InvalidOperationException && ex.InnerException is NpgsqlException) ||
+        ex.InnerException is TimeoutException ||
+        ex.InnerException is NpgsqlException;
 }

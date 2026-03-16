@@ -32,6 +32,8 @@ public class GeofenceService : IGeofenceService
         if (dto == null)
             throw new ArgumentNullException(nameof(dto));
 
+        dto.Coordinates = NormalizeCoordinates(dto.Coordinates, dto.CoordinatesJson);
+
         var code = dto.UniqueCode?.Trim().ToUpper();
 
         if (string.IsNullOrWhiteSpace(code))
@@ -228,6 +230,8 @@ public class GeofenceService : IGeofenceService
 
         if (entity == null) return false;
 
+        dto.Coordinates = NormalizeCoordinates(dto.Coordinates, dto.CoordinatesJson);
+
         var code = dto.UniqueCode.Trim().ToUpper();
 
         var exists = await _db.GeofenceZones
@@ -293,7 +297,14 @@ public class GeofenceService : IGeofenceService
         }
 
 
-        await SyncGeofenceAsync(entity, coordinates, HttpMethod.Delete);
+        try
+        {
+            await SyncGeofenceAsync(entity, coordinates, HttpMethod.Delete);
+        }
+        catch
+        {
+            // External sync failure should not roll back a successful local delete.
+        }
 
         return true;
     }
@@ -342,6 +353,27 @@ public class GeofenceService : IGeofenceService
 
         throw new Exception("Invalid geometry type");
     }
+
+    private static List<CoordinateDto> NormalizeCoordinates(
+        List<CoordinateDto>? coordinates,
+        string? coordinatesJson)
+    {
+        if (coordinates != null && coordinates.Count > 0)
+            return coordinates;
+
+        if (string.IsNullOrWhiteSpace(coordinatesJson))
+            return new List<CoordinateDto>();
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<CoordinateDto>>(coordinatesJson) ?? new List<CoordinateDto>();
+        }
+        catch
+        {
+            return new List<CoordinateDto>();
+        }
+    }
+
     public async Task<List<GeofenceDto>> BulkCreateAsync(List<CreateGeofenceDto> items)
     {
         if (items == null || items.Count == 0)
@@ -351,6 +383,8 @@ public class GeofenceService : IGeofenceService
 
         foreach (var dto in items)
         {
+            dto.Coordinates = NormalizeCoordinates(dto.Coordinates, dto.CoordinatesJson);
+
             var code = dto.UniqueCode.Trim().ToUpper();
 
             var exists = await _db.GeofenceZones
@@ -430,13 +464,14 @@ public class GeofenceService : IGeofenceService
     List<CoordinateDto> coordinates,
     HttpMethod method)
     {
-        var request = BuildExternalPayload(entity, coordinates);
+        ExternalGeofenceRequest? request = null;
 
         bool success = false;
         string? error = null;
 
         try
         {
+            request = BuildExternalPayload(entity, coordinates);
             success = await _external.SendGeofenceAsync(
                 new List<ExternalGeofenceRequest> { request },
                 method);
@@ -463,18 +498,35 @@ public class GeofenceService : IGeofenceService
         }
 
         // ⭐ LOG SYNC REQUEST
-        var log = new map_geofence_sync_log
+        object payloadForLog = request != null
+            ? request
+            : new
+            {
+                entity.Id,
+                entity.AccountId,
+                entity.DisplayName,
+                entity.GeometryType,
+                CoordinatesCount = coordinates?.Count ?? 0
+            };
+
+        try
         {
-            GeofenceId = entity.Id,
-            PayloadJson = JsonSerializer.Serialize(request),
-            IsSynced = success,
-            ErrorMessage = error,
-            RetryCount = success ? 0 : 1,
-            LastTriedAt = DateTime.UtcNow
-        };
+            var log = new map_geofence_sync_log
+            {
+                GeofenceId = entity.Id,
+                PayloadJson = JsonSerializer.Serialize(payloadForLog),
+                IsSynced = success,
+                ErrorMessage = error,
+                RetryCount = success ? 0 : 1,
+                LastTriedAt = DateTime.UtcNow
+            };
 
-        _db.map_geofence_sync_logs.Add(log);
-
-        await _db.SaveChangesAsync();
+            _db.map_geofence_sync_logs.Add(log);
+            await _db.SaveChangesAsync();
+        }
+        catch
+        {
+            // Missing sync-log table or sync status persistence issues should not fail the API request.
+        }
     }
 }
