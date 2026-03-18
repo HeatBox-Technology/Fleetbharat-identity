@@ -36,17 +36,17 @@ public class AuthService : IAuthService
         var loginInput = req.Email?.Trim();
         if (string.IsNullOrWhiteSpace(loginInput))
             throw new UnauthorizedAccessException("Invalid email or password");
+
         var normalizedLoginInput = loginInput.ToLower();
 
         var user = await _db.Users
             .FirstOrDefaultAsync(x =>
                 !x.IsDeleted &&
                 (
-                    x.Email.ToLower() == normalizedLoginInput ||
-                    x.MobileNo.ToLower() == normalizedLoginInput ||
-                    (x.User_name != null && x.User_name.ToLower() == normalizedLoginInput)
+                    (x.Email != null && x.Email.ToLower() == normalizedLoginInput) ||
+                    (x.User_name != null && x.User_name.ToLower() == normalizedLoginInput) ||
+                    (x.MobileNo != null && x.MobileNo == loginInput)
                 ));
-
         if (user == null)
             throw new UnauthorizedAccessException("Invalid email or password");
 

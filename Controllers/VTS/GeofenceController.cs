@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 [ApiController]
 [Route("api/geofences")]
-[AllowAnonymous] // Remove this in production, added for testing
+// Remove this in production, added for testing
 public class GeofenceController : ControllerBase
 {
     private readonly IGeofenceService _service;

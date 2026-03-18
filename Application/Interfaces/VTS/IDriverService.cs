@@ -56,4 +56,5 @@ public interface IDriverService
     /// Bulk create drivers
     /// </summary>
     Task<List<DriverDto>> BulkCreateAsync(List<CreateDriverDto> drivers);
+    Task<byte[]> ExportDriversCsvAsync(int? accountId, string? search);
 }

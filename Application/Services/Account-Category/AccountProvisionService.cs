@@ -53,6 +53,8 @@ public class AccountProvisionService : IAccountProvisionService
 
             var codeExists = await _db.Accounts
                 .AnyAsync(x => x.AccountCode == accountCode && !x.IsDeleted);
+            // FIX: normalize email
+
 
             if (codeExists)
                 throw new InvalidOperationException("AccountCode already exists");
@@ -80,7 +82,7 @@ public class AccountProvisionService : IAccountProvisionService
                 TaxTypeId = req.TaxTypeId,
 
                 fullname = req.fullname,
-                email = req.email,
+                email = req.email?.Trim().ToLowerInvariant(),
                 phone = req.phone,
                 Position = req.Position,
 
@@ -103,7 +105,7 @@ public class AccountProvisionService : IAccountProvisionService
                 CreatedOn = DateTime.UtcNow,
                 UpdatedOn = DateTime.UtcNow,
                 IsDeleted = false,
-                CreatedBy = req.userId
+                CreatedBy = _currentUser.AccountId
             };
 
             _db.Accounts.Add(account);
@@ -116,18 +118,33 @@ public class AccountProvisionService : IAccountProvisionService
 
             string hierarchyPath;
 
+            // if (account.ParentAccountId.HasValue)
+            // {
+            //     var parent = await _db.Accounts
+            //         .AsNoTracking()
+            //         .FirstOrDefaultAsync(x =>
+            //             x.AccountId == account.ParentAccountId.Value &&
+            //             !x.IsDeleted);
+
+            //     if (parent == null)
+            //         throw new Exception("Parent account not found");
+            //     if (string.IsNullOrWhiteSpace(parent.HierarchyPath))
+            //         throw new Exception("Parent account hierarchy is invalid");
+
+            //     hierarchyPath = $"{parent.HierarchyPath}{account.AccountId}/";
+            // }
+            // FIX: parent must be inside hierarchy
             if (account.ParentAccountId.HasValue)
             {
                 var parent = await _db.Accounts
+                    .ApplyAccountHierarchyFilter(_currentUser)
                     .AsNoTracking()
                     .FirstOrDefaultAsync(x =>
                         x.AccountId == account.ParentAccountId.Value &&
                         !x.IsDeleted);
 
                 if (parent == null)
-                    throw new Exception("Parent account not found");
-                if (string.IsNullOrWhiteSpace(parent.HierarchyPath))
-                    throw new Exception("Parent account hierarchy is invalid");
+                    throw new Exception("Invalid parent account access");
 
                 hierarchyPath = $"{parent.HierarchyPath}{account.AccountId}/";
             }
@@ -177,7 +194,7 @@ public class AccountProvisionService : IAccountProvisionService
                     IsActive = true,
                     CreatedOn = DateTime.UtcNow,
                     UpdatedOn = DateTime.UtcNow,
-                    CreatedBy = req.userId
+                    CreatedBy = _currentUser.AccountId,
                 };
 
                 _db.Roles.Add(firstRole);
@@ -188,7 +205,8 @@ public class AccountProvisionService : IAccountProvisionService
             // CREATE FIRST USER
             // =====================================================
 
-            var email = req.email?.Trim().ToLower();
+            // FIX: normalize email
+            var email = req.email?.Trim().ToLowerInvariant();
 
             if (!string.IsNullOrWhiteSpace(email))
             {
@@ -206,7 +224,7 @@ public class AccountProvisionService : IAccountProvisionService
                 Email = email ?? "",
                 FirstName = req.fullname,
                 LastName = "",
-
+                User_name = req.UserName,
                 Password_hash = BCrypt.Net.BCrypt.HashPassword(req.Password),
 
                 AccountId = account.AccountId,
@@ -220,7 +238,8 @@ public class AccountProvisionService : IAccountProvisionService
                 MobileVerified = false,
 
                 CreatedAt = DateTime.UtcNow,
-                CreatedBy = req.userId,
+                CreatedBy = _currentUser.AccountId,
+
                 IsDeleted = false
             };
 
@@ -286,8 +305,11 @@ public class AccountProvisionService : IAccountProvisionService
         // -----------------------------
         // Base query only for cards
         // -----------------------------
+        // var baseAccountQuery = _db.Accounts
+        //     .Where(x => !x.IsDeleted);
         var baseAccountQuery = _db.Accounts
-            .Where(x => !x.IsDeleted);
+    .ApplyAccountHierarchyFilter(_currentUser)
+    .Where(x => !x.IsDeleted);
 
         var cardCounts = await baseAccountQuery
             .GroupBy(x => 1)
@@ -305,7 +327,8 @@ public class AccountProvisionService : IAccountProvisionService
         // Main grid query
         // -----------------------------
         var query =
-            from a in _db.Accounts
+            //from a in _db.Accounts
+            from a in _db.Accounts.ApplyAccountHierarchyFilter(_currentUser)
             join c in _db.Countries on a.CountryId equals c.CountryId
 
             join st0 in _db.States
@@ -388,7 +411,7 @@ public class AccountProvisionService : IAccountProvisionService
                 BusinessTimeZone = x.a.BusinessTimeZone,
                 Zipcode = x.a.Zipcode,
                 usernamesacc = x.a.UserName,
-                password = x.a.PasswordHash,
+                //password = x.a.PasswordHash,
                 share = x.a.share,
 
 
@@ -431,7 +454,10 @@ public class AccountProvisionService : IAccountProvisionService
 
             join cat in _db.Categories on a.CategoryId equals cat.CategoryId
 
-            where !a.IsDeleted && a.AccountId == accountId
+            // where !a.IsDeleted && a.AccountId == accountId
+            where !a.IsDeleted
+ && a.AccountId == accountId
+ && a.HierarchyPath.StartsWith(_currentUser.HierarchyPath)
             select new { a, c, cat, st, ct };
 
         return await query
@@ -475,7 +501,7 @@ public class AccountProvisionService : IAccountProvisionService
                 BusinessTimeZone = x.a.BusinessTimeZone,
                 Zipcode = x.a.Zipcode,
                 usernamesacc = x.a.UserName,
-                password = x.a.PasswordHash,
+                // password = x.a.PasswordHash,
                 share = x.a.share,
 
                 TaxTypeId = x.a.TaxTypeId,
@@ -545,11 +571,11 @@ public class AccountProvisionService : IAccountProvisionService
         try
         {
             var account = await _db.Accounts
+                .ApplyAccountHierarchyFilter(_currentUser)
                 .FirstOrDefaultAsync(x => x.AccountId == accountId && !x.IsDeleted);
 
             if (account == null)
                 return false;
-
 
             var validTax = await _db.TaxTypes.AnyAsync(x =>
                 x.TaxTypeId == req.TaxTypeId &&
@@ -557,30 +583,25 @@ public class AccountProvisionService : IAccountProvisionService
                 x.IsActive);
 
             if (!validTax)
-                throw new BadHttpRequestException("Invalid TaxType for selected Country");
-
+                throw new BadHttpRequestException("Invalid TaxType");
 
             // Account Code
             if (!string.IsNullOrWhiteSpace(req.AccountCode))
             {
                 var code = req.AccountCode.Trim();
 
-                var codeExists = await _db.Accounts.AnyAsync(x =>
+                var exists = await _db.Accounts.AnyAsync(x =>
                     x.AccountCode == code &&
                     x.AccountId != accountId &&
                     !x.IsDeleted);
 
-                if (codeExists)
-                    throw new InvalidOperationException("AccountCode already exists");
+                if (exists)
+                    throw new Exception("AccountCode exists");
 
                 account.AccountCode = code;
             }
 
-
-            // ========================
-            // MAIN FIELDS
-            // ========================
-
+            // MAIN
             account.AccountName = req.AccountName.Trim();
             account.CategoryId = req.CategoryId;
             account.PrimaryDomain = req.PrimaryDomain.Trim();
@@ -593,71 +614,57 @@ public class AccountProvisionService : IAccountProvisionService
             account.RefferCode = req.RefferCode;
             account.TaxTypeId = req.TaxTypeId;
 
-
-            // ========================
             // CONTACT
-            // ========================
-
             account.fullname = req.fullname;
-            account.email = req.email;
+            account.email = req.email?.Trim().ToLowerInvariant();
             account.phone = req.phone;
             account.Position = req.Position;
             account.address = req.address;
 
-
-            // ========================
             // BUSINESS
-            // ========================
-
             account.BusinessPhone = req.BusinessPhone;
             account.BusinessEmail = req.BusinessEmail;
             account.BusinessAddress = req.BusinessAddress;
             account.BusinessHours = req.BusinessHours;
             account.BusinessTimeZone = req.BusinessTimeZone;
 
-
-            // ========================
             // USER ACCESS
-            // ========================
-
             account.UserName = req.UserName;
             account.share = req.share;
 
-            if (!string.IsNullOrWhiteSpace(req.Password))
-                account.PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password);
 
+            var hashedPassword = string.IsNullOrWhiteSpace(req.Password)
+                ? null
+                : BCrypt.Net.BCrypt.HashPassword(req.Password);
+
+            if (hashedPassword != null)
+                account.PasswordHash = hashedPassword;
 
             // ========================
-            // PARENT CHANGE → UPDATE HIERARCHY
+            // HIERARCHY UPDATE
             // ========================
-
             if (req.ParentAccountId == account.AccountId)
-                throw new Exception("Account cannot be its own parent");
+                throw new Exception("Self parent not allowed");
 
             if (account.ParentAccountId != req.ParentAccountId)
             {
-                var oldPath = account.HierarchyPath;
-                if (string.IsNullOrWhiteSpace(oldPath))
-                    oldPath = $"/{account.AccountId}/";
-
+                var oldPath = account.HierarchyPath ?? $"/{account.AccountId}/";
                 string newPath;
 
                 if (req.ParentAccountId.HasValue)
                 {
                     var parent = await _db.Accounts
+                        .ApplyAccountHierarchyFilter(_currentUser)
                         .AsNoTracking()
                         .FirstOrDefaultAsync(x =>
                             x.AccountId == req.ParentAccountId.Value &&
                             !x.IsDeleted);
 
                     if (parent == null)
-                        throw new Exception("Parent account not found");
-                    if (string.IsNullOrWhiteSpace(parent.HierarchyPath))
-                        throw new Exception("Parent account hierarchy is invalid");
+                        throw new Exception("Invalid parent");
 
-                    // Prevent assigning under own subtree.
                     if (parent.HierarchyPath.StartsWith(oldPath))
-                        throw new Exception("Circular hierarchy is not allowed");
+                        throw new Exception("Circular hierarchy");
 
                     newPath = $"{parent.HierarchyPath}{account.AccountId}/";
                 }
@@ -678,12 +685,37 @@ public class AccountProvisionService : IAccountProvisionService
                 }
 
                 account.ParentAccountId = req.ParentAccountId;
+                account.HierarchyPath = newPath;
             }
 
+            // ========================
+            // 🔥 USER SYNC (YOUR LOGIC INCLUDED)
+            // ========================
+            var users = await _db.Users
+                .Where(x => x.AccountId == accountId && !x.IsDeleted)
+                .ToListAsync();
+
+            foreach (var user in users)
+            {
+                if (!string.IsNullOrWhiteSpace(req.email))
+                    user.Email = req.email.Trim().ToLowerInvariant();
+
+                user.User_name = req.UserName;
+                user.MobileNo = req.phone;
+
+                if (hashedPassword != null)
+                    user.Password_hash = hashedPassword;
+
+                user.UpdatedAt = DateTime.UtcNow;
+                user.UpdatedBy = req.userId;
+                user.UpdatedBy = _currentUser.AccountId;
+                user.UpdatedAt = DateTime.UtcNow;
+            }
 
             account.Status = req.Status;
             account.UpdatedOn = DateTime.UtcNow;
             account.UpdatedBy = req.userId;
+
 
             await _db.SaveChangesAsync();
             await tx.CommitAsync();
@@ -699,24 +731,75 @@ public class AccountProvisionService : IAccountProvisionService
 
     public async Task<bool> UpdateStatusAsync(int accountId, bool status)
     {
-        var account = await _db.Accounts.FirstOrDefaultAsync(x => x.AccountId == accountId);
+        var account = await _db.Accounts
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x => x.AccountId == accountId);
+
         if (account == null) return false;
 
         account.Status = status;
         account.UpdatedOn = DateTime.UtcNow;
 
+        var users = await _db.Users
+            .Where(x => x.AccountId == accountId && !x.IsDeleted)
+            .ToListAsync();
+
+        foreach (var user in users)
+        {
+            user.Status = status;
+            user.UpdatedAt = DateTime.UtcNow;
+        }
+
         await _db.SaveChangesAsync();
         return true;
     }
-
     public async Task<bool> DeleteAsync(int accountId)
     {
-        var account = await _db.Accounts.FirstOrDefaultAsync(x => x.AccountId == accountId);
-        if (account == null) return false;
+        using var tx = await _db.Database.BeginTransactionAsync();
 
-        _db.Accounts.Remove(account);
-        await _db.SaveChangesAsync();
-        return true;
+        try
+        {
+            var account = await _db.Accounts
+                .ApplyAccountHierarchyFilter(_currentUser)
+                .FirstOrDefaultAsync(x => x.AccountId == accountId && !x.IsDeleted);
+
+            if (account == null) return false;
+
+            var hasChildren = await _db.Accounts
+                .AnyAsync(x => x.ParentAccountId == accountId && !x.IsDeleted);
+
+            if (hasChildren)
+                throw new Exception("Cannot delete account with children");
+
+            account.IsDeleted = true;
+            account.Status = false;
+            account.UpdatedOn = DateTime.UtcNow;
+            account.UpdatedBy = _currentUser.AccountId;
+            account.DeletedBy = _currentUser.AccountId;
+            account.DeletedOn = DateTime.UtcNow;
+
+            var users = await _db.Users
+                .Where(x => x.AccountId == accountId && !x.IsDeleted)
+                .ToListAsync();
+
+            foreach (var user in users)
+            {
+                user.IsDeleted = true;
+                user.Status = false;
+                user.UpdatedAt = DateTime.UtcNow;
+                user.UpdatedBy = _currentUser.AccountId;
+            }
+
+            await _db.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            return true;
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
     }
 
     private static string ResolveDefaultRoleByCategory(string? categoryName)

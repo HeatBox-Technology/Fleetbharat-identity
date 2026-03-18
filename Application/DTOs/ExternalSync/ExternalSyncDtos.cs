@@ -6,6 +6,7 @@ public class ExternalSyncQueueCreateRequest
     public string ModuleName { get; set; } = "";
     public string EntityId { get; set; } = "";
     public string PayloadJson { get; set; } = "";
+    public bool PreservePayload { get; set; }
 }
 
 public class ExternalSyncModuleStatsDto

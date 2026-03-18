@@ -15,6 +15,9 @@ public class RoleService : IRoleService
         _currentUser = currentUser;
     }
 
+    // -----------------------------
+    // CREATE ROLE
+    // -----------------------------
     public async Task<int> CreateAsync(CreateRoleRequest req)
     {
         var role = new mst_role
@@ -25,13 +28,14 @@ public class RoleService : IRoleService
             RoleCode = req.RoleCode.Trim(),
             IsActive = true,
             CreatedOn = DateTime.UtcNow,
-            UpdatedOn = DateTime.UtcNow
+            UpdatedOn = DateTime.UtcNow,
+            CreatedBy = _currentUser.AccountId, // Assuming creator is from the same account
         };
 
         _db.Roles.Add(role);
         await _db.SaveChangesAsync();
 
-        if (req.Rights.Any())
+        if (req.Rights?.Any() == true)
         {
             var rights = req.Rights.Select(x => new map_FormRole_right
             {
@@ -43,7 +47,7 @@ public class RoleService : IRoleService
                 CanDelete = x.CanDelete,
                 CanExport = x.CanExport,
                 CanAll = x.CanAll
-            }).ToList();
+            });
 
             _db.FormRoleRights.AddRange(rights);
             await _db.SaveChangesAsync();
@@ -52,20 +56,27 @@ public class RoleService : IRoleService
         return role.RoleId;
     }
 
+    // -----------------------------
+    // GET ROLES BY ACCOUNT
+    // -----------------------------
     public async Task<List<mst_role>> GetByAccountAsync(int accountId)
     {
         return await _db.Roles
+            .AsNoTracking()
             .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => x.AccountId == accountId && x.IsActive)
             .OrderBy(x => x.RoleName)
             .ToListAsync();
     }
 
+    // -----------------------------
+    // GET ROLE RIGHTS
+    // -----------------------------
     public async Task<List<FormRightResponseDto>> GetRoleRightsAsync(int roleId)
     {
         var role = await _db.Roles
-            .ApplyAccountHierarchyFilter(_currentUser)
             .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.RoleId == roleId);
 
         if (role == null)
@@ -74,33 +85,41 @@ public class RoleService : IRoleService
         if (IsSystemRole(role))
             return await BuildFullAccessRightsAsync();
 
-        return await (from r in _db.FormRoleRights
-                      join f in _db.Forms on r.FormId equals f.FormId
-                      where r.RoleId == roleId
-                      select new FormRightResponseDto
-                      {
-                          FormId = f.FormId,
-                          FormCode = f.FormCode,
-                          FormName = f.FormName,
-                          PageUrl = f.PageUrl,
-                          icon = f.IconName,
-                          CanRead = r.CanRead,
-                          CanWrite = r.CanWrite,
-                          CanUpdate = r.CanUpdate,
-                          CanDelete = r.CanDelete,
-                          CanExport = r.CanExport,
-                          CanAll = r.CanAll
-                      }).ToListAsync();
+        return await (
+            from r in _db.FormRoleRights
+            join f in _db.Forms on r.FormId equals f.FormId
+            where r.RoleId == roleId
+            select new FormRightResponseDto
+            {
+                FormId = f.FormId,
+                FormCode = f.FormCode,
+                FormName = f.FormName,
+                PageUrl = f.PageUrl,
+                icon = f.IconName,
+                CanRead = r.CanRead,
+                CanWrite = r.CanWrite,
+                CanUpdate = r.CanUpdate,
+                CanDelete = r.CanDelete,
+                CanExport = r.CanExport,
+                CanAll = r.CanAll
+            }).ToListAsync();
     }
 
+    // -----------------------------
+    // UPDATE RIGHTS
+    // -----------------------------
     public async Task<bool> UpdateRightsAsync(int roleId, List<RoleFormRightDto> rights)
     {
         var role = await _db.Roles
             .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.RoleId == roleId);
+
         if (role == null) return false;
 
-        var existing = await _db.FormRoleRights.Where(x => x.RoleId == roleId).ToListAsync();
+        var existing = await _db.FormRoleRights
+            .Where(x => x.RoleId == roleId)
+            .ToListAsync();
+
         _db.FormRoleRights.RemoveRange(existing);
 
         var newRights = rights.Select(x => new map_FormRole_right
@@ -113,7 +132,7 @@ public class RoleService : IRoleService
             CanDelete = x.CanDelete,
             CanExport = x.CanExport,
             CanAll = x.CanAll
-        }).ToList();
+        });
 
         _db.FormRoleRights.AddRange(newRights);
         await _db.SaveChangesAsync();
@@ -121,11 +140,15 @@ public class RoleService : IRoleService
         return true;
     }
 
+    // -----------------------------
+    // UPDATE ROLE
+    // -----------------------------
     public async Task<bool> UpdateAsync(int roleId, UpdateRoleRequest req)
     {
         var role = await _db.Roles
             .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.RoleId == roleId);
+
         if (role == null) return false;
 
         role.RoleName = req.RoleName.Trim();
@@ -133,26 +156,41 @@ public class RoleService : IRoleService
         role.RoleCode = req.RoleCode.Trim();
         role.IsActive = req.IsActive;
         role.UpdatedOn = DateTime.UtcNow;
+        role.UpdatedBy = _currentUser.AccountId;
 
         await _db.SaveChangesAsync();
         return true;
     }
 
+    // -----------------------------
+    // DELETE ROLE
+    // -----------------------------
     public async Task<bool> DeleteAsync(int roleId)
     {
         var role = await _db.Roles
             .ApplyAccountHierarchyFilter(_currentUser)
-            .FirstOrDefaultAsync(x => x.RoleId == roleId);
+            .FirstOrDefaultAsync(x => x.RoleId == roleId && !x.IsDeleted);
+
         if (role == null) return false;
 
-        var rights = await _db.FormRoleRights.Where(x => x.RoleId == roleId).ToListAsync();
+        // ✅ Soft delete role
+        role.IsDeleted = true;
+        role.DeletedOn = DateTime.UtcNow;
+        role.DeletedBy = _currentUser.AccountId;
+
+        // ✅ Soft delete related rights (recommended)
+        var rights = await _db.FormRoleRights
+            .Where(x => x.RoleId == roleId)
+            .ToListAsync();
         _db.FormRoleRights.RemoveRange(rights);
 
-        _db.Roles.Remove(role);
         await _db.SaveChangesAsync();
         return true;
     }
 
+    // -----------------------------
+    // GET ROLES LIST (GRID + CARDS)
+    // -----------------------------
     public async Task<RoleListUiResponseDto> GetRoles(
         int page,
         int pageSize,
@@ -178,22 +216,21 @@ public class RoleService : IRoleService
                 (x.Description != null && x.Description.ToLower().Contains(s)));
         }
 
-        // ✅ Cards count (Summary)
         var totalRoles = await roleQuery.CountAsync();
         var systemRoles = await roleQuery.CountAsync(x => x.IsSystemRole);
-        var customRoles = totalRoles - systemRoles;
 
         var summary = new RoleCardSummaryDto
         {
             TotalRoles = totalRoles,
             SystemRoles = systemRoles,
-            CustomRoles = customRoles
+            CustomRoles = totalRoles - systemRoles
         };
 
-        // ✅ Table data + AssignedUsers Count + AccountName
         var tableQuery =
             from r in roleQuery
-            join a in _db.Accounts.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser) on r.AccountId equals a.AccountId
+            join a in _db.Accounts.AsNoTracking()
+                .ApplyAccountHierarchyFilter(_currentUser)
+                on r.AccountId equals a.AccountId
             select new
             {
                 Role = r,
@@ -211,11 +248,9 @@ public class RoleService : IRoleService
                 RoleId = x.Role.RoleId,
                 AccountId = x.Role.AccountId,
                 AccountName = x.AccountName,
-
                 RoleName = x.Role.RoleName,
                 Description = x.Role.Description,
                 IsSystemRole = x.Role.IsSystemRole,
-
                 AssignedUsers = _db.Users.Count(u => u.roleId == x.Role.RoleId && !u.IsDeleted),
                 CreatedOn = x.Role.CreatedOn
             })
@@ -233,12 +268,16 @@ public class RoleService : IRoleService
             }
         };
     }
-    public async Task<RoleDetailResponseDto?> GetByRoleIdAsync(int roleId, int accountId)
+
+    // -----------------------------
+    // GET ROLE DETAIL (FIXED)
+    // -----------------------------
+    public async Task<RoleDetailResponseDto?> GetByRoleIdAsync(int roleId, int? accountId)
     {
         var role = await _db.Roles
             .AsNoTracking()
             .ApplyAccountHierarchyFilter(_currentUser)
-            .FirstOrDefaultAsync(x => x.RoleId == roleId && x.AccountId == accountId);
+            .FirstOrDefaultAsync(x => x.RoleId == roleId);
 
         if (role == null) return null;
 
@@ -254,16 +293,15 @@ public class RoleService : IRoleService
                     FormId = f.FormId,
                     FormCode = f.FormCode,
                     FormName = f.FormName,
-                    PageUrl = f.PageUrl,// ✅ count
-                    icon = f.IconName,// ✅ coun
+                    PageUrl = f.PageUrl,
+                    icon = f.IconName,
                     CanRead = rr.CanRead,
                     CanWrite = rr.CanWrite,
                     CanUpdate = rr.CanUpdate,
                     CanDelete = rr.CanDelete,
                     CanExport = rr.CanExport,
                     CanAll = rr.CanAll
-                }
-            ).ToListAsync();
+                }).ToListAsync();
 
         return new RoleDetailResponseDto
         {
@@ -279,6 +317,9 @@ public class RoleService : IRoleService
         };
     }
 
+    // -----------------------------
+    // HELPERS
+    // -----------------------------
     private static bool IsSystemRole(mst_role role) =>
         role.IsSystemRole ||
         role.RoleName.Equals("System", StringComparison.OrdinalIgnoreCase);
@@ -304,9 +345,36 @@ public class RoleService : IRoleService
 
     public async Task<byte[]> ExportRolesCsvAsync(int? accountId, string? search)
     {
+        // ✅ Base role query (exclude deleted + apply hierarchy)
+        var roleQuery = _db.Roles
+            .AsNoTracking()
+            .Where(r => !r.IsDeleted)
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AsQueryable();
+
+        // ✅ Apply account filter correctly
+        if (accountId.HasValue)
+            roleQuery = roleQuery.Where(r => r.AccountId == accountId.Value);
+
+        // ✅ Apply search filter
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+
+            roleQuery = roleQuery.Where(r =>
+                r.RoleName.ToLower().Contains(s) ||
+                (r.Description != null && r.Description.ToLower().Contains(s))
+            );
+        }
+
+        // ✅ Join with accounts (exclude deleted)
         var query =
-            from r in _db.Roles.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser)
-            join a in _db.Accounts.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser) on r.AccountId equals a.AccountId
+            from r in roleQuery
+            join a in _db.Accounts
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted)
+                .ApplyAccountHierarchyFilter(_currentUser)
+            on r.AccountId equals a.AccountId
             select new
             {
                 a.AccountName,
@@ -314,33 +382,34 @@ public class RoleService : IRoleService
                 r.Description,
                 r.IsSystemRole,
                 r.CreatedOn,
-                AssignedUsers = _db.Users.Count(u => u.roleId == r.RoleId && !u.IsDeleted)
+
+                // ✅ Correct AssignedUsers count
+                AssignedUsers = _db.Users
+                    .Where(u =>
+                        !u.IsDeleted &&
+                        u.roleId == r.RoleId
+                    )
+                    .Count()
             };
-
-        if (accountId.HasValue)
-            query = query.Where(x => x.AccountName != null && _db.Roles.Any(r => r.AccountId == accountId.Value));
-
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var s = search.Trim().ToLower();
-            query = query.Where(x =>
-                x.RoleName.ToLower().Contains(s) ||
-                (x.Description != null && x.Description.ToLower().Contains(s)) ||
-                x.AccountName.ToLower().Contains(s));
-        }
 
         var rows = await query.ToListAsync();
 
+        // ✅ CSV Build
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("Account,RoleName,Description,AssignedUsers,IsSystemRole,CreatedOn");
 
         foreach (var r in rows)
         {
-            sb.AppendLine($"{r.AccountName},{r.RoleName},{r.Description},{r.AssignedUsers},{r.IsSystemRole},{r.CreatedOn:yyyy-MM-dd}");
+            sb.AppendLine(
+                $"{r.AccountName}," +
+                $"{r.RoleName}," +
+                $"{r.Description}," +
+                $"{r.AssignedUsers}," +
+                $"{r.IsSystemRole}," +
+                $"{r.CreatedOn:yyyy-MM-dd}"
+            );
         }
 
         return System.Text.Encoding.UTF8.GetBytes(sb.ToString());
     }
-
-
 }

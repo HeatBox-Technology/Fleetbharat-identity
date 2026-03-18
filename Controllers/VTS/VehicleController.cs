@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Application.DTOs;
@@ -9,7 +10,6 @@ using Microsoft.AspNetCore.Mvc;
 /// </summary>
 [ApiController]
 [Route("api/vehicles")]
-[AllowAnonymous]
 //[Authorize] // Enable if authentication required
 public class VehicleController : ControllerBase
 {
@@ -41,9 +41,10 @@ public class VehicleController : ControllerBase
     public async Task<IActionResult> GetAll(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
+        [FromQuery] int? accountId = null,
         [FromQuery] string? search = null)
     {
-        var result = await _service.GetVehicles(page, pageSize, search);
+        var result = await _service.GetVehicles(page, pageSize, accountId, search);
 
         return Ok(ApiResponse<object>.Ok(
             result,
@@ -126,9 +127,10 @@ public class VehicleController : ControllerBase
     public async Task<IActionResult> GetPaged(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
+        [FromQuery] int? accountId = null,
         [FromQuery] string? search = null)
     {
-        var result = await _service.GetPagedAsync(page, pageSize, search);
+        var result = await _service.GetPagedAsync(page, pageSize, accountId, search);
 
         return Ok(ApiResponse<object>.Ok(
             result,
@@ -148,5 +150,14 @@ public class VehicleController : ControllerBase
             result,
             "Vehicles created successfully",
             200));
+    }
+    [HttpGet("export")]
+    public async Task<IActionResult> ExportVehicles(
+      [FromQuery] int? accountId = null,
+      [FromQuery] string? search = null)
+    {
+        var bytes = await _service.ExportVehiclesCsvAsync(accountId, search);
+
+        return File(bytes, "text/csv", $"vehicles_export_{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
     }
 }

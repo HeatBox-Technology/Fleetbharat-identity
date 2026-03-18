@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -124,5 +125,18 @@ public class DriverController : ControllerBase
             result,
             "Drivers created successfully",
             200));
+    }
+    [HttpGet("export")]
+    public async Task<IActionResult> ExportDrivers(
+    [FromQuery] int? accountId,
+    [FromQuery] string? search)
+    {
+        var fileBytes = await _service.ExportDriversCsvAsync(accountId, search);
+
+        return File(
+            fileBytes,
+            "text/csv",
+            $"drivers_{DateTime.UtcNow:yyyyMMddHHmmss}.csv"
+        );
     }
 }

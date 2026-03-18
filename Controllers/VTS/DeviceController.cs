@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
 [Route("api/devices")]
-[AllowAnonymous]
+
 //[Authorize] // Enable if authentication required
 public class DeviceController : ControllerBase
 {

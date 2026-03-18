@@ -9,7 +9,7 @@ namespace Domain.Entities
     /// Example: A truck with vehicle number 'MH12AB1234' and VIN 'XYZ123456789'.
     /// </summary>
     [Table("mst_vehicle")]
-public class mst_vehicle : IAccountEntity
+    public class mst_vehicle : IAccountEntity
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
@@ -38,7 +38,9 @@ public class mst_vehicle : IAccountEntity
         public int CreatedBy { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public int? UpdatedBy { get; set; }
+        public int? DeletedBy { get; set; }
         public DateTime? UpdatedAt { get; set; }
+        public DateTime? DeletedAt { get; set; }
         public bool IsDeleted { get; set; } = false;
 
     }

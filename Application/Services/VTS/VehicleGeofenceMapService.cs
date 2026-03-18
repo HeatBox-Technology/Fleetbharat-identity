@@ -321,10 +321,12 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
     #region SYNC EXTERNAL API
 
     private async Task SyncVehicleGeofenceAsync(
-        map_vehicle_geofence entity,
-        HttpMethod method)
+      map_vehicle_geofence entity,
+      HttpMethod method)
     {
         bool success = false;
+        string payloadJson = string.Empty;
+        string? errorMessage = null;
 
         try
         {
@@ -350,23 +352,26 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
                 return;
 
             var payload = new List<ExternalGeofenceMappingRequest>
+        {
+            new ExternalGeofenceMappingRequest
             {
-                new ExternalGeofenceMappingRequest
+                vehicleId = vehicle.Id.ToString(),
+                vehicleNo = vehicle.VehicleNumber,
+                deviceNo = device.DeviceNo,
+                geofence = new List<ExternalGeofenceItem>
                 {
-                    vehicleId = vehicle.Id.ToString(),
-                    vehicleNo = vehicle.VehicleNumber,
-                    deviceNo = device.DeviceNo,
-                    geofence = new List<ExternalGeofenceItem>
+                    new ExternalGeofenceItem
                     {
-                        new ExternalGeofenceItem
-                        {
-                            geoId = geofence.Id,
-                            tripNo = "0",
-                            geoPoint = "START"
-                        }
+                        geoId = geofence.Id,
+                        tripNo = "0",
+                        geoPoint = "START"
                     }
                 }
-            };
+            }
+        };
+
+            // ✅ Serialize payload for logging
+            payloadJson = System.Text.Json.JsonSerializer.Serialize(payload);
 
             success = await _external.SendVehicleGeofenceMappingAsync(
                 payload,
@@ -381,17 +386,34 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
             else
             {
                 entity.SyncStatus = "FAILED";
-                entity.SyncError = "External API failure";
+                errorMessage = "External API failure";
+                entity.SyncError = errorMessage;
             }
         }
         catch (Exception ex)
         {
             entity.SyncStatus = "FAILED";
-            entity.SyncError = ex.Message;
+            errorMessage = ex.Message;
+            entity.SyncError = errorMessage;
 
             _logger.LogError(ex, "Vehicle geofence sync failed");
         }
 
+        // ✅ Save main entity update first
+        await _db.SaveChangesAsync();
+
+        // ✅ Insert log entry
+        var log = new map_vehicle_geofence_sync_log
+        {
+            MappingId = entity.Id,
+            PayloadJson = payloadJson,
+            IsSynced = success,
+            ErrorMessage = errorMessage,
+            RetryCount = 0, // initial attempt
+            LastTriedAt = DateTime.UtcNow
+        };
+
+        _db.map_vehicle_geofence_sync_logs.Add(log);
         await _db.SaveChangesAsync();
     }
 

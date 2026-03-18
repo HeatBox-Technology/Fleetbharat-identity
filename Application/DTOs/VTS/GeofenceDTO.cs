@@ -69,6 +69,7 @@ public class GeofenceDto
     public string? ColorTheme { get; set; }
 
     public DateTime? CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 
     public string CoordinatesJson { get; set; } = string.Empty;
     public List<CoordinateDto> Coordinates { get; set; } = new();

@@ -23,7 +23,9 @@ public class ExternalSyncQueueService : IExternalSyncQueueService
         {
             ModuleName = request.ModuleName,
             EntityId = request.EntityId,
-            PayloadJson = BuildCompactPayload(request.EntityId, request.PayloadJson),
+            PayloadJson = request.PreservePayload
+                ? request.PayloadJson
+                : BuildCompactPayload(request.EntityId, request.PayloadJson),
             Status = ExternalSyncStatus.Pending,
             RetryCount = 0,
             NextRetryTime = DateTime.UtcNow,

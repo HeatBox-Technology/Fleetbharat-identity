@@ -15,6 +15,7 @@ public interface IVehicleService
     Task<VehicleListUiResponseDto> GetVehicles(
         int page,
         int pageSize,
+        int? accountId,
         string? search = null);
 
     /// <summary>
@@ -43,10 +44,12 @@ public interface IVehicleService
     Task<PagedResultDto<VehicleDto>> GetPagedAsync(
         int page,
         int pageSize,
+        int? accountId,
         string? search = null);
 
     /// <summary>
     /// Bulk create vehicles
     /// </summary>
     Task<List<VehicleDto>> BulkCreateAsync(List<CreateVehicleDto> vehicles);
+    Task<byte[]> ExportVehiclesCsvAsync(int? accountId, string? search);
 }

@@ -14,7 +14,7 @@ namespace Controller;
 
 [ApiController]
 [Route("api/live-tracking")]
-[AllowAnonymous]
+
 public class LiveTrackingController : ControllerBase
 {
     private const int RedisBatchSize = 500;

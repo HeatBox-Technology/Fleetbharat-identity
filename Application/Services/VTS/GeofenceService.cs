@@ -166,7 +166,8 @@ public class GeofenceService : IGeofenceService
                 RadiusM = x.RadiusM,
                 Status = x.Status,
                 ColorTheme = x.ColorTheme,
-                CreatedAt = x.CreatedAt
+                CreatedAt = x.CreatedAt,
+                UpdatedAt = x.UpdatedAt
             })
             .ToListAsync();
 
