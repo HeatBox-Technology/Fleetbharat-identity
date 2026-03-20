@@ -1,0 +1,10 @@
+
+bin/
+obj/
+.vs/
+.vscode/
+.env
+artifacts/
+artifacts/build-billing/
+*.log
+storage/keys/
