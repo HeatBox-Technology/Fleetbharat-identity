@@ -50,6 +50,7 @@ public class AccountConfigurationService : IAccountConfigurationService
                 ? null
                 : string.Join(",", req.AllowedLanguages),
 
+            CreatedBy = _currentUser.AccountId > 0 ? _currentUser.AccountId : null,
             CreatedOn = DateTime.UtcNow,
             IsActive = true
         };
@@ -84,6 +85,7 @@ public class AccountConfigurationService : IAccountConfigurationService
             : string.Join(",", req.AllowedLanguages);
 
         cfg.IsActive = req.IsActive;
+        cfg.UpdatedBy = _currentUser.AccountId > 0 ? _currentUser.AccountId : null;
         cfg.UpdatedOn = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -98,6 +100,9 @@ public class AccountConfigurationService : IAccountConfigurationService
         if (cfg == null) return false;
 
         cfg.IsDeleted = true;
+        cfg.IsActive = false;
+        cfg.DeletedBy = _currentUser.AccountId > 0 ? _currentUser.AccountId : null;
+        cfg.DeletedAt = DateTime.UtcNow;
         cfg.UpdatedOn = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -155,10 +160,10 @@ public class AccountConfigurationService : IAccountConfigurationService
         {
             var s = search.Trim().ToLower();
             query = query.Where(x =>
-                x.acc.AccountName.ToLower().Contains(s) ||
-                x.cfg.MapProvider.ToLower().Contains(s) ||
-                x.cfg.DefaultLanguage.ToLower().Contains(s) ||
-                x.cfg.DateFormat.ToLower().Contains(s));
+                (x.acc.AccountName != null && x.acc.AccountName.ToLower().Contains(s)) ||
+                (x.cfg.MapProvider != null && x.cfg.MapProvider.ToLower().Contains(s)) ||
+                (x.cfg.DefaultLanguage != null && x.cfg.DefaultLanguage.ToLower().Contains(s)) ||
+                (x.cfg.DateFormat != null && x.cfg.DateFormat.ToLower().Contains(s)));
         }
 
         var total = await query.CountAsync();

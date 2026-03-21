@@ -31,7 +31,8 @@ public class BillingInvoiceService : IBillingInvoiceService
         return await _repo.Query<BillingInvoice>()
             .AsNoTracking()
             .ApplyAccountHierarchyFilter(_currentUser)
-            .OrderByDescending(x => x.InvoiceDate)
+            .Where(x => !x.IsDeleted)
+            .OrderByDescending(x => x.UpdatedDate ?? x.CreatedDate)
             .Skip(skip)
             .Take(take)
             .Select(x => new InvoiceResponseDto
@@ -61,8 +62,8 @@ public class BillingInvoiceService : IBillingInvoiceService
         return await _repo.Query<BillingInvoice>()
             .AsNoTracking()
             .ApplyAccountHierarchyFilter(_currentUser)
-            .Where(x => x.AccountId == accountId)
-            .OrderByDescending(x => x.InvoiceDate)
+            .Where(x => !x.IsDeleted && x.AccountId == accountId)
+            .OrderByDescending(x => x.UpdatedDate ?? x.CreatedDate)
             .Skip(skip)
             .Take(take)
             .Select(x => new InvoiceResponseDto
@@ -90,6 +91,17 @@ public class BillingInvoiceService : IBillingInvoiceService
         var actor = _currentUser.AccountId > 0 ? _currentUser.AccountId : (int?)null;
         var invoiceDate = dto.InvoiceDate?.Date ?? DateTime.UtcNow.Date;
         var dueDate = dto.DueDate?.Date ?? invoiceDate.AddDays(15);
+        var normalizedCurrency = string.IsNullOrWhiteSpace(dto.Currency) ? "INR" : dto.Currency.Trim().ToUpperInvariant();
+
+        var subscription = await _repo.Query<AccountSubscription>()
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x =>
+                !x.IsDeleted &&
+                x.Id == dto.SubscriptionId &&
+                x.AccountId == accountId, ct);
+
+        await ValidateInvoiceAsync(accountId, dto, invoiceDate, dueDate, subscription, ct);
 
         var invoice = new BillingInvoice
         {
@@ -97,14 +109,16 @@ public class BillingInvoiceService : IBillingInvoiceService
             InvoiceNumber = GenerateInvoiceNumber(accountId, invoiceDate),
             SubscriptionId = dto.SubscriptionId,
             Amount = dto.Amount,
-            Currency = dto.Currency,
+            Currency = normalizedCurrency,
             Status = "Pending",
+            IsActive = true,
             InvoiceDate = invoiceDate,
             DueDate = dueDate,
             CreatedBy = actor,
             UpdatedBy = actor,
             CreatedDate = DateTime.UtcNow,
-            UpdatedDate = DateTime.UtcNow
+            UpdatedDate = DateTime.UtcNow,
+            IsDeleted = false
         };
 
         await _repo.AddAsync(invoice, ct);
@@ -125,6 +139,29 @@ public class BillingInvoiceService : IBillingInvoiceService
             CreatedDate = invoice.CreatedDate,
             UpdatedDate = invoice.UpdatedDate
         };
+    }
+
+    public async Task<bool> DeleteInvoiceAsync(int id, CancellationToken ct = default)
+    {
+        var entity = await _repo.Query<BillingInvoice>()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x => !x.IsDeleted && x.Id == id, ct);
+
+        if (entity == null)
+        {
+            return false;
+        }
+
+        entity.IsDeleted = true;
+        entity.IsActive = false;
+        entity.Status = "Cancelled";
+        entity.UpdatedBy = _currentUser.AccountId > 0 ? _currentUser.AccountId : null;
+        entity.UpdatedDate = DateTime.UtcNow;
+        entity.DeletedBy = _currentUser.AccountId > 0 ? _currentUser.AccountId : null;
+        entity.DeletedAt = DateTime.UtcNow;
+
+        await _repo.SaveChangesAsync(ct);
+        return true;
     }
 
     public async Task<string> ExportInvoicesCsvAsync(int skip, int take, CancellationToken ct = default)
@@ -156,7 +193,7 @@ public class BillingInvoiceService : IBillingInvoiceService
 
         var dueSubscriptions = await _repo.Query<AccountSubscription>()
             .ApplyAccountHierarchyFilter(_currentUser)
-            .Where(x => x.Status == "Active" && x.NextBillingDate.Date <= now)
+            .Where(x => !x.IsDeleted && x.Status == "Active" && x.NextBillingDate.Date <= now)
             .OrderBy(x => x.NextBillingDate)
             .Take(take)
             .ToListAsync(ct);
@@ -167,6 +204,7 @@ public class BillingInvoiceService : IBillingInvoiceService
             var duplicateExists = await _repo.Query<BillingInvoice>()
                 .AsNoTracking()
                 .AnyAsync(x =>
+                    !x.IsDeleted &&
                     x.SubscriptionId == subscription.Id &&
                     x.InvoiceDate.Date == now, ct);
 
@@ -177,7 +215,7 @@ public class BillingInvoiceService : IBillingInvoiceService
 
             var amount = await _calculationService.CalculateSubscriptionAmountAsync(subscription, now, ct);
             var currencyId = await _repo.Query<BillingPlan>()
-                .Where(x => x.Id == subscription.PlanId)
+                .Where(x => !x.IsDeleted && x.Id == subscription.PlanId)
                 .Select(x => x.CurrencyId)
                 .FirstOrDefaultAsync(ct);
 
@@ -189,6 +227,7 @@ public class BillingInvoiceService : IBillingInvoiceService
                 Amount = amount,
                 Currency = currencyId == 0 ? "INR" : currencyId.ToString(CultureInfo.InvariantCulture),
                 Status = "Pending",
+                IsActive = true,
                 InvoiceDate = now,
                 DueDate = now.AddDays(15),
                 RetryCount = 0,
@@ -196,7 +235,8 @@ public class BillingInvoiceService : IBillingInvoiceService
                 CreatedBy = actor,
                 UpdatedBy = actor,
                 CreatedDate = DateTime.UtcNow,
-                UpdatedDate = DateTime.UtcNow
+                UpdatedDate = DateTime.UtcNow,
+                IsDeleted = false
             };
 
             await _repo.AddAsync(invoice, ct);
@@ -228,4 +268,53 @@ public class BillingInvoiceService : IBillingInvoiceService
 
     private static string GenerateInvoiceNumber(int accountId, DateTime date) =>
         $"INV-{accountId}-{date:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..8]}";
+
+    private async Task ValidateInvoiceAsync(
+        int accountId,
+        InvoiceManualCreateDto dto,
+        DateTime invoiceDate,
+        DateTime dueDate,
+        AccountSubscription? subscription,
+        CancellationToken ct)
+    {
+        if (dto == null)
+        {
+            throw new InvalidOperationException("Invoice payload is required.");
+        }
+
+        if (dto.SubscriptionId <= 0)
+        {
+            throw new InvalidOperationException("Subscription is required.");
+        }
+
+        if (dto.Amount <= 0)
+        {
+            throw new InvalidOperationException("Amount must be greater than zero.");
+        }
+
+        if (dueDate < invoiceDate)
+        {
+            throw new InvalidOperationException("Due date cannot be earlier than invoice date.");
+        }
+
+        var accountExists = await _repo.Query<mst_account>()
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AnyAsync(x => x.AccountId == accountId && !x.IsDeleted, ct);
+
+        if (!accountExists)
+        {
+            throw new InvalidOperationException("Account not found in accessible hierarchy.");
+        }
+
+        if (subscription == null)
+        {
+            throw new InvalidOperationException("Subscription not found for the selected account.");
+        }
+
+        if (subscription.EndDate.Date < invoiceDate)
+        {
+            throw new InvalidOperationException("Cannot create invoice for an expired subscription.");
+        }
+    }
 }

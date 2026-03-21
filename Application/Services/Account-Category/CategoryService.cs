@@ -18,7 +18,7 @@ public class CategoryService : ICategoryService
         var name = req.LabelName.Trim();
 
         var exists = await _db.Categories
-            .AnyAsync(x => x.LabelName == name);
+            .AnyAsync(x => x.LabelName == name && !x.IsDeleted);
 
         if (exists)
             throw new InvalidOperationException("Category already exists");
@@ -43,14 +43,17 @@ public class CategoryService : ICategoryService
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 10;
 
-        var query = _db.Categories.AsQueryable();
+        var query = _db.Categories
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
             query = query.Where(x =>
-                (x.LabelName ?? "").ToLower().Contains(s) ||
-                (x.Description ?? "").ToLower().Contains(s));
+                (x.LabelName != null && x.LabelName.ToLower().Contains(s)) ||
+                (x.Description != null && x.Description.ToLower().Contains(s)));
         }
 
         if (isActive.HasValue)
@@ -59,7 +62,7 @@ public class CategoryService : ICategoryService
         }
 
         return await query
-            .OrderByDescending(x => x.CreatedAt)
+            .OrderByDescending(x => x.UpdatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(x => new CategoryResponseDto
@@ -76,7 +79,8 @@ public class CategoryService : ICategoryService
     public async Task<CategoryResponseDto?> GetByIdAsync(int id)
     {
         return await _db.Categories
-            .Where(x => x.CategoryId == id)
+            .AsNoTracking()
+            .Where(x => x.CategoryId == id && !x.IsDeleted)
             .Select(x => new CategoryResponseDto
             {
                 CategoryId = x.CategoryId,
@@ -90,7 +94,7 @@ public class CategoryService : ICategoryService
 
     public async Task<bool> UpdateAsync(int id, UpdateCategoryRequest req)
     {
-        var entity = await _db.Categories.FirstOrDefaultAsync(x => x.CategoryId == id);
+        var entity = await _db.Categories.FirstOrDefaultAsync(x => x.CategoryId == id && !x.IsDeleted);
         if (entity == null) return false;
 
         entity.LabelName = req.LabelName.Trim();
@@ -104,7 +108,7 @@ public class CategoryService : ICategoryService
 
     public async Task<bool> UpdateStatusAsync(int id, bool isActive)
     {
-        var entity = await _db.Categories.FirstOrDefaultAsync(x => x.CategoryId == id);
+        var entity = await _db.Categories.FirstOrDefaultAsync(x => x.CategoryId == id && !x.IsDeleted);
         if (entity == null) return false;
 
         entity.IsActive = isActive;
@@ -116,10 +120,12 @@ public class CategoryService : ICategoryService
 
     public async Task<bool> DeleteAsync(int id)
     {
-        var entity = await _db.Categories.FirstOrDefaultAsync(x => x.CategoryId == id);
+        var entity = await _db.Categories.FirstOrDefaultAsync(x => x.CategoryId == id && !x.IsDeleted);
         if (entity == null) return false;
 
-        _db.Categories.Remove(entity);
+        entity.IsDeleted = true;
+        entity.DeletedAt = DateTime.UtcNow;
+        entity.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         return true;
     }

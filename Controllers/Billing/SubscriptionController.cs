@@ -33,4 +33,16 @@ public class SubscriptionController : ControllerBase
         var data = await _service.GetSubscriptionsByAccountAsync(accountId, skip, take, ct);
         return Ok(ApiResponse<object>.Ok(data));
     }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id, CancellationToken ct = default)
+    {
+        var ok = await _service.DeleteSubscriptionAsync(id, ct);
+        if (!ok)
+        {
+            return NotFound(ApiResponse<object>.Fail("Subscription not found", 404));
+        }
+
+        return Ok(ApiResponse<object>.Ok(null, "Subscription deleted", 200));
+    }
 }

@@ -26,5 +26,9 @@ public class mst_white_label : IAccountEntity
     public bool IsActive { get; set; } = true;
     public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedOn { get; set; }
+    public int? CreatedBy { get; set; }
+    public int? UpdatedBy { get; set; }
+    public int? DeletedBy { get; set; }
+    public DateTime? DeletedAt { get; set; }
     public bool IsDeleted { get; set; } = false;
 }

@@ -22,5 +22,9 @@ public class mst_account_configuration : IAccountEntity
 
     public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedOn { get; set; }
+    public int? CreatedBy { get; set; }
+    public int? UpdatedBy { get; set; }
+    public int? DeletedBy { get; set; }
+    public DateTime? DeletedAt { get; set; }
     public bool IsDeleted { get; set; } = false;
 }

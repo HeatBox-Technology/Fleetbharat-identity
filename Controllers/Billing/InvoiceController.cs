@@ -34,6 +34,18 @@ public class InvoiceController : ControllerBase
         return Ok(ApiResponse<object>.Ok(data, "Invoice created", 200));
     }
 
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id, CancellationToken ct = default)
+    {
+        var ok = await _service.DeleteInvoiceAsync(id, ct);
+        if (!ok)
+        {
+            return NotFound(ApiResponse<object>.Fail("Invoice not found", 404));
+        }
+
+        return Ok(ApiResponse<object>.Ok(null, "Invoice deleted", 200));
+    }
+
     [HttpGet("export")]
     public async Task<IActionResult> Export([FromQuery] int skip = 0, [FromQuery] int take = 500, CancellationToken ct = default)
     {

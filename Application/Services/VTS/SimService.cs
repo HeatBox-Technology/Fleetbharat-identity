@@ -10,10 +10,12 @@ using System;
 public class SimService : ISimService
 {
     private readonly IdentityDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public SimService(IdentityDbContext db)
+    public SimService(IdentityDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public async Task<int> CreateAsync(CreateSimDto dto)
@@ -126,6 +128,8 @@ public class SimService : ISimService
         if (pageSize <= 0) pageSize = 10;
 
         var query = _db.Sims
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => !x.IsDeleted)
             .AsQueryable();
 
@@ -133,13 +137,13 @@ public class SimService : ISimService
         {
             var s = search.Trim().ToLower();
             query = query.Where(x =>
-                (x.Iccid ?? "").ToLower().Contains(s) ||
-                (x.Msisdn ?? "").ToLower().Contains(s) ||
-                (x.Imsi ?? "").ToLower().Contains(s));
+                (x.Iccid != null && x.Iccid.ToLower().Contains(s)) ||
+                (x.Msisdn != null && x.Msisdn.ToLower().Contains(s)) ||
+                (x.Imsi != null && x.Imsi.ToLower().Contains(s)));
         }
 
         return await query
-            .OrderByDescending(x => x.SimId)
+            .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(x => MapToDto(x))
@@ -156,24 +160,26 @@ public class SimService : ISimService
         if (pageSize < 1) pageSize = 10;
 
         var query = _db.Sims
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => !x.IsDeleted)
             .AsQueryable();
 
         if (accountId.HasValue)
-            query = query.Where(x => x.AccountId == accountId);
+            query = query.Where(x => x.AccountId == accountId.Value);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
             query = query.Where(x =>
-                (x.Iccid ?? "").ToLower().Contains(s) ||
-                (x.Msisdn ?? "").ToLower().Contains(s));
+                (x.Iccid != null && x.Iccid.ToLower().Contains(s)) ||
+                (x.Msisdn != null && x.Msisdn.ToLower().Contains(s)));
         }
 
         var total = await query.CountAsync();
 
         var items = await query
-            .OrderByDescending(x => x.SimId)
+            .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(x => MapToDto(x))
@@ -194,18 +200,46 @@ public class SimService : ISimService
         int? accountId,
         string? search)
     {
-        var query = _db.Sims.Where(x => !x.IsDeleted);
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 10;
 
-        var total = await query.CountAsync();
-        var active = await query.CountAsync(x => x.IsActive);
+        var query = _db.Sims
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => !x.IsDeleted);
+
+        if (accountId.HasValue)
+            query = query.Where(x => x.AccountId == accountId.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                (x.Iccid != null && x.Iccid.ToLower().Contains(s)) ||
+                (x.Msisdn != null && x.Msisdn.ToLower().Contains(s)) ||
+                (x.Imsi != null && x.Imsi.ToLower().Contains(s)));
+        }
+
+        var summaryData = await query
+            .GroupBy(x => 1)
+            .Select(g => new
+            {
+                Total = g.Count(),
+                Active = g.Count(x => x.IsActive),
+                Expired = g.Count(x => x.ExpiryAt != null && x.ExpiryAt < DateTime.UtcNow)
+            })
+            .FirstOrDefaultAsync();
+
+        var total = summaryData?.Total ?? 0;
+        var active = summaryData?.Active ?? 0;
+        var expired = summaryData?.Expired ?? 0;
 
         var summary = new SimSummaryDto
         {
             TotalSims = total,
             Active = active,
             Inactive = total - active,
-            Expired = await query.CountAsync(x =>
-                x.ExpiryAt != null && x.ExpiryAt < DateTime.UtcNow)
+            Expired = expired
         };
 
         var paged = await GetPagedAsync(page, pageSize, accountId, search);

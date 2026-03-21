@@ -34,6 +34,7 @@ public class BillingSubscriptionService : IBillingSubscriptionService
             throw new InvalidOperationException("Plan not found in accessible hierarchy.");
         }
 
+        await ValidateSubscriptionAsync(accountId, dto, plan, ct);
         var actor = _currentUser.AccountId > 0 ? _currentUser.AccountId : (int?)null;
         var now = DateTime.UtcNow;
 
@@ -46,10 +47,12 @@ public class BillingSubscriptionService : IBillingSubscriptionService
             EndDate = dto.EndDate,
             Status = dto.Status,
             NextBillingDate = CalculateNextBillingDate(dto.StartDate, plan.BillingCycleId),
+            IsActive = string.Equals(dto.Status, "Active", StringComparison.OrdinalIgnoreCase),
             CreatedBy = actor,
             UpdatedBy = actor,
             CreatedDate = now,
-            UpdatedDate = now
+            UpdatedDate = now,
+            IsDeleted = false
         };
 
         await _repo.AddAsync(subscription, ct);
@@ -65,7 +68,8 @@ public class BillingSubscriptionService : IBillingSubscriptionService
         return await _repo.Query<AccountSubscription>()
             .AsNoTracking()
             .ApplyAccountHierarchyFilter(_currentUser)
-            .OrderByDescending(x => x.CreatedDate)
+            .Where(x => !x.IsDeleted)
+            .OrderByDescending(x => x.UpdatedDate ?? x.CreatedDate)
             .Skip(skip)
             .Take(take)
             .Select(x => new AccountSubscriptionResponseDto
@@ -94,8 +98,8 @@ public class BillingSubscriptionService : IBillingSubscriptionService
         return await _repo.Query<AccountSubscription>()
             .AsNoTracking()
             .ApplyAccountHierarchyFilter(_currentUser)
-            .Where(x => x.AccountId == accountId)
-            .OrderByDescending(x => x.CreatedDate)
+            .Where(x => !x.IsDeleted && x.AccountId == accountId)
+            .OrderByDescending(x => x.UpdatedDate ?? x.CreatedDate)
             .Skip(skip)
             .Take(take)
             .Select(x => new AccountSubscriptionResponseDto
@@ -114,6 +118,29 @@ public class BillingSubscriptionService : IBillingSubscriptionService
                 UpdatedDate = x.UpdatedDate
             })
             .ToListAsync(ct);
+    }
+
+    public async Task<bool> DeleteSubscriptionAsync(int id, CancellationToken ct = default)
+    {
+        var entity = await _repo.Query<AccountSubscription>()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x => !x.IsDeleted && x.Id == id, ct);
+
+        if (entity == null)
+        {
+            return false;
+        }
+
+        entity.IsDeleted = true;
+        entity.IsActive = false;
+        entity.Status = "Inactive";
+        entity.UpdatedBy = _currentUser.AccountId > 0 ? _currentUser.AccountId : null;
+        entity.UpdatedDate = DateTime.UtcNow;
+        entity.DeletedBy = _currentUser.AccountId > 0 ? _currentUser.AccountId : null;
+        entity.DeletedAt = DateTime.UtcNow;
+
+        await _repo.SaveChangesAsync(ct);
+        return true;
     }
 
     private int ResolveAccount(int requestAccountId)
@@ -135,5 +162,68 @@ public class BillingSubscriptionService : IBillingSubscriptionService
             3 => startDate.Date.AddYears(1),
             _ => startDate.Date.AddMonths(1)
         };
+    }
+
+    private async Task ValidateSubscriptionAsync(
+        int accountId,
+        AccountSubscriptionMapPlanDto dto,
+        BillingPlan plan,
+        CancellationToken ct)
+    {
+        if (dto == null)
+        {
+            throw new InvalidOperationException("Subscription payload is required.");
+        }
+
+        if (dto.PlanId <= 0)
+        {
+            throw new InvalidOperationException("Plan is required.");
+        }
+
+        if (dto.Units <= 0)
+        {
+            throw new InvalidOperationException("Units must be greater than zero.");
+        }
+
+        if (dto.EndDate.Date < dto.StartDate.Date)
+        {
+            throw new InvalidOperationException("End date must be greater than or equal to start date.");
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.Status))
+        {
+            throw new InvalidOperationException("Subscription status is required.");
+        }
+
+        var accountExists = await _repo.Query<mst_account>()
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AnyAsync(x => x.AccountId == accountId && !x.IsDeleted, ct);
+
+        if (!accountExists)
+        {
+            throw new InvalidOperationException("Account not found in accessible hierarchy.");
+        }
+
+        if (plan.AccountId != accountId)
+        {
+            throw new InvalidOperationException("Selected plan does not belong to the target account.");
+        }
+
+        var duplicateExists = await _repo.Query<AccountSubscription>()
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AnyAsync(x =>
+                !x.IsDeleted &&
+                x.AccountId == accountId &&
+                x.PlanId == dto.PlanId &&
+                x.Status == dto.Status &&
+                x.StartDate.Date == dto.StartDate.Date &&
+                x.EndDate.Date == dto.EndDate.Date, ct);
+
+        if (duplicateExists)
+        {
+            throw new InvalidOperationException("A matching subscription already exists for this account.");
+        }
     }
 }

@@ -21,10 +21,13 @@ public class BillingPlan : IAccountEntity
     public decimal DiscountPercentage { get; set; }
     public decimal RecurringPlatformFee { get; set; }
     public decimal RecurringAmcFee { get; set; }
+    public bool IsActive { get; set; } = true;
     public int? CreatedBy { get; set; }
     public int? UpdatedBy { get; set; }
     public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedDate { get; set; }
+    public int? DeletedBy { get; set; }
+    public DateTime? DeletedAt { get; set; }
     public bool IsDeleted { get; set; }
 
     public List<PlanFeature> Features { get; set; } = new();

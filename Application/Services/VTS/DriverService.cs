@@ -198,22 +198,22 @@ public class DriverService : IDriverService
         if (accountId.HasValue)
             query = query.Where(x => x.AccountId == accountId.Value);
 
-        // ✅ Search (NO ToLower)
+        // ✅ Search
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var s = search.Trim();
+            var s = search.Trim().ToLower();
 
             query = query.Where(x =>
-                (x.Name != null && x.Name.Contains(s)) ||
-                (x.Mobile != null && x.Mobile.Contains(s)) ||
-                (x.LicenseNumber != null && x.LicenseNumber.Contains(s))
+                (x.Name != null && x.Name.ToLower().Contains(s)) ||
+                (x.Mobile != null && x.Mobile.ToLower().Contains(s)) ||
+                (x.LicenseNumber != null && x.LicenseNumber.ToLower().Contains(s))
             );
         }
 
         var total = await query.CountAsync();
 
         var items = await query
-        .OrderByDescending(x => x.DriverId)
+        .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
         .Skip((page - 1) * pageSize)
         .Take(pageSize)
         .Select(x => new DriverDto
@@ -250,17 +250,40 @@ public class DriverService : IDriverService
      int? accountId,
      string? search)
     {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 10;
+
         var query = BaseQuery();
 
         if (accountId.HasValue)
             query = query.Where(x => x.AccountId == accountId.Value);
 
-        var total = await query.CountAsync();
-        var active = await query.CountAsync(x => x.IsActive);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
 
-        var expiringSoon = await query.CountAsync(x =>
-            x.LicenseExpiry != null &&
-            x.LicenseExpiry <= DateTime.UtcNow.AddDays(30));
+            query = query.Where(x =>
+                (x.Name != null && x.Name.ToLower().Contains(s)) ||
+                (x.Mobile != null && x.Mobile.ToLower().Contains(s)) ||
+                (x.LicenseNumber != null && x.LicenseNumber.ToLower().Contains(s))
+            );
+        }
+
+        var summaryData = await query
+            .GroupBy(x => 1)
+            .Select(g => new
+            {
+                Total = g.Count(),
+                Active = g.Count(x => x.IsActive),
+                ExpiringSoon = g.Count(x =>
+                    x.LicenseExpiry != null &&
+                    x.LicenseExpiry <= DateTime.UtcNow.AddDays(30))
+            })
+            .FirstOrDefaultAsync();
+
+        var total = summaryData?.Total ?? 0;
+        var active = summaryData?.Active ?? 0;
+        var expiringSoon = summaryData?.ExpiringSoon ?? 0;
 
         var summary = new DriverSummaryDto
         {

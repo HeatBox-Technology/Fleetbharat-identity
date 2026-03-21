@@ -10,10 +10,12 @@ using System.Collections.Generic;
 public class DeviceService : IDeviceService
 {
     private readonly IdentityDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public DeviceService(IdentityDbContext db)
+    public DeviceService(IdentityDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public async Task<int> CreateAsync(CreateDeviceDto dto)
@@ -57,6 +59,7 @@ public class DeviceService : IDeviceService
 
         var query = _db.Devices
             .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => !x.IsDeleted);
 
         if (accountId.HasValue)
@@ -66,15 +69,23 @@ public class DeviceService : IDeviceService
         {
             var s = search.Trim().ToLower();
             query = query.Where(x =>
-                x.DeviceImeiOrSerial.ToLower().Contains(s) ||
-                x.DeviceNo.ToLower().Contains(s));
+                (x.DeviceImeiOrSerial != null && x.DeviceImeiOrSerial.ToLower().Contains(s)) ||
+                (x.DeviceNo != null && x.DeviceNo.ToLower().Contains(s)));
         }
 
-        var totalDevices = await query.CountAsync();
+        var summaryData = await query
+            .GroupBy(x => 1)
+            .Select(g => new
+            {
+                Total = g.Count(),
+                Active = g.Count(x =>
+                    x.DeviceStatus != null &&
+                    (x.DeviceStatus.ToLower() == "active" || x.DeviceStatus.ToLower() == "inservice"))
+            })
+            .FirstOrDefaultAsync();
 
-        var inService = await query.CountAsync(x =>
-            x.DeviceStatus.ToLower() == "active" ||
-            x.DeviceStatus.ToLower() == "inservice");
+        var totalDevices = summaryData?.Total ?? 0;
+        var inService = summaryData?.Active ?? 0;
 
         var outOfService = totalDevices - inService;
 
@@ -86,7 +97,7 @@ public class DeviceService : IDeviceService
         };
 
         var items = await query
-            .OrderByDescending(x => x.Id)
+            .OrderByDescending(x => x.updatedAt ?? x.createdAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(x => new DeviceDto
@@ -202,6 +213,7 @@ public class DeviceService : IDeviceService
 
         var query = _db.Devices
             .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => !x.IsDeleted);
 
         if (accountId.HasValue)
@@ -211,14 +223,14 @@ public class DeviceService : IDeviceService
         {
             var s = search.Trim().ToLower();
             query = query.Where(x =>
-                x.DeviceImeiOrSerial.ToLower().Contains(s) ||
-                x.DeviceNo.ToLower().Contains(s));
+                (x.DeviceImeiOrSerial != null && x.DeviceImeiOrSerial.ToLower().Contains(s)) ||
+                (x.DeviceNo != null && x.DeviceNo.ToLower().Contains(s)));
         }
 
         var totalCount = await query.CountAsync();
 
         var data = await query
-            .OrderByDescending(x => x.Id)
+            .OrderByDescending(x => x.updatedAt ?? x.createdAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(x => new DeviceDto

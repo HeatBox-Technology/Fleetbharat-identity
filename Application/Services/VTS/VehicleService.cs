@@ -37,8 +37,10 @@ namespace Application.Services
                 VinOrChassisNumber = dto.VinOrChassisNumber?.Trim(),
                 VehicleTypeId = dto.VehicleTypeId,
                 Status = "Active",
+                IsActive = true,
                 CreatedBy = dto.CreatedBy,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                IsDeleted = false
             };
 
             _db.Vehicles.Add(entity);
@@ -58,17 +60,29 @@ namespace Application.Services
 
             var query = _db.Vehicles
                 .AsNoTracking()
+                .ApplyAccountHierarchyFilter(_currentUserService)
                 .Where(x => !x.IsDeleted);
             if (accountId.HasValue)
                 query = query.Where(x => x.AccountId == accountId.Value);
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var s = search.Trim().ToLower();
-                query = query.Where(x => x.VehicleNumber.ToLower().Contains(s));
+                query = query.Where(x =>
+                    x.VehicleNumber != null &&
+                    x.VehicleNumber.ToLower().Contains(s));
             }
 
-            var totalFleet = await query.CountAsync();
-            var inService = await query.CountAsync(x => x.Status.ToLower() == "active");
+            var summaryData = await query
+                .GroupBy(x => 1)
+                .Select(g => new
+                {
+                    Total = g.Count(),
+                    Active = g.Count(x => x.Status != null && x.Status.ToLower() == "active")
+                })
+                .FirstOrDefaultAsync();
+
+            var totalFleet = summaryData?.Total ?? 0;
+            var inService = summaryData?.Active ?? 0;
             var outOfService = totalFleet - inService;
 
             var summary = new VehicleSummaryDto
@@ -81,7 +95,7 @@ namespace Application.Services
             var totalRecords = totalFleet;
 
             var items = await query
-                .OrderByDescending(x => x.Id)
+                .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(x => new VehicleDto
@@ -148,6 +162,7 @@ namespace Application.Services
             entity.VinOrChassisNumber = dto.VinOrChassisNumber?.Trim();
             entity.VehicleTypeId = dto.VehicleTypeId;
             entity.Status = dto.Status;
+            entity.IsActive = !string.Equals(dto.Status, "Inactive", StringComparison.OrdinalIgnoreCase);
             entity.UpdatedBy = dto.updatedBy;
             entity.UpdatedAt = DateTime.UtcNow;
 
@@ -163,6 +178,7 @@ namespace Application.Services
             if (entity == null) return false;
 
             entity.Status = status;
+            entity.IsActive = !string.Equals(status, "Inactive", StringComparison.OrdinalIgnoreCase);
             entity.UpdatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
@@ -177,6 +193,7 @@ namespace Application.Services
             if (entity == null) return false;
 
             entity.IsDeleted = true;
+            entity.IsActive = false;
             entity.DeletedBy = _currentUserService.AccountId;
             entity.DeletedAt = DateTime.UtcNow;
 
@@ -195,24 +212,24 @@ namespace Application.Services
 
             var query = _db.Vehicles
                 .AsNoTracking()
+                .ApplyAccountHierarchyFilter(_currentUserService)
                 .Where(x => !x.IsDeleted);
 
-            if (!_currentUserService.IsSystem)
-            {
-                query = query.Where(x =>
-                    _currentUserService.AccessibleAccountIds.Contains(x.AccountId));
-            }
+            if (accountId.HasValue)
+                query = query.Where(x => x.AccountId == accountId.Value);
 
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var s = search.Trim().ToLower();
-                query = query.Where(x => x.VehicleNumber.ToLower().Contains(s));
+                query = query.Where(x =>
+                    x.VehicleNumber != null &&
+                    x.VehicleNumber.ToLower().Contains(s));
             }
 
             var totalCount = await query.CountAsync();
 
             var data = await query
-                .OrderByDescending(x => x.Id)
+                .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(x => new VehicleDto
@@ -246,8 +263,10 @@ namespace Application.Services
                 VinOrChassisNumber = dto.VinOrChassisNumber?.Trim(),
                 VehicleTypeId = dto.VehicleTypeId,
                 Status = "Active",
+                IsActive = true,
                 CreatedBy = dto.CreatedBy,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                IsDeleted = false
             }).ToList();
 
             _db.Vehicles.AddRange(entities);

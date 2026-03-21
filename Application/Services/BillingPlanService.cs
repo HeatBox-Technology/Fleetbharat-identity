@@ -25,7 +25,7 @@ public class BillingPlanService : IBillingPlanService
             .AsNoTracking()
             .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => !x.IsDeleted)
-            .OrderByDescending(x => x.CreatedDate)
+            .OrderByDescending(x => x.UpdatedDate ?? x.CreatedDate)
             .Skip(skip)
             .Take(take)
             .Select(x => new PlanResponseDto
@@ -153,6 +153,7 @@ public class BillingPlanService : IBillingPlanService
     {
         var actor = _currentUser.AccountId > 0 ? _currentUser.AccountId : (int?)null;
         var accountId = ResolveAccount(dto.AccountId);
+        await ValidatePlanAsync(accountId, dto, null, ct);
         var solutionIds = await ValidateAndNormalizeSolutionIdsAsync(dto.SolutionIds, ct);
 
         var entity = new BillingPlan
@@ -174,10 +175,12 @@ public class BillingPlanService : IBillingPlanService
             DiscountPercentage = dto.DiscountPercentage,
             RecurringPlatformFee = dto.RecurringPlatformFee,
             RecurringAmcFee = dto.RecurringAmcFee,
+            IsActive = true,
             CreatedBy = actor,
             UpdatedBy = actor,
             CreatedDate = DateTime.UtcNow,
-            UpdatedDate = DateTime.UtcNow
+            UpdatedDate = DateTime.UtcNow,
+            IsDeleted = false
         };
 
         await _repo.AddAsync(entity, ct);
@@ -212,6 +215,7 @@ public class BillingPlanService : IBillingPlanService
             return false;
         }
 
+        await ValidatePlanAsync(entity.AccountId, dto, id, ct);
         var solutionIds = await ValidateAndNormalizeSolutionIdsAsync(dto.SolutionIds, ct);
 
         entity.PlanName = dto.PlanName.Trim();
@@ -222,6 +226,7 @@ public class BillingPlanService : IBillingPlanService
         entity.ContractDuration = dto.ContractDuration;
         entity.PricingModel = dto.PricingModel;
         entity.PlanStatus = dto.PlanStatus;
+        entity.IsActive = !string.Equals(dto.PlanStatus, "Inactive", StringComparison.OrdinalIgnoreCase);
         entity.TierId = dto.TierId;
         entity.BaseRate = dto.BaseRate;
         entity.MinUnits = dto.MinUnits;
@@ -271,9 +276,12 @@ public class BillingPlanService : IBillingPlanService
         }
 
         entity.IsDeleted = true;
+        entity.IsActive = false;
         entity.PlanStatus = "Inactive";
         entity.UpdatedBy = _currentUser.AccountId > 0 ? _currentUser.AccountId : null;
         entity.UpdatedDate = DateTime.UtcNow;
+        entity.DeletedBy = _currentUser.AccountId > 0 ? _currentUser.AccountId : null;
+        entity.DeletedAt = DateTime.UtcNow;
         await _repo.SaveChangesAsync(ct);
         return true;
     }
@@ -357,5 +365,72 @@ public class BillingPlanService : IBillingPlanService
         }
 
         return solutionIds;
+    }
+
+    private async Task ValidatePlanAsync(int accountId, CreatePlanDto dto, int? existingId, CancellationToken ct)
+    {
+        if (dto == null)
+        {
+            throw new InvalidOperationException("Plan payload is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.PlanName))
+        {
+            throw new InvalidOperationException("Plan name is required.");
+        }
+
+        if (dto.MinUnits < 0 || dto.MaxUnits < 0 || dto.MaxUnits < dto.MinUnits)
+        {
+            throw new InvalidOperationException("Plan units are invalid.");
+        }
+
+        if (dto.ContractDuration <= 0)
+        {
+            throw new InvalidOperationException("Contract duration must be greater than zero.");
+        }
+
+        if (dto.CurrencyId <= 0)
+        {
+            throw new InvalidOperationException("Currency is required.");
+        }
+
+        if (dto.BillingCycleId <= 0)
+        {
+            throw new InvalidOperationException("Billing cycle is required.");
+        }
+
+        var accountExists = await _repo.Query<mst_account>()
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AnyAsync(x => x.AccountId == accountId && !x.IsDeleted, ct);
+
+        if (!accountExists)
+        {
+            throw new InvalidOperationException("Account not found in accessible hierarchy.");
+        }
+
+        var currencyExists = await _repo.Query<Currency>()
+            .AsNoTracking()
+            .AnyAsync(x => x.CurrencyId == dto.CurrencyId && x.IsActive, ct);
+
+        if (!currencyExists)
+        {
+            throw new InvalidOperationException("Currency is invalid.");
+        }
+
+        var normalizedName = dto.PlanName.Trim().ToLower();
+        var duplicateExists = await _repo.Query<BillingPlan>()
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AnyAsync(x =>
+                !x.IsDeleted &&
+                x.AccountId == accountId &&
+                x.Id != (existingId ?? 0) &&
+                x.PlanName.ToLower() == normalizedName, ct);
+
+        if (duplicateExists)
+        {
+            throw new InvalidOperationException("Plan name already exists for this account.");
+        }
     }
 }

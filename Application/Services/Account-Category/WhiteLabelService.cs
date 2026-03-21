@@ -56,6 +56,7 @@ public class WhiteLabelService : IWhiteLabelService
             PrimaryColorHex = string.IsNullOrWhiteSpace(req.PrimaryColorHex) ? "#4F46E5" : req.PrimaryColorHex,
             SecondaryColorHex = string.IsNullOrWhiteSpace(req.PrimaryColorHex) ? "#bbbace" : req.SecondaryColorHex,
             IsActive = req.IsActive,
+            CreatedBy = _currentUser.AccountId > 0 ? _currentUser.AccountId : null,
             CreatedOn = DateTime.UtcNow
         };
 
@@ -83,6 +84,7 @@ public class WhiteLabelService : IWhiteLabelService
         entity.PrimaryColorHex = string.IsNullOrWhiteSpace(req.PrimaryColorHex) ? entity.PrimaryColorHex : req.PrimaryColorHex;
         entity.SecondaryColorHex = string.IsNullOrWhiteSpace(req.SecondaryColorHex) ? entity.SecondaryColorHex : req.SecondaryColorHex;
         entity.IsActive = req.IsActive;
+        entity.UpdatedBy = _currentUser.AccountId > 0 ? _currentUser.AccountId : null;
         entity.UpdatedOn = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -97,6 +99,9 @@ public class WhiteLabelService : IWhiteLabelService
         if (entity == null) return false;
 
         entity.IsDeleted = true;
+        entity.IsActive = false;
+        entity.DeletedBy = _currentUser.AccountId > 0 ? _currentUser.AccountId : null;
+        entity.DeletedAt = DateTime.UtcNow;
         entity.UpdatedOn = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
@@ -203,8 +208,8 @@ public class WhiteLabelService : IWhiteLabelService
         {
             var s = search.Trim().ToLower();
             query = query.Where(x =>
-                x.acc.AccountName.ToLower().Contains(s) ||
-                x.wl.CustomEntryFqdn.ToLower().Contains(s));
+                (x.acc.AccountName != null && x.acc.AccountName.ToLower().Contains(s)) ||
+                (x.wl.CustomEntryFqdn != null && x.wl.CustomEntryFqdn.ToLower().Contains(s)));
         }
 
         var total = await query.CountAsync();

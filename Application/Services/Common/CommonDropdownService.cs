@@ -7,25 +7,32 @@ public class CommonDropdownService : ICommonDropdownService
 {
     private readonly IdentityDbContext _db;
     private readonly IHierarchyService _hierarchyService;
+    private readonly ICurrentUserService _currentUser;
 
-    public CommonDropdownService(IdentityDbContext db, IHierarchyService hierarchyService)
+    public CommonDropdownService(
+        IdentityDbContext db,
+        IHierarchyService hierarchyService,
+        ICurrentUserService currentUser)
     {
         _db = db;
         _hierarchyService = hierarchyService;
+        _currentUser = currentUser;
     }
 
     public async Task<List<DropdownDto>> GetAccountsAsync(string? search, int limit)
     {
         if (limit <= 0) limit = 20;
 
-        var query = _db.Accounts.AsNoTracking().Where(x => !x.IsDeleted);
+        var query = _db.Accounts.AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => !x.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
             query = query.Where(x =>
-                x.AccountName.ToLower().Contains(s) ||
-                x.AccountCode.ToLower().Contains(s));
+                (x.AccountName != null && x.AccountName.ToLower().Contains(s)) ||
+                (x.AccountCode != null && x.AccountCode.ToLower().Contains(s)));
         }
 
         return await query
@@ -49,7 +56,7 @@ public class CommonDropdownService : ICommonDropdownService
         {
             var s = search.Trim().ToLower();
             query = query.Where(x =>
-                x.LabelName.ToLower().Contains(s));
+                x.LabelName != null && x.LabelName.ToLower().Contains(s));
         }
 
         return await query
@@ -68,12 +75,13 @@ public class CommonDropdownService : ICommonDropdownService
         if (limit <= 0) limit = 20;
 
         var query = _db.Roles.AsNoTracking()
-            .Where(x => x.AccountId == accountId);
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => x.AccountId == accountId && !x.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
-            query = query.Where(x => x.RoleName.ToLower().Contains(s));
+            query = query.Where(x => x.RoleName != null && x.RoleName.ToLower().Contains(s));
         }
 
         return await query
@@ -92,15 +100,16 @@ public class CommonDropdownService : ICommonDropdownService
         if (limit <= 0) limit = 20;
 
         var query = _db.Users.AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => x.AccountId == accountId && !x.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
             query = query.Where(x =>
-                x.FirstName.ToLower().Contains(s) ||
-                x.LastName.ToLower().Contains(s) ||
-                x.Email.ToLower().Contains(s));
+                (x.FirstName != null && x.FirstName.ToLower().Contains(s)) ||
+                (x.LastName != null && x.LastName.ToLower().Contains(s)) ||
+                (x.Email != null && x.Email.ToLower().Contains(s)));
         }
 
         return await query
@@ -116,6 +125,7 @@ public class CommonDropdownService : ICommonDropdownService
     public async Task<List<DropdownDto>> GetCurrencyDropdownAsync()
     {
         return await _db.Currencies
+            .AsNoTracking()
             .Where(x => x.IsActive)
             .OrderBy(x => x.Code)
             .Select(x => new DropdownDto
@@ -128,6 +138,7 @@ public class CommonDropdownService : ICommonDropdownService
     public async Task<List<DropdownDto>> GetFormModuleDropdownAsync()
     {
         return await _db.FormModules
+            .AsNoTracking()
             .Where(x => x.IsActive)
             .OrderBy(x => x.ModuleName)
             .Select(x => new DropdownDto
@@ -140,6 +151,8 @@ public class CommonDropdownService : ICommonDropdownService
     public async Task<List<DropdownDto>> GetVehicles(int accountId)
     {
         return await _db.Vehicles
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => x.AccountId == accountId &&
                         x.Status == "Active" &&
                         !x.IsDeleted)
@@ -155,6 +168,8 @@ public class CommonDropdownService : ICommonDropdownService
     public async Task<List<DropdownDto>> GetDevices(int accountId)
     {
         return await _db.Devices
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => x.AccountId == accountId &&
                         x.IsActive &&
                         !x.IsDeleted)
@@ -170,6 +185,8 @@ public class CommonDropdownService : ICommonDropdownService
     public async Task<List<DropdownDto>> GetSims(int accountId)
     {
         return await _db.Sims
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => x.AccountId == accountId &&
                         x.IsActive &&
                         !x.IsDeleted)
@@ -203,6 +220,7 @@ public class CommonDropdownService : ICommonDropdownService
         if (limit <= 0) limit = 20;
 
         var query = _db.GeofenceZones.AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => x.AccountId == accountId &&
                         x.Status == "ENABLED" &&
                         !x.IsDeleted);
@@ -211,7 +229,7 @@ public class CommonDropdownService : ICommonDropdownService
         {
             var s = search.Trim().ToLower();
             query = query.Where(x =>
-                x.DisplayName.ToLower().Contains(s));
+                x.DisplayName != null && x.DisplayName.ToLower().Contains(s));
         }
 
         return await query

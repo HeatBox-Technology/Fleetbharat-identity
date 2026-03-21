@@ -67,15 +67,15 @@ public class AuthService : IAuthService
             user.TwoFactorCodeHash = BCrypt.Net.BCrypt.HashPassword(code);
             user.TwoFactorExpiry = DateTime.UtcNow.AddMinutes(5);
             await _db.SaveChangesAsync();
-
-            var template = await LoadEmailTemplateAsync("fleetbharat-2fa.html");
-            var body = template.Replace("{{CODE}}", code);
-
-            await _emailService.SendAsync(
-                user.Email,
-                "Fleetbharat Login Verification Code",
-                body
-            );
+            await SendBrandedEmailAsync(
+                accountId: user.AccountId,
+                toEmail: user.Email,
+                templateName: "2fa.html",
+                subjectFactory: brandName => $"{brandName} Login Verification Code",
+                placeholders: new Dictionary<string, string>
+                {
+                    ["{{CODE}}"] = code
+                });
 
             return new LoginWithAccessResponse
             {
@@ -112,6 +112,7 @@ public class AuthService : IAuthService
         // -------------------------------------------------
         // ✅ Generate tokens
         // -------------------------------------------------
+        StampSuccessfulLogin(user);
         var tokens = await GenerateTokens(
             user,
             roleName,
@@ -275,16 +276,16 @@ public class AuthService : IAuthService
         var resetBaseUrl = _config["Frontend:ResetPasswordUrl"]!;
         var resetLink = $"{resetBaseUrl}?token={token}&email={email}";
 
-        var template = await LoadEmailTemplateAsync("fleetbharat-reset-password.html");
-        var body = template
-            .Replace("{{FIRSTNAME}}", user.FirstName ?? "")
-            .Replace("{{RESET_LINK}}", resetLink);
-
-        await _emailService.SendAsync(
-            email,
-            "Fleetbharat Password Reset Request",
-            body
-        );
+        await SendBrandedEmailAsync(
+            accountId: user.AccountId,
+            toEmail: email,
+            templateName: "reset-password.html",
+            subjectFactory: brandName => $"{brandName} Password Reset Request",
+            placeholders: new Dictionary<string, string>
+            {
+                ["{{FIRSTNAME}}"] = user.FirstName ?? string.Empty,
+                ["{{RESET_LINK}}"] = resetLink
+            });
     }
 
 
@@ -386,8 +387,7 @@ public class AuthService : IAuthService
         user.TwoFactorCodeHash = null;
         user.TwoFactorExpiry = null;
         TwoFactorAttemptTracker.TryRemove(user.UserId, out _);
-
-        await _db.SaveChangesAsync();
+        StampSuccessfulLogin(user);
 
         // ✅ Generate tokens now
         var role = await _db.Roles
@@ -469,6 +469,11 @@ public class AuthService : IAuthService
     private static bool ResolveIsSystemRole(mst_role? role, string roleName) =>
         role?.IsSystemRole == true ||
         roleName.Equals("System", StringComparison.OrdinalIgnoreCase);
+
+    private static void StampSuccessfulLogin(User user)
+    {
+        user.LastLoginAt = DateTime.UtcNow;
+    }
 
     private async Task<IReadOnlyCollection<int>> BuildAccessibleAccountIdsAsync(
         string hierarchyPath,
@@ -552,6 +557,65 @@ public class AuthService : IAuthService
             return await File.ReadAllTextAsync(baseDirectoryPath);
 
         throw new FileNotFoundException($"Email template not found: {relativePath}");
+    }
+
+    private async Task SendBrandedEmailAsync(
+        int accountId,
+        string toEmail,
+        string templateName,
+        Func<string, string> subjectFactory,
+        IDictionary<string, string>? placeholders = null)
+    {
+        if (string.IsNullOrWhiteSpace(toEmail))
+            return;
+
+        var branding = await GetBrandingAsync(accountId);
+        var template = await LoadEmailTemplateAsync(templateName);
+        var body = ApplyBrandingPlaceholders(template, branding.BrandName, branding.LogoUrl, placeholders);
+        var subject = subjectFactory(branding.BrandName);
+
+        await _emailService.SendAsync(toEmail, subject, body);
+    }
+
+    private async Task<(string BrandName, string LogoUrl)> GetBrandingAsync(int accountId)
+    {
+        const string defaultBrandName = "IOT";
+
+        var branding = await _db.WhiteLabels
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.AccountId == accountId &&
+                x.IsActive &&
+                !x.IsDeleted);
+
+        var brandName = string.IsNullOrWhiteSpace(branding?.BrandName)
+            ? defaultBrandName
+            : branding.BrandName.Trim();
+
+        var logoUrl = branding?.LogoUrl?.Trim() ?? string.Empty;
+
+        return (brandName, logoUrl);
+    }
+
+    private static string ApplyBrandingPlaceholders(
+        string template,
+        string brandName,
+        string logoUrl,
+        IDictionary<string, string>? placeholders)
+    {
+        var body = template
+            .Replace("{{BRAND_NAME}}", brandName, StringComparison.Ordinal)
+            .Replace("{{LOGO_URL}}", logoUrl, StringComparison.Ordinal);
+
+        if (placeholders == null)
+            return body;
+
+        foreach (var placeholder in placeholders)
+        {
+            body = body.Replace(placeholder.Key, placeholder.Value ?? string.Empty, StringComparison.Ordinal);
+        }
+
+        return body;
     }
 
 }

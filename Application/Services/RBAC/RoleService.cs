@@ -64,7 +64,7 @@ public class RoleService : IRoleService
         return await _db.Roles
             .AsNoTracking()
             .ApplyAccountHierarchyFilter(_currentUser)
-            .Where(x => x.AccountId == accountId && x.IsActive)
+            .Where(x => x.AccountId == accountId && x.IsActive && !x.IsDeleted)
             .OrderBy(x => x.RoleName)
             .ToListAsync();
     }
@@ -203,6 +203,7 @@ public class RoleService : IRoleService
         var roleQuery = _db.Roles
             .AsNoTracking()
             .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => !x.IsDeleted)
             .AsQueryable();
 
         if (accountId.HasValue)
@@ -212,12 +213,21 @@ public class RoleService : IRoleService
         {
             var s = search.Trim().ToLower();
             roleQuery = roleQuery.Where(x =>
-                x.RoleName.ToLower().Contains(s) ||
+                (x.RoleName != null && x.RoleName.ToLower().Contains(s)) ||
                 (x.Description != null && x.Description.ToLower().Contains(s)));
         }
 
-        var totalRoles = await roleQuery.CountAsync();
-        var systemRoles = await roleQuery.CountAsync(x => x.IsSystemRole);
+        var summaryData = await roleQuery
+            .GroupBy(x => 1)
+            .Select(g => new
+            {
+                Total = g.Count(),
+                SystemRoles = g.Count(x => x.IsSystemRole)
+            })
+            .FirstOrDefaultAsync();
+
+        var totalRoles = summaryData?.Total ?? 0;
+        var systemRoles = summaryData?.SystemRoles ?? 0;
 
         var summary = new RoleCardSummaryDto
         {
@@ -240,7 +250,7 @@ public class RoleService : IRoleService
         var totalRecords = await tableQuery.CountAsync();
 
         var items = await tableQuery
-            .OrderByDescending(x => x.Role.UpdatedOn)
+            .OrderByDescending(x => x.Role.UpdatedOn ?? x.Role.CreatedOn)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(x => new RoleListItemDto

@@ -36,9 +36,10 @@ public class GeofenceController : ControllerBase
     public async Task<IActionResult> GetZones(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
+        [FromQuery] int? accountId = null,
         [FromQuery] string? search = null)
     {
-        var result = await _service.GetZones(page, pageSize, search);
+        var result = await _service.GetZones(page, pageSize, accountId, search);
 
         return Ok(ApiResponse<object>.Ok(result, "Success", 200));
     }
@@ -50,9 +51,10 @@ public class GeofenceController : ControllerBase
     public async Task<IActionResult> GetPaged(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
+        [FromQuery] int? accountId = null,
         [FromQuery] string? search = null)
     {
-        var result = await _service.GetPagedAsync(page, pageSize, search);
+        var result = await _service.GetPagedAsync(page, pageSize, accountId, search);
 
         return Ok(ApiResponse<object>.Ok(result, "Success", 200));
     }

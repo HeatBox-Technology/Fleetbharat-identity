@@ -12,15 +12,18 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
     private readonly IdentityDbContext _db;
     private readonly IExternalMappingApiService _external;
     private readonly ILogger<VehicleGeofenceMapService> _logger;
+    private readonly ICurrentUserService _currentUser;
 
     public VehicleGeofenceMapService(
         IdentityDbContext db,
         IExternalMappingApiService external,
-        ILogger<VehicleGeofenceMapService> logger)
+        ILogger<VehicleGeofenceMapService> logger,
+        ICurrentUserService currentUser)
     {
         _db = db;
         _external = external;
         _logger = logger;
+        _currentUser = currentUser;
     }
 
     #region CREATE
@@ -28,24 +31,28 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
     public async Task<int> CreateAsync(CreateVehicleGeofenceMapDto dto)
     {
         var accountExists = await _db.Accounts
+            .ApplyAccountHierarchyFilter(_currentUser)
             .AnyAsync(x => x.AccountId == dto.AccountId);
 
         if (!accountExists)
             throw new Exception("Invalid AccountId");
 
         var vehicleExists = await _db.Vehicles
-            .AnyAsync(x => x.Id == dto.VehicleId && !x.IsDeleted);
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AnyAsync(x => x.Id == dto.VehicleId && x.AccountId == dto.AccountId && !x.IsDeleted);
 
         if (!vehicleExists)
             throw new Exception("Invalid VehicleId");
 
         var geofenceExists = await _db.GeofenceZones
-            .AnyAsync(x => x.Id == dto.GeofenceId && !x.IsDeleted);
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AnyAsync(x => x.Id == dto.GeofenceId && x.AccountId == dto.AccountId && !x.IsDeleted);
 
         if (!geofenceExists)
             throw new Exception("Invalid GeofenceId");
 
         var exists = await _db.VehicleGeofenceMaps
+            .ApplyAccountHierarchyFilter(_currentUser)
             .AnyAsync(x =>
                 x.VehicleId == dto.VehicleId &&
                 x.GeofenceId == dto.GeofenceId &&
@@ -83,16 +90,19 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
     public async Task<bool> UpdateAsync(int id, UpdateVehicleGeofenceMapDto dto)
     {
         var entity = await _db.VehicleGeofenceMaps
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
         if (entity == null)
             throw new Exception("Mapping not found");
 
-        var duplicate = await _db.VehicleGeofenceMaps.AnyAsync(x =>
-            x.VehicleId == dto.VehicleId &&
-            x.GeofenceId == dto.GeofenceId &&
-            x.Id != id &&
-            !x.IsDeleted);
+        var duplicate = await _db.VehicleGeofenceMaps
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AnyAsync(x =>
+                x.VehicleId == dto.VehicleId &&
+                x.GeofenceId == dto.GeofenceId &&
+                x.Id != id &&
+                !x.IsDeleted);
 
         if (duplicate)
             throw new Exception("Mapping already exists");
@@ -116,6 +126,7 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
     public async Task<bool> UpdateStatusAsync(int id, bool isActive)
     {
         var entity = await _db.VehicleGeofenceMaps
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
         if (entity == null)
@@ -136,6 +147,7 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
     public async Task<bool> DeleteAsync(int id)
     {
         var entity = await _db.VehicleGeofenceMaps
+            .ApplyAccountHierarchyFilter(_currentUser)
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
         if (entity == null)
@@ -160,6 +172,7 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
     public async Task<VehicleGeofenceMapDto?> GetByIdAsync(int id)
     {
         return await _db.VehicleGeofenceMaps
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => x.Id == id && !x.IsDeleted)
             .Select(x => new VehicleGeofenceMapDto
             {
@@ -196,7 +209,12 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
         int? accountId,
         string? search)
     {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 10;
+
         var query = _db.VehicleGeofenceMaps
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => !x.IsDeleted);
 
         if (accountId.HasValue)
@@ -206,12 +224,21 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
         {
             var s = search.Trim().ToLower();
             query = query.Where(x =>
-                (x.Vehicle.VehicleNumber ?? "").ToLower().Contains(s) ||
-                (x.Geofence.DisplayName ?? "").ToLower().Contains(s));
+                (x.Vehicle.VehicleNumber != null && x.Vehicle.VehicleNumber.ToLower().Contains(s)) ||
+                (x.Geofence.DisplayName != null && x.Geofence.DisplayName.ToLower().Contains(s)));
         }
 
-        var total = await query.CountAsync();
-        var active = await query.CountAsync(x => x.IsActive);
+        var summaryData = await query
+            .GroupBy(x => 1)
+            .Select(g => new
+            {
+                Total = g.Count(),
+                Active = g.Count(x => x.IsActive)
+            })
+            .FirstOrDefaultAsync();
+
+        var total = summaryData?.Total ?? 0;
+        var active = summaryData?.Active ?? 0;
 
         var summary = new VehicleGeofenceAssignmentSummaryDto
         {
@@ -221,7 +248,7 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
         };
 
         var items = await query
-            .OrderByDescending(x => x.Id)
+            .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(x => new VehicleGeofenceMapDto
@@ -267,7 +294,12 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
         int? accountId,
         string? search)
     {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 10;
+
         var query = _db.VehicleGeofenceMaps
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => !x.IsDeleted);
 
         if (accountId.HasValue)
@@ -277,14 +309,14 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
         {
             var s = search.Trim().ToLower();
             query = query.Where(x =>
-                (x.Vehicle.VehicleNumber ?? "").ToLower().Contains(s) ||
-                (x.Geofence.DisplayName ?? "").ToLower().Contains(s));
+                (x.Vehicle.VehicleNumber != null && x.Vehicle.VehicleNumber.ToLower().Contains(s)) ||
+                (x.Geofence.DisplayName != null && x.Geofence.DisplayName.ToLower().Contains(s)));
         }
 
         var total = await query.CountAsync();
 
         var items = await query
-            .OrderByDescending(x => x.Id)
+            .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(x => new VehicleGeofenceMapDto
@@ -331,12 +363,15 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
         try
         {
             var vehicle = await _db.Vehicles
+                .ApplyAccountHierarchyFilter(_currentUser)
                 .FirstOrDefaultAsync(x => x.Id == entity.VehicleId);
 
             var geofence = await _db.GeofenceZones
+                .ApplyAccountHierarchyFilter(_currentUser)
                 .FirstOrDefaultAsync(x => x.Id == entity.GeofenceId);
 
             var deviceMap = await _db.VehicleDeviceMaps
+                .ApplyAccountHierarchyFilter(_currentUser)
                 .FirstOrDefaultAsync(x =>
                     x.Fk_VehicleId == entity.VehicleId &&
                     x.IsActive &&
@@ -346,6 +381,7 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
                 return;
 
             var device = await _db.Devices
+                .ApplyAccountHierarchyFilter(_currentUser)
                 .FirstOrDefaultAsync(x => x.Id == deviceMap.Fk_DeviceId);
 
             if (device == null)

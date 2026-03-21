@@ -206,41 +206,59 @@ public class IdentityDbContext : DbContext
                      entity.ToTable("mst_white_label");
                      entity.HasKey(x => x.WhiteLabelId);
 
+                     entity.Property(x => x.WhiteLabelId).HasColumnName("WhiteLabelId");
+                     entity.Property(x => x.AccountId).HasColumnName("AccountId");
+
                      entity.Property(x => x.BrandName)
+                     .HasColumnName("BrandName")
                      .HasMaxLength(200);
 
                      entity.Property(x => x.LogoName)
+                     .HasColumnName("LogoName")
                      .HasMaxLength(255);
 
                      entity.Property(x => x.LogoPath)
+                     .HasColumnName("LogoPath")
                      .HasMaxLength(500);
 
                      entity.Property(x => x.CustomEntryFqdn)
+                     .HasColumnName("CustomEntryFqdn")
                      .HasMaxLength(200)
                      .IsRequired();
 
                      entity.Property(x => x.LogoUrl)
+                     .HasColumnName("LogoUrl")
                      .HasMaxLength(500);
 
-                     entity.Property(x => x.PrimaryLogoPath).HasMaxLength(500);
-                     entity.Property(x => x.PrimaryLogoUrl).HasMaxLength(500);
-                     entity.Property(x => x.AppLogoPath).HasMaxLength(500);
-                     entity.Property(x => x.AppLogoUrl).HasMaxLength(500);
-                     entity.Property(x => x.MobileLogoPath).HasMaxLength(500);
-                     entity.Property(x => x.MobileLogoUrl).HasMaxLength(500);
-                     entity.Property(x => x.FaviconPath).HasMaxLength(500);
-                     entity.Property(x => x.FaviconUrl).HasMaxLength(500);
-                     entity.Property(x => x.LogoDarkPath).HasMaxLength(500);
-                     entity.Property(x => x.LogoDarkUrl).HasMaxLength(500);
-                     entity.Property(x => x.LogoLightPath).HasMaxLength(500);
-                     entity.Property(x => x.LogoLightUrl).HasMaxLength(500);
+                     entity.Property(x => x.PrimaryLogoPath).HasColumnName("PrimaryLogoPath").HasMaxLength(500);
+                     entity.Property(x => x.PrimaryLogoUrl).HasColumnName("PrimaryLogoUrl").HasMaxLength(500);
+                     entity.Property(x => x.AppLogoPath).HasColumnName("AppLogoPath").HasMaxLength(500);
+                     entity.Property(x => x.AppLogoUrl).HasColumnName("AppLogoUrl").HasMaxLength(500);
+                     entity.Property(x => x.MobileLogoPath).HasColumnName("MobileLogoPath").HasMaxLength(500);
+                     entity.Property(x => x.MobileLogoUrl).HasColumnName("MobileLogoUrl").HasMaxLength(500);
+                     entity.Property(x => x.FaviconPath).HasColumnName("FaviconPath").HasMaxLength(500);
+                     entity.Property(x => x.FaviconUrl).HasColumnName("FaviconUrl").HasMaxLength(500);
+                     entity.Property(x => x.LogoDarkPath).HasColumnName("LogoDarkPath").HasMaxLength(500);
+                     entity.Property(x => x.LogoDarkUrl).HasColumnName("LogoDarkUrl").HasMaxLength(500);
+                     entity.Property(x => x.LogoLightPath).HasColumnName("LogoLightPath").HasMaxLength(500);
+                     entity.Property(x => x.LogoLightUrl).HasColumnName("LogoLightUrl").HasMaxLength(500);
 
                      entity.Property(x => x.PrimaryColorHex)
+                     .HasColumnName("PrimaryColorHex")
                      .HasMaxLength(10)
                      .HasDefaultValue("#4F46E5");
 
+                     entity.Property(x => x.SecondaryColorHex).HasColumnName("SecondaryColorHex");
                      entity.Property(x => x.IsActive)
+                     .HasColumnName("IsActive")
                      .HasDefaultValue(true);
+                     entity.Property(x => x.CreatedOn).HasColumnName("CreatedOn");
+                     entity.Property(x => x.UpdatedOn).HasColumnName("UpdatedOn");
+                     entity.Property(x => x.IsDeleted).HasColumnName("IsDeleted");
+                     entity.Property(x => x.CreatedBy).HasColumnName("createdby");
+                     entity.Property(x => x.UpdatedBy).HasColumnName("updatedby");
+                     entity.Property(x => x.DeletedBy).HasColumnName("deletedby");
+                     entity.Property(x => x.DeletedAt).HasColumnName("deletedat");
 
                      entity.HasIndex(x => x.AccountId).IsUnique();
               });

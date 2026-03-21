@@ -29,23 +29,12 @@ public class GeofenceService : IGeofenceService
 
     public async Task<int> CreateAsync(CreateGeofenceDto dto)
     {
-        if (dto == null)
-            throw new ArgumentNullException(nameof(dto));
-
         dto.Coordinates = NormalizeCoordinates(dto.Coordinates, dto.CoordinatesJson);
 
         var code = dto.UniqueCode?.Trim().ToUpper();
 
         if (string.IsNullOrWhiteSpace(code))
             throw new Exception("Unique code is required");
-
-        var geometryType = dto.GeometryType?.Trim().ToUpper();
-
-        if (geometryType != "CIRCLE" && geometryType != "POLYGON")
-            throw new Exception("GeometryType must be CIRCLE or POLYGON");
-
-        if (geometryType == "CIRCLE" && dto.RadiusM <= 0)
-            throw new Exception("Radius must be greater than zero for circle");
 
         var exists = await _db.GeofenceZones
             .ApplyAccountHierarchyFilter(_currentUser)
@@ -56,92 +45,77 @@ public class GeofenceService : IGeofenceService
         if (exists)
             throw new InvalidOperationException("Geofence already exists.");
 
-        Geometry geom;
-
-        try
-        {
-            geom = BuildGeometry(geometryType, dto.Coordinates);
-
-            if (geom == null)
-                throw new Exception("Geometry creation failed");
-        }
-        catch (Exception ex)
-        {
-            throw new Exception($"Geometry build failed: {ex.Message}");
-        }
-        if (geometryType == "POLYGON")
-            dto.RadiusM = null;
+        var geom = BuildGeometry(dto.GeometryType, dto.Coordinates);
 
         var entity = new mst_Geofence
         {
             AccountId = dto.AccountId,
             UniqueCode = code,
             DisplayName = dto.DisplayName?.Trim(),
-            Description = dto.Description,
-            ClassificationCode = dto.ClassificationCode,
-            ClassificationLabel = dto.ClassificationLabel,
-            GeometryType = geometryType,
-            RadiusM = geometryType == "CIRCLE" ? dto.RadiusM : null,
+            GeometryType = dto.GeometryType,
+            RadiusM = dto.GeometryType == "CIRCLE" ? dto.RadiusM : null,
             Geom = geom,
-            CoordinatesJson = dto.Coordinates == null
-                ? null
-                : JsonDocument.Parse(JsonSerializer.Serialize(dto.Coordinates)),
-
-            ColorTheme = dto.ColorTheme,
-            Opacity = dto.Opacity,
+            CoordinatesJson = JsonDocument.Parse(JsonSerializer.Serialize(dto.Coordinates)),
             Status = dto.IsEnabled ? "ENABLED" : "DISABLED",
+            IsActive = dto.IsEnabled,
             CreatedBy = dto.CreatedBy,
             CreatedAt = DateTime.UtcNow
         };
 
         _db.GeofenceZones.Add(entity);
-        try
-        {
-            await _db.SaveChangesAsync();
-        }
-        catch (Exception ex)
-        {
-            throw new Exception(
-                $"DB SAVE ERROR: {ex.Message} | INNER: {ex.InnerException?.Message}");
-        }
+        await _db.SaveChangesAsync();
 
-        // Sync should not break DB operation
         try
         {
             await SyncGeofenceAsync(entity, dto.Coordinates, HttpMethod.Post);
         }
-        catch (Exception ex)
-        {
-            //_logger.LogError(ex, "Geofence sync failed");
-        }
+        catch { }
 
         return entity.Id;
     }
-
     public async Task<GeofenceListUiResponseDto> GetZones(
-        int page,
-        int pageSize,
-        string? search = null)
+           int page,
+           int pageSize,
+           int? accountId,
+           string? search = null)
     {
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 10;
 
         var query = _db.GeofenceZones
-            .ApplyAccountHierarchyFilter(_currentUser)
             .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => !x.IsDeleted);
 
+        // ✅ Account filter (NEW FIX)
+        if (accountId.HasValue)
+        {
+            query = query.Where(x => x.AccountId == accountId.Value);
+        }
+
+        // ✅ Search (NULL SAFE)
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
 
             query = query.Where(x =>
-                x.UniqueCode.ToLower().Contains(s) ||
-                x.DisplayName.ToLower().Contains(s));
+                (x.UniqueCode != null && x.UniqueCode.ToLower().Contains(s)) ||
+                (x.DisplayName != null && x.DisplayName.ToLower().Contains(s))
+            );
         }
 
-        var total = await query.CountAsync();
-        var enabled = await query.CountAsync(x => x.Status == "ENABLED");
+        // ✅ OPTIMIZED SUMMARY (Single DB Call)
+        var summaryData = await query
+            .GroupBy(x => 1)
+            .Select(g => new
+            {
+                Total = g.Count(),
+                Enabled = g.Count(x => x.Status == "ENABLED")
+            })
+            .FirstOrDefaultAsync();
+
+        var total = summaryData?.Total ?? 0;
+        var enabled = summaryData?.Enabled ?? 0;
         var disabled = total - enabled;
 
         var summary = new GeofenceSummaryDto
@@ -151,8 +125,9 @@ public class GeofenceService : IGeofenceService
             Disabled = disabled
         };
 
+        // ✅ DATA
         var items = await query
-            .OrderByDescending(x => x.UpdatedAt.HasValue ? x.UpdatedAt : x.CreatedAt)
+            .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(x => new GeofenceDto
@@ -185,15 +160,9 @@ public class GeofenceService : IGeofenceService
         };
     }
 
-    public async Task<PagedResultDto<GeofenceDto>> GetPagedAsync(
-        int page,
-        int pageSize,
-        string? search = null)
-    {
-        var result = await GetZones(page, pageSize, search);
-        return result.Zones;
-    }
-
+    // ===============================
+    // GET BY ID (SAFE)
+    // ===============================
     public async Task<GeofenceDto?> GetByIdAsync(int id)
     {
         var entity = await _db.GeofenceZones
@@ -222,6 +191,20 @@ public class GeofenceService : IGeofenceService
             Coordinates = coordinates
         };
     }
+
+
+
+    public async Task<PagedResultDto<GeofenceDto>> GetPagedAsync(
+        int page,
+        int pageSize,
+        int? accountId,
+        string? search = null)
+    {
+        var result = await GetZones(page, pageSize, accountId, search);
+        return result.Zones;
+    }
+
+
 
     public async Task<bool> UpdateAsync(int id, UpdateGeofenceDto dto)
     {
@@ -255,6 +238,7 @@ public class GeofenceService : IGeofenceService
         entity.ColorTheme = dto.ColorTheme;
         entity.Opacity = dto.Opacity;
         entity.Status = dto.IsEnabled ? "ENABLED" : "DISABLED";
+        entity.IsActive = dto.IsEnabled;
         entity.UpdatedBy = dto.UpdatedBy;
         entity.UpdatedAt = DateTime.UtcNow;
 
@@ -271,6 +255,7 @@ public class GeofenceService : IGeofenceService
         if (entity == null) return false;
 
         entity.Status = isEnabled ? "ENABLED" : "DISABLED";
+        entity.IsActive = isEnabled;
         entity.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -285,7 +270,11 @@ public class GeofenceService : IGeofenceService
         if (entity == null) return false;
 
         entity.IsDeleted = true;
+        entity.IsActive = false;
+        entity.DeletedBy = _currentUser.AccountId;
+        entity.DeletedAt = DateTime.UtcNow;
         entity.UpdatedAt = DateTime.UtcNow;
+
 
         await _db.SaveChangesAsync();
 

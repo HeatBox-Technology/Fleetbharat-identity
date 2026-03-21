@@ -261,12 +261,6 @@ public class AccountProvisionService : IAccountProvisionService
             {
                 var resetLink = $"{resetBaseUrl}?token={token}&email={user.Email}";
 
-                var template = await LoadEmailTemplateAsync("fleetbharat-account-onboarding.html");
-                var body = template
-                    .Replace("{{ACCOUNT_NAME}}", account.AccountName ?? "")
-                    .Replace("{{USER_NAME}}", account.UserName ?? "")
-                    .Replace("{{RESET_LINK}}", resetLink);
-
                 var recipients = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 if (!string.IsNullOrWhiteSpace(req.email))
@@ -277,11 +271,18 @@ public class AccountProvisionService : IAccountProvisionService
 
                 foreach (var recipient in recipients)
                 {
-                    await _emailService.SendAsync(
-                        recipient,
-                        "Welcome to Fleetbharat - Your Account is Ready",
-                        body
-                    );
+                    await SendBrandedEmailAsync(
+                        accountId: account.AccountId,
+                        toEmail: recipient,
+                        templateName: "account-onboarding.html",
+                        subjectFactory: brandName => $"Welcome to {brandName} - Your Account is Ready",
+                        placeholders: new Dictionary<string, string>
+                        {
+                            ["{{ACCOUNT_NAME}}"] = account.AccountName ?? string.Empty,
+                            ["{{USER_NAME}}"] = account.UserName ?? string.Empty,
+                            ["{{RESET_LINK}}"] = resetLink,
+                            ["{{CODE}}"] = string.Empty
+                        });
                 }
             }
 
@@ -833,5 +834,64 @@ public class AccountProvisionService : IAccountProvisionService
             return await File.ReadAllTextAsync(baseDirectoryPath);
 
         throw new FileNotFoundException($"Email template not found: {relativePath}");
+    }
+
+    private async Task SendBrandedEmailAsync(
+        int accountId,
+        string toEmail,
+        string templateName,
+        Func<string, string> subjectFactory,
+        IDictionary<string, string>? placeholders = null)
+    {
+        if (string.IsNullOrWhiteSpace(toEmail))
+            return;
+
+        var branding = await GetBrandingAsync(accountId);
+        var template = await LoadEmailTemplateAsync(templateName);
+        var body = ApplyBrandingPlaceholders(template, branding.BrandName, branding.LogoUrl, placeholders);
+        var subject = subjectFactory(branding.BrandName);
+
+        await _emailService.SendAsync(toEmail, subject, body);
+    }
+
+    private async Task<(string BrandName, string LogoUrl)> GetBrandingAsync(int accountId)
+    {
+        const string defaultBrandName = "Fleetbharat";
+
+        var branding = await _db.WhiteLabels
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x =>
+                x.AccountId == accountId &&
+                x.IsActive &&
+                !x.IsDeleted);
+
+        var brandName = string.IsNullOrWhiteSpace(branding?.BrandName)
+            ? defaultBrandName
+            : branding.BrandName.Trim();
+
+        var logoUrl = branding?.LogoUrl?.Trim() ?? string.Empty;
+
+        return (brandName, logoUrl);
+    }
+
+    private static string ApplyBrandingPlaceholders(
+        string template,
+        string brandName,
+        string logoUrl,
+        IDictionary<string, string>? placeholders)
+    {
+        var body = template
+            .Replace("{{BRAND_NAME}}", brandName, StringComparison.Ordinal)
+            .Replace("{{LOGO_URL}}", logoUrl, StringComparison.Ordinal);
+
+        if (placeholders == null)
+            return body;
+
+        foreach (var placeholder in placeholders)
+        {
+            body = body.Replace(placeholder.Key, placeholder.Value ?? string.Empty, StringComparison.Ordinal);
+        }
+
+        return body;
     }
 }
