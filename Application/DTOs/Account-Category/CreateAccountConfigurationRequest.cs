@@ -64,6 +64,7 @@ public class AccountConfigurationResponseDto
 
     public string DateFormat { get; set; } = "";
     public string DefaultLanguage { get; set; } = "";
+    public List<string> AllowedLanguages { get; set; } = new();
 
     public DateTime CreatedOn { get; set; }
     public DateTime? UpdatedOn { get; set; }

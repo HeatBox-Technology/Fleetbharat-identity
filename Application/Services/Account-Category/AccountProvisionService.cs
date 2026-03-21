@@ -760,6 +760,9 @@ public class AccountProvisionService : IAccountProvisionService
 
         try
         {
+            var utcNow = DateTime.UtcNow;
+            var actorAccountId = _currentUser.AccountId;
+
             var account = await _db.Accounts
                 .ApplyAccountHierarchyFilter(_currentUser)
                 .FirstOrDefaultAsync(x => x.AccountId == accountId && !x.IsDeleted);
@@ -774,21 +777,62 @@ public class AccountProvisionService : IAccountProvisionService
 
             account.IsDeleted = true;
             account.Status = false;
-            account.UpdatedOn = DateTime.UtcNow;
-            account.UpdatedBy = _currentUser.AccountId;
-            account.DeletedBy = _currentUser.AccountId;
-            account.DeletedOn = DateTime.UtcNow;
+            account.UpdatedOn = utcNow;
+            account.UpdatedBy = actorAccountId;
+            account.DeletedBy = actorAccountId;
+            account.DeletedOn = utcNow;
 
             var users = await _db.Users
                 .Where(x => x.AccountId == accountId && !x.IsDeleted)
                 .ToListAsync();
 
+            var userIds = users.Select(x => x.UserId).ToList();
+
             foreach (var user in users)
             {
                 user.IsDeleted = true;
                 user.Status = false;
-                user.UpdatedAt = DateTime.UtcNow;
-                user.UpdatedBy = _currentUser.AccountId;
+                user.UpdatedAt = utcNow;
+                user.UpdatedBy = actorAccountId;
+                user.DeletedBy = actorAccountId;
+                user.DeletedAt = utcNow;
+            }
+
+            var roles = await _db.Roles
+                .Where(x => x.AccountId == accountId && !x.IsDeleted)
+                .ToListAsync();
+
+            var roleIds = roles.Select(x => x.RoleId).ToList();
+
+            foreach (var role in roles)
+            {
+                role.IsDeleted = true;
+                role.IsActive = false;
+                role.UpdatedOn = utcNow;
+                role.UpdatedBy = actorAccountId;
+                role.DeletedBy = actorAccountId;
+                role.DeletedOn = utcNow;
+            }
+
+            // These mapping tables do not support soft delete, so remove them in bulk.
+            if (userIds.Count > 0)
+            {
+                var userFormRights = await _db.UserFormRights
+                    .Where(x => userIds.Contains(x.UserId))
+                    .ToListAsync();
+
+                if (userFormRights.Count > 0)
+                    _db.UserFormRights.RemoveRange(userFormRights);
+            }
+
+            if (roleIds.Count > 0)
+            {
+                var formRoleRights = await _db.FormRoleRights
+                    .Where(x => roleIds.Contains(x.RoleId))
+                    .ToListAsync();
+
+                if (formRoleRights.Count > 0)
+                    _db.FormRoleRights.RemoveRange(formRoleRights);
             }
 
             await _db.SaveChangesAsync();

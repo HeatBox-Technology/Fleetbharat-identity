@@ -46,9 +46,8 @@ public class AccountConfigurationService : IAccountConfigurationService
             AddressDisplay = req.AddressDisplay,
 
             DefaultLanguage = req.DefaultLanguage,
-            AllowedLanguagesCsv = req.AllowedLanguages == null
-                ? null
-                : string.Join(",", req.AllowedLanguages),
+            // Store the selected UI languages as CSV in the database.
+            AllowedLanguagesCsv = ToAllowedLanguagesCsv(req.AllowedLanguages),
 
             CreatedBy = _currentUser.AccountId > 0 ? _currentUser.AccountId : null,
             CreatedOn = DateTime.UtcNow,
@@ -80,9 +79,8 @@ public class AccountConfigurationService : IAccountConfigurationService
         cfg.AddressDisplay = req.AddressDisplay;
 
         cfg.DefaultLanguage = req.DefaultLanguage;
-        cfg.AllowedLanguagesCsv = req.AllowedLanguages == null
-            ? null
-            : string.Join(",", req.AllowedLanguages);
+        // Store the selected UI languages as CSV in the database.
+        cfg.AllowedLanguagesCsv = ToAllowedLanguagesCsv(req.AllowedLanguages);
 
         cfg.IsActive = req.IsActive;
         cfg.UpdatedBy = _currentUser.AccountId > 0 ? _currentUser.AccountId : null;
@@ -114,29 +112,51 @@ public class AccountConfigurationService : IAccountConfigurationService
         var data = await (from cfg in _db.AccountConfigurations.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser)
                           join acc in _db.Accounts.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser) on cfg.AccountId equals acc.AccountId
                           where cfg.AccountConfigurationId == id && !cfg.IsDeleted
-                          select new AccountConfigurationResponseDto
+                          select new
                           {
-                              AccountConfigurationId = cfg.AccountConfigurationId,
-                              AccountId = cfg.AccountId,
-                              AccountName = acc.AccountName,
-
-                              MapProvider = cfg.MapProvider,
-                              licenseKey = cfg.LicenseKey,
-                              AddressKey = cfg.AddressKey,
-                              TimeFormat = cfg.TimeFormat,
-                              DistanceUnit = cfg.DistanceUnit,
-                              SpeedUnit = cfg.SpeedUnit,
-                              FuelUnit = cfg.FuelUnit,
-                              TemperatureUnit = cfg.TemperatureUnit,
-                              AddressDisplay = cfg.AddressDisplay,
-                              DateFormat = cfg.DateFormat,
-                              DefaultLanguage = cfg.DefaultLanguage,
-
-                              CreatedOn = cfg.CreatedOn,
-                              UpdatedOn = cfg.UpdatedOn
+                              cfg.AccountConfigurationId,
+                              cfg.AccountId,
+                              acc.AccountName,
+                              cfg.MapProvider,
+                              cfg.LicenseKey,
+                              cfg.AddressKey,
+                              cfg.TimeFormat,
+                              cfg.DistanceUnit,
+                              cfg.SpeedUnit,
+                              cfg.FuelUnit,
+                              cfg.TemperatureUnit,
+                              cfg.AddressDisplay,
+                              cfg.DateFormat,
+                              cfg.DefaultLanguage,
+                              cfg.AllowedLanguagesCsv,
+                              cfg.CreatedOn,
+                              cfg.UpdatedOn
                           }).FirstOrDefaultAsync();
 
-        return data;
+        if (data == null)
+            return null;
+
+        return new AccountConfigurationResponseDto
+        {
+            AccountConfigurationId = data.AccountConfigurationId,
+            AccountId = data.AccountId,
+            AccountName = data.AccountName,
+            MapProvider = data.MapProvider,
+            licenseKey = data.LicenseKey,
+            AddressKey = data.AddressKey,
+            TimeFormat = data.TimeFormat,
+            DistanceUnit = data.DistanceUnit,
+            SpeedUnit = data.SpeedUnit,
+            FuelUnit = data.FuelUnit,
+            TemperatureUnit = data.TemperatureUnit,
+            AddressDisplay = data.AddressDisplay,
+            DateFormat = data.DateFormat,
+            DefaultLanguage = data.DefaultLanguage,
+            // Convert saved CSV back to a list for the UI.
+            AllowedLanguages = ParseAllowedLanguagesCsv(data.AllowedLanguagesCsv),
+            CreatedOn = data.CreatedOn,
+            UpdatedOn = data.UpdatedOn
+        };
     }
 
     public async Task<PagedResultDto<AccountConfigurationResponseDto>> GetAllAsync(
@@ -172,35 +192,81 @@ public class AccountConfigurationService : IAccountConfigurationService
             .OrderByDescending(x => x.cfg.UpdatedOn ?? x.cfg.CreatedOn)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(x => new AccountConfigurationResponseDto
+            .Select(x => new
             {
-                AccountConfigurationId = x.cfg.AccountConfigurationId,
-                AccountId = x.cfg.AccountId,
-                AccountName = x.acc.AccountName,
-
-                MapProvider = x.cfg.MapProvider,
-                licenseKey = x.cfg.LicenseKey,
-                AddressKey = x.cfg.AddressKey,
-                TimeFormat = x.cfg.TimeFormat,
-                DistanceUnit = x.cfg.DistanceUnit,
-                SpeedUnit = x.cfg.SpeedUnit,
-                FuelUnit = x.cfg.FuelUnit,
-                TemperatureUnit = x.cfg.TemperatureUnit,
-                AddressDisplay = x.cfg.AddressDisplay,
-                DateFormat = x.cfg.DateFormat,
-                DefaultLanguage = x.cfg.DefaultLanguage,
-
-                CreatedOn = x.cfg.CreatedOn,
-                UpdatedOn = x.cfg.UpdatedOn
+                x.cfg.AccountConfigurationId,
+                x.cfg.AccountId,
+                x.acc.AccountName,
+                x.cfg.MapProvider,
+                x.cfg.LicenseKey,
+                x.cfg.AddressKey,
+                x.cfg.TimeFormat,
+                x.cfg.DistanceUnit,
+                x.cfg.SpeedUnit,
+                x.cfg.FuelUnit,
+                x.cfg.TemperatureUnit,
+                x.cfg.AddressDisplay,
+                x.cfg.DateFormat,
+                x.cfg.DefaultLanguage,
+                x.cfg.AllowedLanguagesCsv,
+                x.cfg.CreatedOn,
+                x.cfg.UpdatedOn
             })
             .ToListAsync();
+
+        var responseItems = items.Select(x => new AccountConfigurationResponseDto
+        {
+            AccountConfigurationId = x.AccountConfigurationId,
+            AccountId = x.AccountId,
+            AccountName = x.AccountName,
+            MapProvider = x.MapProvider,
+            licenseKey = x.LicenseKey,
+            AddressKey = x.AddressKey,
+            TimeFormat = x.TimeFormat,
+            DistanceUnit = x.DistanceUnit,
+            SpeedUnit = x.SpeedUnit,
+            FuelUnit = x.FuelUnit,
+            TemperatureUnit = x.TemperatureUnit,
+            AddressDisplay = x.AddressDisplay,
+            DateFormat = x.DateFormat,
+            DefaultLanguage = x.DefaultLanguage,
+            // Convert saved CSV back to a list for the UI.
+            AllowedLanguages = ParseAllowedLanguagesCsv(x.AllowedLanguagesCsv),
+            CreatedOn = x.CreatedOn,
+            UpdatedOn = x.UpdatedOn
+        }).ToList();
 
         return new PagedResultDto<AccountConfigurationResponseDto>
         {
             Page = page,
             PageSize = pageSize,
             TotalRecords = total,
-            Items = items
+            Items = responseItems
         };
+    }
+
+    // Convert the incoming language list into the CSV format stored in the table.
+    private static string? ToAllowedLanguagesCsv(List<string>? allowedLanguages)
+    {
+        if (allowedLanguages == null || allowedLanguages.Count == 0)
+            return null;
+
+        return string.Join(",",
+            allowedLanguages
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim()));
+    }
+
+    // Convert the stored CSV value back into a list for API responses.
+    private static List<string> ParseAllowedLanguagesCsv(string? allowedLanguagesCsv)
+    {
+        if (string.IsNullOrWhiteSpace(allowedLanguagesCsv))
+            return new List<string>();
+
+        return allowedLanguagesCsv
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList();
     }
 }
