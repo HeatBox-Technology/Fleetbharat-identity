@@ -10,13 +10,13 @@ public record CreateAccountRequest
 
     [Required] int CategoryId,
 
-    [Required, MaxLength(200)] string PrimaryDomain,
+    [MaxLength(200)] string PrimaryDomain,
 
     [Required] int CountryId,
 
-    string StateId,
-    string CityId,
-    string Zipcode,
+   [Required] string StateId,
+   [Required] string CityId,
+     string Zipcode,
 
     int? ParentAccountId,
 
@@ -27,24 +27,24 @@ public record CreateAccountRequest
     bool Status,
 
     // contact person
-    string fullname,
-    string email,
-    string phone,
+    [Required] string fullname,
+   [Required] string email,
+   [Required] string phone,
     string Position,
 
     // address
     string address,
 
-    // business profile
-    string BusinessPhone,
-    string BusinessEmail,
-    string BusinessAddress,
+   // business profile
+   [Required] string BusinessPhone,
+    [Required] string BusinessEmail,
+    [Required] string BusinessAddress,
     string BusinessHours,
     string BusinessTimeZone,
 
     // user access
-    string UserName,
-    string Password,
+    [Required] string UserName,
+     string Password,
 
     string share,
 
@@ -64,8 +64,8 @@ public record UpdateAccountRequest
 
     [Required] int CountryId,
 
-    string StateId,
-    string CityId,
+   [Required] string StateId,
+    [Required] string CityId,
     string Zipcode,
 
     int? ParentAccountId,
@@ -76,24 +76,24 @@ public record UpdateAccountRequest
 
     bool Status,
 
-    // contact person
-    string fullname,
-    string email,
-    string phone,
+   // contact person
+   [Required] string fullname,
+    [Required] string email,
+    [Required] string phone,
     string Position,
 
     // address
     string address,
 
-    // business profile
-    string BusinessPhone,
-    string BusinessEmail,
-    string BusinessAddress,
+   // business profile
+   [Required] string BusinessPhone,
+    [Required] string BusinessEmail,
+    [Required] string BusinessAddress,
     string BusinessHours,
     string BusinessTimeZone,
 
-    // user access
-    string UserName,
+   // user access
+   [Required] string UserName,
     string? Password,
 
     string share,
