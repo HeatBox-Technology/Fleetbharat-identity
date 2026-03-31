@@ -61,7 +61,7 @@ public record UpdateAccountRequest
 
     [Required] int CategoryId,
 
-    [Required, MaxLength(200)] string PrimaryDomain,
+    [MaxLength(200)] string PrimaryDomain,
 
     [Required] int CountryId,
 
@@ -73,7 +73,7 @@ public record UpdateAccountRequest
 
     string RefferCode,
 
-    [Required] int TaxTypeId,
+     int TaxTypeId,
 
     bool Status,
 
