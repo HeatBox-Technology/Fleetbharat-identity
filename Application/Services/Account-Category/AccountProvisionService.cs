@@ -68,7 +68,7 @@ public class AccountProvisionService : IAccountProvisionService
             // =====================================================
             // CREATE ACCOUNT FIRST (WITHOUT HIERARCHY)
             // =====================================================
-
+            var defaultpass = "123456";
             var account = new mst_account
             {
                 AccountCode = accountCode,
@@ -100,7 +100,7 @@ public class AccountProvisionService : IAccountProvisionService
                 BusinessTimeZone = req.BusinessTimeZone,
 
                 UserName = req.UserName,
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password),
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(defaultpass),
 
                 share = req.share,
 
