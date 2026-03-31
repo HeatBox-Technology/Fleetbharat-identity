@@ -59,7 +59,7 @@ public class AuditWorker : BackgroundService
                     if (DateTime.UtcNow > deadline)
                         break;
 
-                    await Task.Delay(25, stoppingToken);
+                    await Task.Delay(5, stoppingToken);
                 }
 
                 if (batch.Count > 0)

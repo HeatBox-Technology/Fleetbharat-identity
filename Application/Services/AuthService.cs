@@ -38,15 +38,17 @@ public class AuthService : IAuthService
             throw new UnauthorizedAccessException("Invalid email or password");
 
         var normalizedLoginInput = loginInput.ToLower();
-
         var user = await _db.Users
             .FirstOrDefaultAsync(x =>
                 !x.IsDeleted &&
+                x.Status == true &&
                 (
                     (x.Email != null && x.Email.ToLower() == normalizedLoginInput) ||
                     (x.User_name != null && x.User_name.ToLower() == normalizedLoginInput) ||
-                    (x.MobileNo != null && x.MobileNo == loginInput)
+                    (x.MobileNo != null && x.MobileNo == normalizedLoginInput)
                 ));
+
+
         if (user == null)
             throw new UnauthorizedAccessException("Invalid email or password");
 
@@ -232,16 +234,66 @@ public class AuthService : IAuthService
         return new LoginResponse(access, refresh, DateTime.UtcNow.AddMinutes(_accessTokenExpiryMinutes));
     }
 
+    // public async Task RegisterAsync(RegisterRequest req)
+    // {
+    //     var email = req.Email.Trim().ToLower();
+
+    //     var exists = await _db.Users.AnyAsync(x => x.Email == email);
+    //     if (exists)
+    //         throw new BadHttpRequestException("Email already registered"); // ✅ 400 type error
+
+    //     var user = new User
+    //     {
+    //         Email = email,
+    //         FirstName = req.FirstName,
+    //         LastName = req.LastName,
+    //         MobileNo = req.MobileNo,
+    //         CountryCode = req.CountryCode,
+    //         Password_hash = BCrypt.Net.BCrypt.HashPassword(req.Password),
+    //         ReferralCode = req.RefferalCode,
+    //         CreatedAt = DateTime.UtcNow,
+    //         Status = true,
+    //         roleId = 0 // Default role, e.g., 'User'
+    //     };
+
+    //     _db.Users.Add(user);
+    //     await _db.SaveChangesAsync();
+    // }
     public async Task RegisterAsync(RegisterRequest req)
     {
         var email = req.Email.Trim().ToLower();
 
         var exists = await _db.Users.AnyAsync(x => x.Email == email);
         if (exists)
-            throw new BadHttpRequestException("Email already registered"); // ✅ 400 type error
+            throw new BadHttpRequestException("Email already registered");
 
+        // Create account first
+        var account = new mst_account
+        {
+            AccountCode = $"ACC-{DateTime.UtcNow:yyyyMMddHHmmss}",
+            AccountName = $"{req.FirstName} {req.LastName}",
+            email = email,
+            phone = req.MobileNo,
+            UserName = email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.Password),
+            BusinessEmail = email,
+            RefferCode = "Direct",
+            CreatedBy = 0, // system
+            CreatedOn = DateTime.UtcNow,
+            Status = false,
+
+            // Important defaults
+            IsDeleted = false,
+            ParentAccountId = null
+        };
+
+        _db.Accounts.Add(account);
+        await _db.SaveChangesAsync();
+
+        // Create user
         var user = new User
         {
+            AccountId = account.AccountId,
             Email = email,
             FirstName = req.FirstName,
             LastName = req.LastName,
@@ -250,14 +302,20 @@ public class AuthService : IAuthService
             Password_hash = BCrypt.Net.BCrypt.HashPassword(req.Password),
             ReferralCode = req.RefferalCode,
             CreatedAt = DateTime.UtcNow,
-            Status = true,
-            roleId = 0 // Default role, e.g., 'User'
+            Status = false,
+
+            // Recommended default role
+            //roleId = 2 // AccountOwner
         };
 
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
-    }
 
+        // Update account after user creation
+        account.HierarchyPath = account.AccountId.ToString();
+
+        await _db.SaveChangesAsync();
+    }
 
     public async Task ForgotPasswordAsync(string email)
     {

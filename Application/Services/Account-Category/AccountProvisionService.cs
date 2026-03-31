@@ -294,25 +294,168 @@ public class AccountProvisionService : IAccountProvisionService
             throw;
         }
     }
+    // public async Task<AccountListWithCardDto> GetAllAsync(
+    //  int page,
+    //  int pageSize,
+    //  string? search,
+    //  bool? status)
+    // {
+    //     if (page <= 0) page = 1;
+    //     if (pageSize <= 0) pageSize = 10;
+
+    //     // -----------------------------
+    //     // Base query only for cards
+    //     // -----------------------------
+    //     // var baseAccountQuery = _db.Accounts
+    //     //     .Where(x => !x.IsDeleted);
+    //     var baseAccountQuery = _db.Accounts
+    // .ApplyAccountHierarchyFilter(_currentUser)
+    // .Where(x => !x.IsDeleted);
+
+    //     var cardCounts = await baseAccountQuery
+    //         .GroupBy(x => 1)
+    //         .Select(g => new AccountCardCountDto
+    //         {
+    //             Total = g.Count(),
+    //             Active = g.Count(x => x.Status == true),
+    //             Inactive = g.Count(x => x.Status == false),
+    //             Pending = g.Count(x => x.Status == null)
+    //         })
+    //         .FirstOrDefaultAsync()
+    //         ?? new AccountCardCountDto();
+
+    //     // -----------------------------
+    //     // Main grid query
+    //     // -----------------------------
+    //     var query =
+    //         //from a in _db.Accounts
+    //         from a in _db.Accounts.ApplyAccountHierarchyFilter(_currentUser)
+    //         join c in _db.Countries on a.CountryId equals c.CountryId
+
+    //         join st0 in _db.States
+    //             on a.StateId equals st0.StateId.ToString() into stGroup
+    //         from st in stGroup.DefaultIfEmpty()
+
+    //         join ct0 in _db.Cities
+    //             on a.CityId equals ct0.CityId.ToString() into ctGroup
+    //         from ct in ctGroup.DefaultIfEmpty()
+
+    //         join cat in _db.Categories on a.CategoryId equals cat.CategoryId
+
+    //         where !a.IsDeleted
+    //         select new { a, c, cat, st, ct };
+
+    //     // -----------------------------
+    //     // Search filter
+    //     // -----------------------------
+    //     if (!string.IsNullOrWhiteSpace(search))
+    //     {
+    //         var s = search.Trim().ToLower();
+
+    //         query = query.Where(x =>
+    //             (x.a.AccountName ?? "").ToLower().Contains(s) ||
+    //             (x.a.AccountCode ?? "").ToLower().Contains(s) ||
+    //             (x.a.PrimaryDomain ?? "").ToLower().Contains(s) ||
+    //             ((x.st != null ? x.st.StateName : "")).ToLower().Contains(s) ||
+    //             ((x.ct != null ? x.ct.CityName : "")).ToLower().Contains(s));
+    //     }
+
+    //     // -----------------------------
+    //     // Status filter only for grid
+    //     // -----------------------------
+    //     if (status.HasValue)
+    //     {
+    //         query = query.Where(x => x.a.Status == status.Value);
+    //     }
+
+    //     var totalCount = await query.CountAsync();
+
+    //     var items = await query
+    //         .OrderByDescending(x => x.a.CreatedOn)
+    //         .Skip((page - 1) * pageSize)
+    //         .Take(pageSize)
+    //         .Select(x => new AccountResponseDto
+    //         {
+    //             AccountId = x.a.AccountId,
+    //             AccountCode = x.a.AccountCode,
+    //             AccountName = x.a.AccountName,
+    //             Reffer = x.a.RefferCode,
+
+    //             ParentAccountId = x.a.ParentAccountId,
+    //             HierarchyPath = x.a.HierarchyPath,
+
+    //             Fk_userid = x.a.Fk_userid,
+
+    //             CategoryId = x.cat.CategoryId,
+    //             CategoryName = x.cat.LabelName,
+
+    //             PrimaryDomain = x.a.PrimaryDomain,
+
+    //             CountryId = x.c.CountryId,
+    //             CountryName = x.c.CountryName,
+
+    //             StateId = x.a.StateId,
+    //             StateName = x.st != null ? x.st.StateName : "",
+
+    //             CityId = x.a.CityId,
+    //             CityName = x.ct != null ? x.ct.CityName : "",
+
+    //             fullname = x.a.fullname,
+    //             email = x.a.email,
+    //             phone = x.a.phone,
+    //             address = x.a.address,
+    //             Position = x.a.Position,
+    //             BusinessAddress = x.a.BusinessAddress,
+    //             BusinessEmail = x.a.BusinessEmail,
+    //             BusinessHours = x.a.BusinessHours,
+    //             BusinessPhone = x.a.BusinessPhone,
+    //             BusinessTimeZone = x.a.BusinessTimeZone,
+    //             Zipcode = x.a.Zipcode,
+    //             usernamesacc = x.a.UserName,
+    //             //password = x.a.PasswordHash,
+    //             share = x.a.share,
+
+
+    //             TaxTypeId = x.a.TaxTypeId,
+    //             Status = x.a.Status,
+
+    //             CreatedOn = x.a.CreatedOn
+    //         })
+    //         .AsNoTracking()
+    //         .ToListAsync();
+
+    //     return new AccountListWithCardDto
+    //     {
+    //         PageData = new PagedResultDto<AccountResponseDto>
+    //         {
+    //             Page = page,
+    //             PageSize = pageSize,
+    //             TotalRecords = totalCount,
+    //             Items = items
+    //         },
+    //         CardCounts = cardCounts
+    //     };
+    // }
     public async Task<AccountListWithCardDto> GetAllAsync(
-     int page,
-     int pageSize,
-     string? search,
-     bool? status)
+    int page,
+    int pageSize,
+    string? search,
+    bool? status)
     {
         if (page <= 0) page = 1;
         if (pageSize <= 0) pageSize = 10;
 
-        // -----------------------------
-        // Base query only for cards
-        // -----------------------------
-        // var baseAccountQuery = _db.Accounts
-        //     .Where(x => !x.IsDeleted);
-        var baseAccountQuery = _db.Accounts
-    .ApplyAccountHierarchyFilter(_currentUser)
-    .Where(x => !x.IsDeleted);
+        // System account can see all accounts
+        var accountBaseQuery = _db.Accounts.AsQueryable();
 
-        var cardCounts = await baseAccountQuery
+        if (_currentUser.AccountId != 1)
+        {
+            accountBaseQuery = accountBaseQuery.ApplyAccountHierarchyFilter(_currentUser);
+        }
+
+        accountBaseQuery = accountBaseQuery.Where(x => !x.IsDeleted);
+
+        var cardCounts = await accountBaseQuery
             .GroupBy(x => 1)
             .Select(g => new AccountCardCountDto
             {
@@ -324,13 +467,12 @@ public class AccountProvisionService : IAccountProvisionService
             .FirstOrDefaultAsync()
             ?? new AccountCardCountDto();
 
-        // -----------------------------
-        // Main grid query
-        // -----------------------------
         var query =
-            //from a in _db.Accounts
-            from a in _db.Accounts.ApplyAccountHierarchyFilter(_currentUser)
-            join c in _db.Countries on a.CountryId equals c.CountryId
+            from a in accountBaseQuery
+
+            join c0 in _db.Countries
+                on a.CountryId equals c0.CountryId into countryGroup
+            from c in countryGroup.DefaultIfEmpty()
 
             join st0 in _db.States
                 on a.StateId equals st0.StateId.ToString() into stGroup
@@ -340,14 +482,12 @@ public class AccountProvisionService : IAccountProvisionService
                 on a.CityId equals ct0.CityId.ToString() into ctGroup
             from ct in ctGroup.DefaultIfEmpty()
 
-            join cat in _db.Categories on a.CategoryId equals cat.CategoryId
+            join cat0 in _db.Categories
+                on a.CategoryId equals cat0.CategoryId into catGroup
+            from cat in catGroup.DefaultIfEmpty()
 
-            where !a.IsDeleted
             select new { a, c, cat, st, ct };
 
-        // -----------------------------
-        // Search filter
-        // -----------------------------
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
@@ -360,9 +500,6 @@ public class AccountProvisionService : IAccountProvisionService
                 ((x.ct != null ? x.ct.CityName : "")).ToLower().Contains(s));
         }
 
-        // -----------------------------
-        // Status filter only for grid
-        // -----------------------------
         if (status.HasValue)
         {
             query = query.Where(x => x.a.Status == status.Value);
@@ -386,13 +523,13 @@ public class AccountProvisionService : IAccountProvisionService
 
                 Fk_userid = x.a.Fk_userid,
 
-                CategoryId = x.cat.CategoryId,
-                CategoryName = x.cat.LabelName,
+                CategoryId = x.cat != null ? x.cat.CategoryId : 0,
+                CategoryName = x.cat != null ? x.cat.LabelName : "",
 
                 PrimaryDomain = x.a.PrimaryDomain,
 
-                CountryId = x.c.CountryId,
-                CountryName = x.c.CountryName,
+                CountryId = x.c != null ? x.c.CountryId : 0,
+                CountryName = x.c != null ? x.c.CountryName : "",
 
                 StateId = x.a.StateId,
                 StateName = x.st != null ? x.st.StateName : "",
@@ -412,13 +549,10 @@ public class AccountProvisionService : IAccountProvisionService
                 BusinessTimeZone = x.a.BusinessTimeZone,
                 Zipcode = x.a.Zipcode,
                 usernamesacc = x.a.UserName,
-                //password = x.a.PasswordHash,
                 share = x.a.share,
-
 
                 TaxTypeId = x.a.TaxTypeId,
                 Status = x.a.Status,
-
                 CreatedOn = x.a.CreatedOn
             })
             .AsNoTracking()
@@ -437,28 +571,124 @@ public class AccountProvisionService : IAccountProvisionService
         };
     }
 
+    // public async Task<AccountResponseDto?> GetByIdAsync(int accountId)
+    // {
+    //     var query =
+    //         from a in _db.Accounts
+    //         join c in _db.Countries on a.CountryId equals c.CountryId
+
+    //         // ✅ LEFT JOIN mst_state (string -> int match)
+    //         join st in _db.States
+    //             on a.StateId equals st.StateId.ToString() into stj
+    //         from st in stj.DefaultIfEmpty()
+
+    //             // ✅ LEFT JOIN mst_city (string -> int match)
+    //         join ct in _db.Cities
+    //             on a.CityId equals ct.CityId.ToString() into ctj
+    //         from ct in ctj.DefaultIfEmpty()
+
+    //         join cat0 in _db.Categories
+    //     on a.CategoryId equals cat0.CategoryId into catGroup
+    //         from cat in catGroup.DefaultIfEmpty()
+
+    //             // where !a.IsDeleted && a.AccountId == accountId
+    //             //             where !a.IsDeleted
+    //             //  && a.AccountId == accountId
+    //             //  && a.HierarchyPath.StartsWith(_currentUser.HierarchyPath)
+    //             //             select new { a, c, cat, st, ct };
+    //         where !a.IsDeleted
+    //             && a.AccountId == accountId
+    //             && (
+    //                 _currentUser.AccountId == 1
+    //                 || a.HierarchyPath.StartsWith(_currentUser.HierarchyPath)
+    //             )
+    //         select new { a, c, cat, st, ct };
+
+    //     return await query
+    //         .Select(x => new AccountResponseDto
+    //         {
+    //             AccountId = x.a.AccountId,
+    //             AccountCode = x.a.AccountCode,
+    //             AccountName = x.a.AccountName,
+    //             Reffer = x.a.RefferCode,
+
+    //             ParentAccountId = x.a.ParentAccountId,
+    //             HierarchyPath = x.a.HierarchyPath,
+
+    //             Fk_userid = x.a.Fk_userid,
+
+    //             CategoryId = x.cat.CategoryId,
+    //             CategoryName = x.cat.LabelName,
+
+    //             PrimaryDomain = x.a.PrimaryDomain,
+
+    //             CountryId = x.c.CountryId,
+    //             CountryName = x.c.CountryName,
+
+    //             // ✅ state
+    //             StateId = x.a.StateId,
+    //             StateName = x.st != null ? x.st.StateName : "",
+
+    //             // ✅ city
+    //             CityId = x.a.CityId,
+    //             CityName = x.ct != null ? x.ct.CityName : "",
+
+    //             fullname = x.a.fullname,
+    //             email = x.a.email,
+    //             phone = x.a.phone,
+    //             address = x.a.address,
+    //             Position = x.a.Position,
+    //             BusinessAddress = x.a.BusinessAddress,
+    //             BusinessEmail = x.a.BusinessEmail,
+    //             BusinessHours = x.a.BusinessHours,
+    //             BusinessPhone = x.a.BusinessPhone,
+    //             BusinessTimeZone = x.a.BusinessTimeZone,
+    //             Zipcode = x.a.Zipcode,
+    //             usernamesacc = x.a.UserName,
+    //             // password = x.a.PasswordHash,
+    //             share = x.a.share,
+
+    //             TaxTypeId = x.a.TaxTypeId,
+    //             Status = x.a.Status,
+
+    //             CreatedOn = x.a.CreatedOn
+    //         })
+    //         .AsNoTracking()
+    //         .FirstOrDefaultAsync();
+    // }
+
+
     public async Task<AccountResponseDto?> GetByIdAsync(int accountId)
     {
         var query =
             from a in _db.Accounts
-            join c in _db.Countries on a.CountryId equals c.CountryId
 
-            // ✅ LEFT JOIN mst_state (string -> int match)
-            join st in _db.States
-                on a.StateId equals st.StateId.ToString() into stj
+            join c0 in _db.Countries
+                on a.CountryId equals c0.CountryId into countryGroup
+            from c in countryGroup.DefaultIfEmpty()
+
+            join st0 in _db.States
+                on a.StateId equals st0.StateId.ToString() into stj
             from st in stj.DefaultIfEmpty()
 
-                // ✅ LEFT JOIN mst_city (string -> int match)
-            join ct in _db.Cities
-                on a.CityId equals ct.CityId.ToString() into ctj
+            join ct0 in _db.Cities
+                on a.CityId equals ct0.CityId.ToString() into ctj
             from ct in ctj.DefaultIfEmpty()
 
-            join cat in _db.Categories on a.CategoryId equals cat.CategoryId
+            join cat0 in _db.Categories
+                on a.CategoryId equals cat0.CategoryId into catGroup
+            from cat in catGroup.DefaultIfEmpty()
 
-            // where !a.IsDeleted && a.AccountId == accountId
             where !a.IsDeleted
- && a.AccountId == accountId
- && a.HierarchyPath.StartsWith(_currentUser.HierarchyPath)
+                && a.AccountId == accountId
+                && (
+                    _currentUser.AccountId == 1
+                    || (
+                        a.HierarchyPath != null &&
+                        a.HierarchyPath.StartsWith(_currentUser.HierarchyPath)
+                    )
+                )
+
             select new { a, c, cat, st, ct };
 
         return await query
@@ -474,19 +704,17 @@ public class AccountProvisionService : IAccountProvisionService
 
                 Fk_userid = x.a.Fk_userid,
 
-                CategoryId = x.cat.CategoryId,
-                CategoryName = x.cat.LabelName,
+                CategoryId = x.cat != null ? x.cat.CategoryId : 0,
+                CategoryName = x.cat != null ? x.cat.LabelName : "",
 
                 PrimaryDomain = x.a.PrimaryDomain,
 
-                CountryId = x.c.CountryId,
-                CountryName = x.c.CountryName,
+                CountryId = x.c != null ? x.c.CountryId : 0,
+                CountryName = x.c != null ? x.c.CountryName : "",
 
-                // ✅ state
                 StateId = x.a.StateId,
                 StateName = x.st != null ? x.st.StateName : "",
 
-                // ✅ city
                 CityId = x.a.CityId,
                 CityName = x.ct != null ? x.ct.CityName : "",
 
@@ -502,7 +730,6 @@ public class AccountProvisionService : IAccountProvisionService
                 BusinessTimeZone = x.a.BusinessTimeZone,
                 Zipcode = x.a.Zipcode,
                 usernamesacc = x.a.UserName,
-                // password = x.a.PasswordHash,
                 share = x.a.share,
 
                 TaxTypeId = x.a.TaxTypeId,
@@ -513,6 +740,7 @@ public class AccountProvisionService : IAccountProvisionService
             .AsNoTracking()
             .FirstOrDefaultAsync();
     }
+
 
     public async Task<List<AccountHierarchyDto>> GetHierarchyAsync()
     {

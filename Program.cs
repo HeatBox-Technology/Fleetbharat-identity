@@ -68,7 +68,9 @@ builder.Services.AddDbContext<IdentityDbContext>((sp, opt) =>
        .AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>()));
 builder.Services.AddHttpClient<IExternalMappingApiService, ExternalMappingApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://47.131.171.150:5000/api/v1/"); // external base url
+    //client.BaseAddress = new Uri("http://47.131.171.150:5000/api/v1/"); // external base url
+    client.BaseAddress = new Uri("http://92.4.76.230:8083/api/v1/"); // local for testing
+
 });
 
 builder.Services.AddVtsServices(builder.Configuration, defaultConnection);
@@ -124,8 +126,9 @@ builder.Services.AddScoped<IBillingCalculationService, BillingCalculationService
 builder.Services.AddScoped<IBillingRetryService, BillingRetryService>();
 builder.Services.AddScoped<IBillingAnalyticsService, BillingAnalyticsService>();
 builder.Services.Configure<ExternalSyncWorkerOptions>(
-    builder.Configuration.GetSection(ExternalSyncWorkerOptions.SectionName));
+builder.Configuration.GetSection(ExternalSyncWorkerOptions.SectionName));
 builder.Services.AddScoped<IExternalSyncRepository, ExternalSyncRepository>();
+builder.Services.AddScoped<IExternalApiLogRepository, ExternalApiLogRepository>();
 builder.Services.AddScoped<IExternalSyncQueueService, ExternalSyncQueueService>();
 builder.Services.AddScoped<IExternalSyncRetryPolicy, ExternalSyncRetryPolicyService>();
 builder.Services.AddScoped<IExternalSyncInvoker, ExternalSyncInvoker>();
@@ -220,12 +223,31 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization(options =>
+// builder.Services.AddAuthorization(options =>
+// {
+//     options.FallbackPolicy = new AuthorizationPolicyBuilder()
+//         .RequireAuthenticatedUser()
+//         .Build();
+// });
+// ✅ AUTHORIZATION (ENVIRONMENT BASED)
+if (builder.Environment.IsDevelopment())
 {
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .Build();
-});
+    builder.Services.AddAuthorization(options =>
+    {
+        options.FallbackPolicy = new AuthorizationPolicyBuilder()
+            .RequireAssertion(_ => true) // Allow all in dev
+            .Build();
+    });
+}
+else
+{
+    builder.Services.AddAuthorization(options =>
+    {
+        options.FallbackPolicy = new AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser()
+            .Build();
+    });
+}
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -274,6 +296,12 @@ if (IsHostedServiceEnabled("RedisGpsSubscriber"))
 
 
 var app = builder.Build();
+using (var scope = app.Services.CreateScope())
+{
+    var bootstrapper = new ExternalSyncBootstrapper(scope.ServiceProvider.GetRequiredService<IdentityDbContext>());
+    await bootstrapper.InitializeAsync();
+}
+
 var uploadsPath = Path.Combine(app.Environment.ContentRootPath, "uploads");
 var storagePath = Path.Combine(app.Environment.ContentRootPath, "storage");
 Directory.CreateDirectory(uploadsPath);
@@ -303,8 +331,19 @@ app.UseMiddleware<AuditMiddleware>();
 app.UseAuthorization();
 
 
-app.MapControllers().RequireAuthorization();
-app.MapHub<TrackingHub>("/hubs/tracking").RequireAuthorization();
+// app.MapControllers().RequireAuthorization();
+// app.MapHub<TrackingHub>("/hubs/tracking").RequireAuthorization();
+// ✅ ENVIRONMENT BASED ENDPOINT SECURITY
+if (app.Environment.IsDevelopment())
+{
+    app.MapControllers();
+    app.MapHub<TrackingHub>("/hubs/tracking");
+}
+else
+{
+    app.MapControllers().RequireAuthorization();
+    app.MapHub<TrackingHub>("/hubs/tracking").RequireAuthorization();
+}
 
 
 app.Run();

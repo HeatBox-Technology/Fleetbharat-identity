@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 public class VehicleDeviceMapService : IVehicleDeviceMapService
 {
     private readonly IdentityDbContext _db;
+    //private readonly IVtsExternalApiEnqueueService _externalSyncEnqueueService;
     private readonly IExternalMappingApiService _externalApi;
     private readonly ICurrentUserService _currentUser;
 
@@ -48,12 +50,8 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
             throw new Exception("Invalid DeviceId");
 
         // ✅ Business rule: device already assigned
-        var exists = await _db.VehicleDeviceMaps
-            .ApplyAccountHierarchyFilter(_currentUser)
-            .AnyAsync(x => x.Fk_DeviceId == dto.DeviceId && x.IsActive && !x.IsDeleted);
-
-        if (exists)
-            throw new InvalidOperationException("Device already assigned.");
+        await ValidateActiveDeviceAssignmentAsync(dto.DeviceId, excludeMappingId: null);
+        await ValidateSimAssignmentAsync(dto.AccountId, dto.SimId, excludeMappingId: null);
 
         var entity = new map_vehicle_device
         {
@@ -74,8 +72,8 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
         _db.VehicleDeviceMaps.Add(entity);
         await _db.SaveChangesAsync();
 
+        //await _externalSyncEnqueueService.EnqueueVehicleDeviceMappingAsync(entity);
         await SendExternalMapping(entity);
-
         return entity.Id;
     }
 
@@ -151,6 +149,8 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
         if (!deviceExists)
             throw new Exception("Invalid DeviceId");
 
+        await ValidateActiveDeviceAssignmentAsync(dto.DeviceId, id);
+
         // Validate vehicle
         var vehicleExists = await _db.Vehicles
             .ApplyAccountHierarchyFilter(_currentUser)
@@ -158,6 +158,8 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
 
         if (!vehicleExists)
             throw new Exception("Invalid VehicleId");
+
+        await ValidateSimAssignmentAsync(entity.AccountId, dto.SimId, id);
 
         entity.Fk_DeviceId = dto.DeviceId;
         entity.Fk_VehicleId = dto.VehicleId;
@@ -171,6 +173,55 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
 
         await _db.SaveChangesAsync();
         return true;
+    }
+
+    private async Task ValidateActiveDeviceAssignmentAsync(int deviceId, int? excludeMappingId)
+    {
+        var existingDeviceMapping = await _db.VehicleDeviceMaps
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => x.Fk_DeviceId == deviceId && x.IsActive && !x.IsDeleted)
+            .Where(x => !excludeMappingId.HasValue || x.Id != excludeMappingId.Value)
+            .Select(x => new { x.Id })
+            .FirstOrDefaultAsync();
+
+        if (existingDeviceMapping != null)
+            throw new InvalidOperationException("Device already assigned.");
+    }
+
+    private async Task ValidateSimAssignmentAsync(int accountId, int simId, int? excludeMappingId)
+    {
+        var simExists = await _db.Sims
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AnyAsync(x =>
+                x.SimId == simId &&
+                x.AccountId == accountId &&
+                !x.IsDeleted &&
+                x.IsActive);
+
+        if (!simExists)
+            throw new Exception("Invalid or inactive SIM.");
+
+        var existingSimMapping = await (
+            from map in _db.VehicleDeviceMaps.ApplyAccountHierarchyFilter(_currentUser)
+            join device in _db.Devices on map.Fk_DeviceId equals device.Id
+            where map.fk_simid == simId
+                  && (!excludeMappingId.HasValue || map.Id != excludeMappingId.Value)
+                  && map.IsActive
+                  && !map.IsDeleted
+            select new
+            {
+                map.Id,
+                DeviceId = device.Id,
+                DeviceNo = device.DeviceNo,
+                DeviceName = device.DeviceImeiOrSerial
+            }
+        ).FirstOrDefaultAsync();
+
+        if (existingSimMapping != null)
+        {
+            throw new InvalidOperationException(
+                $"SIM already assigned with device: {existingSimMapping.DeviceNo} - {existingSimMapping.DeviceName}");
+        }
     }
 
     public async Task<bool> UpdateStatusAsync(int id, bool isActive)
@@ -415,6 +466,7 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
 
         _db.VehicleDeviceMaps.AddRange(entities);
         await _db.SaveChangesAsync();
+        // await _externalSyncEnqueueService.EnqueueVehicleDeviceMappingsAsync(entities);
 
         var deviceTypeNames = await _db.DeviceTypes
             .Where(x => items.Select(i => i.DeviceTypeId).Contains(x.Id))

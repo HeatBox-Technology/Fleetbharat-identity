@@ -33,6 +33,8 @@ namespace Infrastructure.Data
             services.AddScoped<IDriverService, DriverService>();
             services.AddScoped<IGeofenceService, GeofenceService>();
             services.AddScoped<IVehicleGeofenceMapService, VehicleGeofenceMapService>();
+            services.AddScoped<IVtsExternalApiEnqueueService, VtsExternalApiEnqueueService>();
+            services.AddScoped<IVtsExternalApiSyncDispatcher, VtsExternalApiSyncDispatcher>();
 
 
             // ✅ Redis

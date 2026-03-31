@@ -87,6 +87,7 @@ public class UpdateUserRequest
 
     public bool Status { get; set; }
     public bool TwoFactorEnabled { get; set; }
+    public string UserName { get; set; } = "";
 
     // ✅ same as Create
     public IFormFile? ProfileImage { get; set; }

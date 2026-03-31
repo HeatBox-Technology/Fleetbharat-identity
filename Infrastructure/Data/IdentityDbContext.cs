@@ -83,6 +83,7 @@ public class IdentityDbContext : DbContext
        public DbSet<external_sync_config> external_sync_configs { get; set; }
        public DbSet<external_sync_queue> external_sync_queues { get; set; }
        public DbSet<external_sync_dead_letter> external_sync_dead_letters { get; set; }
+       public DbSet<ExternalApiLog> ExternalApiLogs { get; set; }
        public DbSet<BillingPlan> BillingPlans { get; set; }
        public DbSet<PlanFeature> PlanFeatures { get; set; }
        public DbSet<PlanSolution> PlanSolutions { get; set; }
@@ -115,9 +116,12 @@ public class IdentityDbContext : DbContext
                      entity.Property(x => x.PrimaryDomain).HasMaxLength(200).IsRequired();
                      entity.HasIndex(x => x.HierarchyPath).HasDatabaseName("idx_account_hierarchy");
               });
-              modelBuilder.Entity<mst_role>()
-                .ToTable("mst_role")
-                .HasKey(x => x.RoleId);
+              modelBuilder.Entity<mst_role>(entity =>
+              {
+                     entity.ToTable("mst_role");
+                     entity.HasKey(x => x.RoleId);
+                     entity.HasIndex(x => new { x.AccountId, x.RoleName }).IsUnique();
+              });
               modelBuilder.Entity<mst_form>(entity =>
               {
                      entity.ToTable("mst_form");
@@ -283,6 +287,7 @@ public class IdentityDbContext : DbContext
               {
                      entity.Property(x => x.ProfileImagePath)
                      .HasMaxLength(500);
+                     entity.HasIndex(x => new { x.AccountId, x.Email }).IsUnique();
               });
               modelBuilder.Entity<AuditLog>(entity =>
               {
@@ -606,6 +611,17 @@ public class IdentityDbContext : DbContext
                      entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
                      entity.Property(x => x.MovedToDLQAt).HasColumnName("moved_to_dlq_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
                      entity.HasIndex(x => x.ModuleName);
+              });
+
+              modelBuilder.Entity<ExternalApiLog>(entity =>
+              {
+                     entity.ToTable("ExternalApiLogs");
+                     entity.HasKey(x => x.Id);
+                     entity.Property(x => x.ServiceName).HasMaxLength(150).IsRequired();
+                     entity.Property(x => x.Payload).IsRequired();
+                     entity.Property(x => x.Response);
+                     entity.Property(x => x.Status).HasMaxLength(20).IsRequired();
+                     entity.Property(x => x.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
               });
 
               modelBuilder.Entity<BillingPlan>(entity =>
