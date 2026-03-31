@@ -38,35 +38,22 @@ public class AuthService : IAuthService
             throw new UnauthorizedAccessException("Invalid email or password");
 
         var normalizedLoginInput = loginInput.ToLower();
-        var normalizedMobileInput = new string(loginInput.Where(char.IsDigit).ToArray());
-
-        var users = await _db.Users
-            .Where(x =>
+        var user = await _db.Users
+            .FirstOrDefaultAsync(x =>
                 !x.IsDeleted &&
                 x.Status == true &&
                 (
                     (x.Email != null && x.Email.ToLower() == normalizedLoginInput) ||
                     (x.User_name != null && x.User_name.ToLower() == normalizedLoginInput) ||
-                    x.MobileNo != null
-                ))
-            .ToListAsync();
+                    (x.MobileNo != null && x.MobileNo == normalizedLoginInput)
+                ));
 
-        var user = users.FirstOrDefault(x =>
-        {
-            if (x.MobileNo == null)
-                return false;
-
-            var dbMobile = new string(x.MobileNo.Where(char.IsDigit).ToArray());
-
-            return dbMobile.EndsWith(normalizedMobileInput);
-        });
-
-        if (user == null)
-        {
-            user = users.FirstOrDefault(x =>
-                (x.Email != null && x.Email.ToLower() == normalizedLoginInput) ||
-                (x.User_name != null && x.User_name.ToLower() == normalizedLoginInput));
-        }
+        // if (user == null)
+        // {
+        //     user = users.FirstOrDefault(x =>
+        //         (x.Email != null && x.Email.ToLower() == normalizedLoginInput) ||
+        //         (x.User_name != null && x.User_name.ToLower() == normalizedLoginInput));
+        // }
 
         if (user == null)
             throw new UnauthorizedAccessException("Invalid email or password");
