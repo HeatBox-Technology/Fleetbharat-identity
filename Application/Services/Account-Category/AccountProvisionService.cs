@@ -59,6 +59,11 @@ public class AccountProvisionService : IAccountProvisionService
             if (codeExists)
                 throw new InvalidOperationException("AccountCode already exists");
 
+            await ValidateUniqueAccountUserFieldsAsync(
+                businessEmail: req.BusinessEmail,
+                phone: req.phone,
+                userName: req.UserName);
+
 
             // =====================================================
             // CREATE ACCOUNT FIRST (WITHOUT HIERARCHY)
@@ -814,6 +819,12 @@ public class AccountProvisionService : IAccountProvisionService
             if (!validTax)
                 throw new BadHttpRequestException("Invalid TaxType");
 
+            await ValidateUniqueAccountUserFieldsAsync(
+                businessEmail: req.BusinessEmail,
+                phone: req.phone,
+                userName: req.UserName,
+                excludeAccountId: accountId);
+
             // Account Code
             if (!string.IsNullOrWhiteSpace(req.AccountCode))
             {
@@ -1092,6 +1103,75 @@ public class AccountProvisionService : IAccountProvisionService
             return "DealerAdmin";
 
         return string.Empty;
+    }
+
+    private async Task ValidateUniqueAccountUserFieldsAsync(
+        string? businessEmail,
+        string? phone,
+        string? userName,
+        int? excludeAccountId = null)
+    {
+        var normalizedBusinessEmail = businessEmail?.Trim().ToLowerInvariant();
+        var normalizedPhone = phone?.Trim();
+        var normalizedUserName = userName?.Trim();
+
+        if (!string.IsNullOrWhiteSpace(normalizedBusinessEmail))
+        {
+            var businessEmailExistsInAccounts = await _db.Accounts.AnyAsync(x =>
+                !x.IsDeleted &&
+                (!excludeAccountId.HasValue || x.AccountId != excludeAccountId.Value) &&
+                x.BusinessEmail.ToLower() == normalizedBusinessEmail);
+
+            if (businessEmailExistsInAccounts)
+                throw new InvalidOperationException("Business email already exists");
+
+            var businessEmailExistsInUsers = await _db.Users.AnyAsync(x =>
+                !x.IsDeleted &&
+                (!excludeAccountId.HasValue || x.AccountId != excludeAccountId.Value) &&
+                x.Email.ToLower() == normalizedBusinessEmail);
+
+            if (businessEmailExistsInUsers)
+                throw new InvalidOperationException("Business email already exists in user table");
+        }
+
+        if (!string.IsNullOrWhiteSpace(normalizedPhone))
+        {
+            var phoneExistsInAccounts = await _db.Accounts.AnyAsync(x =>
+                !x.IsDeleted &&
+                (!excludeAccountId.HasValue || x.AccountId != excludeAccountId.Value) &&
+                (x.phone == normalizedPhone || x.BusinessPhone == normalizedPhone));
+
+            if (phoneExistsInAccounts)
+                throw new InvalidOperationException("Phone number already exists");
+
+            var phoneExistsInUsers = await _db.Users.AnyAsync(x =>
+                !x.IsDeleted &&
+                (!excludeAccountId.HasValue || x.AccountId != excludeAccountId.Value) &&
+                x.MobileNo == normalizedPhone);
+
+            if (phoneExistsInUsers)
+                throw new InvalidOperationException("Phone number already exists in user table");
+        }
+
+        if (!string.IsNullOrWhiteSpace(normalizedUserName))
+        {
+            var userNameExistsInAccounts = await _db.Accounts.AnyAsync(x =>
+                !x.IsDeleted &&
+                (!excludeAccountId.HasValue || x.AccountId != excludeAccountId.Value) &&
+                x.UserName.ToLower() == normalizedUserName.ToLower());
+
+            if (userNameExistsInAccounts)
+                throw new InvalidOperationException("Username already exists");
+
+            var userNameExistsInUsers = await _db.Users.AnyAsync(x =>
+                !x.IsDeleted &&
+                (!excludeAccountId.HasValue || x.AccountId != excludeAccountId.Value) &&
+                x.User_name != null &&
+                x.User_name.ToLower() == normalizedUserName.ToLower());
+
+            if (userNameExistsInUsers)
+                throw new InvalidOperationException("Username already exists in user table");
+        }
     }
 
     private static async Task<string> LoadEmailTemplateAsync(string templateName)

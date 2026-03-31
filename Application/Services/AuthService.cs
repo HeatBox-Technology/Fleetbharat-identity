@@ -37,15 +37,23 @@ public class AuthService : IAuthService
         if (string.IsNullOrWhiteSpace(loginInput))
             throw new UnauthorizedAccessException("Invalid email or password");
 
-        var normalizedLoginInput = loginInput.ToLower();
+        var normalizedLoginInput = loginInput.Trim().ToLower();
+        var normalizedMobileInput = new string(loginInput.Where(char.IsDigit).ToArray());
+
         var user = await _db.Users
             .FirstOrDefaultAsync(x =>
                 !x.IsDeleted &&
                 x.Status == true &&
                 (
                     (x.Email != null && x.Email.ToLower() == normalizedLoginInput) ||
+
                     (x.User_name != null && x.User_name.ToLower() == normalizedLoginInput) ||
-                    (x.MobileNo != null && x.MobileNo == normalizedLoginInput)
+
+                    (
+                        x.MobileNo != null &&
+                        new string(x.MobileNo.Where(char.IsDigit).ToArray())
+                            .EndsWith(normalizedMobileInput)
+                    )
                 ));
 
 
