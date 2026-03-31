@@ -44,11 +44,12 @@ public record CreateAccountRequest
 
     // user access
     [Required] string UserName,
-     string Password,
+
 
     string share,
 
-    int userId
+    int userId,
+    string Password = "123456"
 
 );
 

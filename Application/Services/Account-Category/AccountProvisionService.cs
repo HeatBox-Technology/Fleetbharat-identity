@@ -230,7 +230,7 @@ public class AccountProvisionService : IAccountProvisionService
                 FirstName = req.fullname,
                 LastName = "",
                 User_name = req.UserName,
-                Password_hash = BCrypt.Net.BCrypt.HashPassword(req.Password),
+                Password_hash = BCrypt.Net.BCrypt.HashPassword(defaultpass),
 
                 AccountId = account.AccountId,
                 roleId = firstRole.RoleId,
