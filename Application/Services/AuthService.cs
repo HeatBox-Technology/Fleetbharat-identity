@@ -15,18 +15,27 @@ public class AuthService : IAuthService
 {
     private const int MaxTwoFactorAttempts = 5;
     private static readonly ConcurrentDictionary<Guid, int> TwoFactorAttemptTracker = new();
+    private const int MaxLoginOtpAttempts = 5;
+    private static readonly ConcurrentDictionary<Guid, int> LoginOtpAttemptTracker = new();
 
     private readonly IdentityDbContext _db;
     private readonly JwtTokenService _jwt;
     private readonly IEmailService _emailService;
+    private readonly IWhatsAppService _whatsAppService;
     private readonly IConfiguration _config;
     private readonly int _accessTokenExpiryMinutes;
 
-    public AuthService(IdentityDbContext db, JwtTokenService jwt, IEmailService emailService, IConfiguration config)
+    public AuthService(
+        IdentityDbContext db,
+        JwtTokenService jwt,
+        IEmailService emailService,
+        IWhatsAppService whatsAppService,
+        IConfiguration config)
     {
         _db = db;
         _jwt = jwt;
         _emailService = emailService;
+        _whatsAppService = whatsAppService;
         _config = config;
         _accessTokenExpiryMinutes = Math.Max(1, _config.GetValue<int?>("Jwt:AccessTokenExpiryMinutes") ?? 60);
     }
@@ -38,6 +47,8 @@ public class AuthService : IAuthService
             throw new UnauthorizedAccessException("Invalid email or password");
 
         var normalizedLoginInput = loginInput.ToLower();
+        var normalizedPhone = NormalizePhone(loginInput);
+        var isPhoneLogin = IsLikelyPhone(loginInput);
         var user = await _db.Users
             .FirstOrDefaultAsync(x =>
                 !x.IsDeleted &&
@@ -45,7 +56,12 @@ public class AuthService : IAuthService
                 (
                     (x.Email != null && x.Email.ToLower() == normalizedLoginInput) ||
                     (x.User_name != null && x.User_name.ToLower() == normalizedLoginInput) ||
-                    (x.MobileNo != null && x.MobileNo == normalizedLoginInput)
+                    (x.MobileNo != null && x.MobileNo == normalizedLoginInput) ||
+                    (isPhoneLogin &&
+                        (
+                            (x.User_name != null && x.User_name == normalizedPhone) ||
+                            (x.MobileNo != null && (x.MobileNo == loginInput || x.MobileNo == normalizedPhone))
+                        ))
                 ));
 
         // if (user == null)
@@ -58,7 +74,11 @@ public class AuthService : IAuthService
         if (user == null)
             throw new UnauthorizedAccessException("Invalid email or password");
 
-        if (!BCrypt.Net.BCrypt.Verify(req.Password, user.Password_hash))
+        var password = req.Password?.Trim();
+        if (string.IsNullOrWhiteSpace(password))
+            throw new UnauthorizedAccessException("Invalid email or password");
+
+        if (!BCrypt.Net.BCrypt.Verify(password, user.Password_hash))
             throw new UnauthorizedAccessException("Invalid email or password");
 
         // -------------------------------------------------
@@ -519,6 +539,167 @@ public class AuthService : IAuthService
         };
     }
 
+    public async Task<LoginWithAccessResponse> VerifyLoginOtpAsync(VerifyLoginOtpRequest req)
+    {
+        var user = await _db.Users
+            .FirstOrDefaultAsync(x => x.UserId == req.UserId && !x.IsDeleted);
+
+        if (user == null)
+            throw new UnauthorizedAccessException("Invalid request");
+
+        if (string.IsNullOrWhiteSpace(user.LoginOtpCodeHash) || !user.LoginOtpExpiry.HasValue)
+            throw new UnauthorizedAccessException("OTP not found or expired");
+
+        if (user.LoginOtpExpiry.Value < DateTime.UtcNow)
+        {
+            LoginOtpAttemptTracker.TryRemove(user.UserId, out _);
+            throw new UnauthorizedAccessException("OTP expired");
+        }
+
+        var isValid = BCrypt.Net.BCrypt.Verify(req.Otp, user.LoginOtpCodeHash);
+
+        if (!isValid)
+        {
+            var attempts = LoginOtpAttemptTracker.AddOrUpdate(user.UserId, 1, (_, current) => current + 1);
+            if (attempts >= MaxLoginOtpAttempts)
+            {
+                user.LoginOtpCodeHash = null;
+                user.LoginOtpExpiry = null;
+                await _db.SaveChangesAsync();
+                LoginOtpAttemptTracker.TryRemove(user.UserId, out _);
+                throw new UnauthorizedAccessException("Too many invalid attempts. Request a new OTP.");
+            }
+
+            throw new UnauthorizedAccessException("Invalid OTP");
+        }
+
+        user.LoginOtpCodeHash = null;
+        user.LoginOtpExpiry = null;
+        LoginOtpAttemptTracker.TryRemove(user.UserId, out _);
+        StampSuccessfulLogin(user);
+
+        var role = await _db.Roles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.RoleId == user.roleId);
+
+        var account = await _db.Accounts
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.AccountId == user.AccountId && !a.IsDeleted);
+
+        var roleName = ResolveRoleName(role, user);
+
+        var tokens = await GenerateTokens(
+            user,
+            roleName,
+            account?.HierarchyPath ?? string.Empty,
+            ResolveIsSystemRole(role, roleName));
+
+        var whiteLabel = await _db.WhiteLabels
+            .AsNoTracking()
+            .FirstOrDefaultAsync(w =>
+                w.AccountId == user.AccountId &&
+                w.IsActive);
+
+        var rights = await GetRoleFormRightsAsync(user.roleId, roleName);
+
+        return new LoginWithAccessResponse
+        {
+            UserId = user.UserId,
+            Email = user.Email,
+            FullName = $"{user.FirstName} {user.LastName}".Trim(),
+            ProfileImagePath = user.ProfileImagePath ?? "",
+
+            AccountId = user.AccountId,
+            AccountName = account?.AccountName ?? "",
+            AccountCode = account?.AccountCode ?? "",
+
+            RoleId = user.roleId,
+            RoleName = roleName,
+
+            Token = new LoginResponse(
+                AccessToken: tokens.AccessToken,
+                RefreshToken: tokens.RefreshToken,
+                ExpiresAt: tokens.ExpiresAt,
+                Is2FARequired: false,
+                Message: "Login successful"
+            ),
+
+            WhiteLabel = whiteLabel == null
+                ? new WhiteLabelInfoDto()
+                : new WhiteLabelInfoDto
+                {
+                    WhiteLabelId = whiteLabel.WhiteLabelId,
+                    CustomEntryFqdn = whiteLabel.CustomEntryFqdn,
+                    BrandName = whiteLabel.BrandName,
+                    LogoUrl = whiteLabel.LogoUrl,
+                    LogoName = whiteLabel.LogoName,
+                    LogoPath = whiteLabel.LogoPath,
+                    PrimaryColorHex = whiteLabel.PrimaryColorHex,
+                    SecondaryColorHex = whiteLabel.SecondaryColorHex
+                },
+
+            FormRights = rights
+        };
+    }
+
+    public async Task<LoginWithAccessResponse> RequestLoginOtpAsync(RequestLoginOtpRequest req)
+    {
+        var input = req.Phone?.Trim();
+        if (string.IsNullOrWhiteSpace(input) || !IsLikelyPhone(input))
+            throw new UnauthorizedAccessException("Invalid phone number");
+
+        var normalizedPhone = NormalizePhone(input);
+
+        var user = await _db.Users
+            .FirstOrDefaultAsync(x =>
+                !x.IsDeleted &&
+                (
+                    (x.MobileNo != null && (x.MobileNo == input || x.MobileNo == normalizedPhone)) ||
+                    (x.User_name != null && (x.User_name == input || x.User_name == normalizedPhone))
+                ));
+
+        if (user == null)
+            throw new UnauthorizedAccessException("Invalid phone number");
+
+        var otp = RandomNumberGenerator
+            .GetInt32(100000, 1000000)
+            .ToString();
+
+        LoginOtpAttemptTracker.TryRemove(user.UserId, out _);
+
+        try
+        {
+            await SendLoginOtpWhatsAppAsync(user, otp);
+        }
+        catch
+        {
+            throw;
+        }
+
+        user.LoginOtpCodeHash = BCrypt.Net.BCrypt.HashPassword(otp);
+        user.LoginOtpExpiry = DateTime.UtcNow.AddMinutes(5);
+        await _db.SaveChangesAsync();
+
+        return new LoginWithAccessResponse
+        {
+            UserId = user.UserId,
+            Email = user.Email,
+            FullName = $"{user.FirstName} {user.LastName}".Trim(),
+            ProfileImagePath = user.ProfileImagePath ?? "",
+
+            Token = new LoginResponse(
+                AccessToken: null,
+                RefreshToken: null,
+                ExpiresAt: null,
+                Is2FARequired: true,
+                Message: "OTP sent to WhatsApp"
+            ),
+
+            FormRights = new List<FormRightResponseDto>(),
+            WhiteLabel = new WhiteLabelInfoDto()
+        };
+    }
+
     private static string ResolveRoleName(mst_role? role, User user)
     {
         if (role?.IsSystemRole == true)
@@ -682,7 +863,63 @@ public class AuthService : IAuthService
         return body;
     }
 
-}
+    private static bool IsLikelyPhone(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return false;
 
+        foreach (var ch in input)
+        {
+            if (char.IsLetter(ch))
+                return false;
+        }
+
+        var digits = NormalizePhone(input);
+        return digits.Length >= 8 && digits.Length <= 15;
+    }
+
+    private static string NormalizePhone(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return string.Empty;
+
+        var sb = new System.Text.StringBuilder();
+        foreach (var ch in input)
+        {
+            if (char.IsDigit(ch))
+                sb.Append(ch);
+        }
+
+        return sb.ToString();
+    }
+
+    private async Task SendLoginOtpWhatsAppAsync(User user, string otp)
+    {
+        var phone = user.MobileNo ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(phone))
+            throw new InvalidOperationException("User does not have a phone number for OTP.");
+
+        var templateName = _config["WhatsApp:OtpTemplateName"];
+        if (string.IsNullOrWhiteSpace(templateName))
+            throw new InvalidOperationException("WhatsApp:OtpTemplateName is missing.");
+
+        var languageCode = _config["WhatsApp:LanguageCode"] ?? "en_US";
+        var includeBody = _config.GetValue<bool?>("WhatsApp:OtpIncludeBody") ?? true;
+        var includeButton = _config.GetValue<bool?>("WhatsApp:OtpIncludeButton") ?? false;
+
+        var bodyVars = includeBody ? new[] { otp } : Array.Empty<string>();
+        var buttonVar = includeButton ? otp : null;
+
+        await _whatsAppService.SendTemplateAsync(new WhatsAppTemplateMessage
+        {
+            To = phone,
+            TemplateName = templateName,
+            LanguageCode = languageCode,
+            BodyVariables = bodyVars,
+            ButtonVariable = buttonVar
+        });
+    }
+
+}
 
 

@@ -60,6 +60,20 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse<object>.Ok(result, result.Token.Message, 200));
     }
 
+    [HttpPost("request-login-otp")]
+    public async Task<IActionResult> RequestLoginOtp([FromBody] RequestLoginOtpRequest req)
+    {
+        var result = await _service.RequestLoginOtpAsync(req);
+        return Ok(ApiResponse<object>.Ok(result, result.Token.Message, 200));
+    }
+
+    [HttpPost("verify-login-otp")]
+    public async Task<IActionResult> VerifyLoginOtp([FromBody] VerifyLoginOtpRequest req)
+    {
+        var result = await _service.VerifyLoginOtpAsync(req);
+        return Ok(ApiResponse<object>.Ok(result, result.Token.Message, 200));
+    }
+
 
 
 }

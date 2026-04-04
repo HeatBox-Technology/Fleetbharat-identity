@@ -72,6 +72,7 @@ builder.Services.AddHttpClient<IExternalMappingApiService, ExternalMappingApiSer
     client.BaseAddress = new Uri("http://92.4.76.230:8083/api/v1/"); // local for testing
 
 });
+builder.Services.AddHttpClient<IWhatsAppService, WhatsAppService>();
 
 builder.Services.AddVtsServices(builder.Configuration, defaultConnection);
 
