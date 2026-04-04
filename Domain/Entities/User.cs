@@ -24,6 +24,8 @@ public class User : IAccountEntity
     public bool TwoFactorEnabled { get; set; } = false;
     public string? TwoFactorCodeHash { get; set; }
     public DateTime? TwoFactorExpiry { get; set; }
+    public string? LoginOtpCodeHash { get; set; }
+    public DateTime? LoginOtpExpiry { get; set; }
     public DateTime? LastLoginAt { get; set; }
     public string? ReferralCode { get; set; }
     public string? RefreshToken { get; set; }
