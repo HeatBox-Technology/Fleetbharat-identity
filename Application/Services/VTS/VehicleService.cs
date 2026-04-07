@@ -288,23 +288,19 @@ namespace Application.Services
         }
 
 
-
         public async Task<byte[]> ExportVehiclesCsvAsync(int? accountId, string? search)
         {
-            // Base vehicle query
             var vehicleQuery = _db.Vehicles
                 .AsNoTracking()
                 .Where(v => !v.IsDeleted)
                 .ApplyAccountHierarchyFilter(_currentUserService)
                 .AsQueryable();
 
-            // Account filter
             if (accountId.HasValue)
             {
                 vehicleQuery = vehicleQuery.Where(v => v.AccountId == accountId.Value);
             }
 
-            // Search filter
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var s = search.Trim().ToLower();
@@ -315,7 +311,6 @@ namespace Application.Services
                 );
             }
 
-            // Join with account table
             var query =
                 from v in vehicleQuery
                 join a in _db.Accounts
@@ -329,32 +324,35 @@ namespace Application.Services
                     VehicleNumber = v.VehicleNumber,
                     VinOrChassisNumber = v.VinOrChassisNumber,
                     Status = v.Status,
-                    UpdatedAt = v.UpdatedAt
+                    LastUpdated = v.UpdatedAt ?? v.CreatedAt
                 };
 
-            // Apply ordering so latest updated records come first
             var rows = await query
-                .OrderByDescending(x => x.UpdatedAt)
+                .OrderByDescending(x => x.LastUpdated)
                 .ToListAsync();
 
-            // Build CSV
             var sb = new StringBuilder();
             sb.AppendLine("Account,Vehicle Number,VIN/Chassis,Status,Last Updated");
 
             foreach (var v in rows)
             {
+                var lastUpdated = v.LastUpdated != default(DateTime)
+     ? v.LastUpdated.ToLocalTime().ToString("dd/MM/yyyy, hh:mm tt")
+     : "";
+
                 sb.AppendLine(
                     $"\"{v.AccountName}\"," +
                     $"\"{v.VehicleNumber}\"," +
                     $"\"{v.VinOrChassisNumber}\"," +
                     $"\"{v.Status}\"," +
-                    $"\"{(v.UpdatedAt.HasValue ? v.UpdatedAt.Value.ToString("yyyy-MM-dd HH:mm") : "")}\""
+                    $"\"{lastUpdated}\""
                 );
             }
 
             return Encoding.UTF8.GetBytes(sb.ToString());
-
         }
+
+
     }
 }
 
