@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System.IO;
 
 public class AccountProvisionService : IAccountProvisionService
@@ -13,18 +14,24 @@ public class AccountProvisionService : IAccountProvisionService
     private readonly IdentityDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly IEmailService _emailService;
+    private readonly IWhatsAppService _whatsAppService;
     private readonly IConfiguration _config;
+    private readonly ILogger<AccountProvisionService> _logger;
 
     public AccountProvisionService(
         IdentityDbContext db,
         ICurrentUserService currentUser,
         IEmailService emailService,
-        IConfiguration config)
+        IWhatsAppService whatsAppService,
+        IConfiguration config,
+        ILogger<AccountProvisionService> logger)
     {
         _db = db;
         _currentUser = currentUser;
         _emailService = emailService;
+        _whatsAppService = whatsAppService;
         _config = config;
+        _logger = logger;
     }
     public async Task<int> CreateAsync(CreateAccountRequest req)
     {
@@ -262,9 +269,10 @@ public class AccountProvisionService : IAccountProvisionService
             await _db.SaveChangesAsync();
 
             var resetBaseUrl = _config["Frontend:ResetPasswordUrl"];
+            string? resetLink = null;
             if (!string.IsNullOrWhiteSpace(resetBaseUrl))
             {
-                var resetLink = $"{resetBaseUrl}?token={token}&email={user.Email}";
+                resetLink = $"{resetBaseUrl}?token={token}&email={user.Email}";
 
                 var recipients = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -288,6 +296,19 @@ public class AccountProvisionService : IAccountProvisionService
                             ["{{RESET_LINK}}"] = resetLink,
                             ["{{CODE}}"] = string.Empty
                         });
+                }
+            }
+
+            if (string.Equals(req.share?.Trim(), "whatsapp", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    _logger.LogInformation("WhatsApp account creation requested via share flag for AccountId {AccountId}", account.AccountId);
+                    await SendAccountCreationWhatsAppAsync(account, resetLink);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send WhatsApp account creation message for AccountId {AccountId}", account.AccountId);
                 }
             }
 
@@ -1245,5 +1266,49 @@ public class AccountProvisionService : IAccountProvisionService
         }
 
         return body;
+    }
+
+    private async Task SendAccountCreationWhatsAppAsync(
+        mst_account account,
+        string? resetLink)
+    {
+        var phone = account.phone ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(phone))
+            throw new InvalidOperationException("User phone number is missing for WhatsApp account creation message.");
+
+        var templateName = _config["WhatsApp:AccountCreationTemplateName"];
+        if (string.IsNullOrWhiteSpace(templateName))
+            throw new InvalidOperationException("WhatsApp:AccountCreationTemplateName is missing.");
+
+        var languageCode = _config["WhatsApp:LanguageCode"] ?? "en_US";
+        var includeBody = _config.GetValue<bool?>("WhatsApp:AccountCreationIncludeBody") ?? false;
+        var includeButton = _config.GetValue<bool?>("WhatsApp:AccountCreationIncludeButton") ?? false;
+
+        var bodyVars = includeBody
+            ? new[] { account.AccountName ?? string.Empty }
+            : Array.Empty<string>();
+
+        string? buttonVar = null;
+        if (includeButton)
+        {
+            var verifyUrl = _config["WhatsApp:AccountCreationVerifyUrl"];
+            if (!string.IsNullOrWhiteSpace(verifyUrl))
+            {
+                buttonVar = verifyUrl;
+            }
+            else
+            {
+                _logger.LogWarning("WhatsApp AccountCreationIncludeButton enabled but AccountCreationVerifyUrl is empty. Skipping button parameters.");
+            }
+        }
+
+        await _whatsAppService.SendTemplateAsync(new WhatsAppTemplateMessage
+        {
+            To = phone,
+            TemplateName = templateName,
+            LanguageCode = languageCode,
+            BodyVariables = bodyVars,
+            ButtonVariable = buttonVar
+        });
     }
 }
