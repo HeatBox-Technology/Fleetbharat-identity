@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System;
 using Application.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -131,5 +132,15 @@ public class DeviceController : ControllerBase
             result,
             "Devices created successfully",
             200));
+    }
+
+    [HttpGet("export")]
+    public async Task<IActionResult> ExportDevices(
+        [FromQuery] int? accountId = null,
+        [FromQuery] string? search = null)
+    {
+        var bytes = await _service.ExportdeviceCsvAsync(accountId, search);
+
+        return File(bytes, "text/csv", $"devices_export_{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
     }
 }

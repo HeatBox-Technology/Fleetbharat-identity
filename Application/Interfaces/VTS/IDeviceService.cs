@@ -54,4 +54,9 @@ public interface IDeviceService
     /// Bulk create devices.
     /// </summary>
     Task<List<DeviceDto>> BulkCreateAsync(List<CreateDeviceDto> devices);
+
+    /// <summary>
+    /// Export devices as CSV.
+    /// </summary>
+    Task<byte[]> ExportdeviceCsvAsync(int? accountId, string? search);
 }

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Linq;
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 public class DeviceService : IDeviceService
 {
@@ -290,5 +291,69 @@ public class DeviceService : IDeviceService
             CreatedAt = x.createdAt,
             IsActive = x.IsActive
         }).ToList();
+    }
+
+    public async Task<byte[]> ExportdeviceCsvAsync(int? accountId, string? search)
+    {
+        var deviceQuery = _db.Devices
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AsQueryable();
+
+        if (accountId.HasValue)
+        {
+            deviceQuery = deviceQuery.Where(x => x.AccountId == accountId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+
+            deviceQuery = deviceQuery.Where(x =>
+                (!string.IsNullOrEmpty(x.DeviceNo) && x.DeviceNo.ToLower().Contains(s)) ||
+                (!string.IsNullOrEmpty(x.DeviceImeiOrSerial) && x.DeviceImeiOrSerial.ToLower().Contains(s)) ||
+                (!string.IsNullOrEmpty(x.DeviceStatus) && x.DeviceStatus.ToLower().Contains(s))
+            );
+        }
+
+        var query =
+            from d in deviceQuery
+            join a in _db.Accounts
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted)
+                .ApplyAccountHierarchyFilter(_currentUser)
+            on d.AccountId equals a.AccountId
+            select new
+            {
+                a.AccountName,
+                d.DeviceNo,
+                d.DeviceImeiOrSerial,
+                d.DeviceStatus,
+                LastUpdated = d.updatedAt ?? d.createdAt
+            };
+
+        var rows = await query
+            .OrderByDescending(x => x.LastUpdated)
+            .ToListAsync();
+
+        var sb = new StringBuilder();
+        sb.AppendLine("Account,Device Number,Device IMEI/Serial,Status,Last Updated");
+
+        foreach (var d in rows)
+        {
+            var lastUpdated = d.LastUpdated != default(DateTime)
+                ? d.LastUpdated.ToLocalTime().ToString("dd/MM/yyyy, hh:mm tt")
+                : "";
+
+            sb.AppendLine(
+                $"\"{d.AccountName}\"," +
+                $"\"{d.DeviceNo}\"," +
+                $"\"{d.DeviceImeiOrSerial}\"," +
+                $"\"{d.DeviceStatus}\"," +
+                $"\"{lastUpdated}\"");
+        }
+
+        return Encoding.UTF8.GetBytes(sb.ToString());
     }
 }
