@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 public interface IGeofenceService
 {
     Task<int> CreateAsync(CreateGeofenceDto dto);
+    Task<int> CreateByLocationAsync(CreateGeofenceByLocationDto dto);
+
     Task<GeofenceDto?> GetByIdAsync(int id);
     Task<GeofenceListUiResponseDto> GetZones(int page, int pageSize, int? accountId, string? search = null);
     Task<PagedResultDto<GeofenceDto>> GetPagedAsync(int page, int pageSize, int? accountId, string? search = null);

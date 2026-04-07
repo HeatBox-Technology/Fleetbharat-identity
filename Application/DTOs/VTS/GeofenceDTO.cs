@@ -80,6 +80,17 @@ public class GeofenceSummaryDto
     public int Enabled { get; set; }
     public int Disabled { get; set; }
 }
+public class CreateGeofenceByLocationDto
+{
+    public int AccountId { get; set; }
+    public string Address { get; set; } = string.Empty;
+
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+
+    public string DisplayName { get; set; } = string.Empty;
+    public int? CreatedBy { get; set; }
+}
 public class GeofenceListUiResponseDto
 {
     public GeofenceSummaryDto Summary { get; set; } = new();

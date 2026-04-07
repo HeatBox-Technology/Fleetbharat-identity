@@ -28,6 +28,22 @@ public class GeofenceController : ControllerBase
             "Geofence created",
             200));
     }
+    /// <summary>
+    /// Create geofence by providing location (lat, lng) and radius. This will create a circular geofence.
+    /// </summary>
+    /// <param name="req"></param>
+    /// <returns></returns>
+    [HttpPost("create-by-location")]
+    public async Task<IActionResult> CreateByLocation([FromBody] CreateGeofenceByLocationDto req)
+    {
+        var id = await _service.CreateByLocationAsync(req);
+
+        return Ok(ApiResponse<object>.Ok(
+            new { geofenceId = id },
+            "Geofence created successfully",
+            200));
+    }
+
 
     /// <summary>
     /// Get geofences with summary + pagination

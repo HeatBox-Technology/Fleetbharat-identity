@@ -73,6 +73,54 @@ public class GeofenceService : IGeofenceService
 
         return entity.Id;
     }
+    public async Task<int> CreateByLocationAsync(CreateGeofenceByLocationDto dto)
+    {
+        if (dto.Latitude == 0 || dto.Longitude == 0)
+            throw new Exception("Invalid latitude/longitude");
+
+        // Default radius
+        var radius = 500;
+
+        // Unique code generate (simple)
+        var code = $"GF_{Guid.NewGuid().ToString("N")[..8].ToUpper()}";
+
+        // Create coordinate list (center point)
+        var coordinates = new List<CoordinateDto>
+    {
+        new CoordinateDto
+        {
+            Latitude = dto.Latitude,
+            Longitude = dto.Longitude
+        }
+    };
+
+        // Build geometry (circle)
+        var geom = BuildGeometry("CIRCLE", coordinates);
+
+        var entity = new mst_Geofence
+        {
+            AccountId = dto.AccountId,
+            UniqueCode = code,
+            DisplayName = dto.DisplayName?.Trim() ?? dto.Address,
+            Description = dto.Address,
+
+            GeometryType = "CIRCLE",
+            RadiusM = radius,
+            Geom = geom,
+
+            CoordinatesJson = JsonDocument.Parse(JsonSerializer.Serialize(coordinates)),
+
+            Status = "ENABLED",
+            IsActive = true,
+
+            CreatedBy = dto.CreatedBy,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.GeofenceZones.Add(entity);
+        await _db.SaveChangesAsync();
+        return entity.Id;
+    }
     public async Task<GeofenceListUiResponseDto> GetZones(
            int page,
            int pageSize,
