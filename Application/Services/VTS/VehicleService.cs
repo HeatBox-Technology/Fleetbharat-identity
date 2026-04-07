@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace Application.Services
 {
@@ -283,33 +284,38 @@ namespace Application.Services
                 CreatedBy = x.CreatedBy,
                 CreatedAt = x.CreatedAt
             }).ToList();
+
         }
+
+
 
         public async Task<byte[]> ExportVehiclesCsvAsync(int? accountId, string? search)
         {
-            // ✅ Base vehicle query (exclude deleted + apply hierarchy)
+            // Base vehicle query
             var vehicleQuery = _db.Vehicles
                 .AsNoTracking()
                 .Where(v => !v.IsDeleted)
                 .ApplyAccountHierarchyFilter(_currentUserService)
                 .AsQueryable();
 
-            // ✅ Apply account filter
+            // Account filter
             if (accountId.HasValue)
+            {
                 vehicleQuery = vehicleQuery.Where(v => v.AccountId == accountId.Value);
+            }
 
-            // ✅ Apply search filter
+            // Search filter
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var s = search.Trim().ToLower();
 
                 vehicleQuery = vehicleQuery.Where(v =>
-                    v.VehicleNumber.ToLower().Contains(s) ||
-                    v.VinOrChassisNumber.ToLower().Contains(s)
+                    (!string.IsNullOrEmpty(v.VehicleNumber) && v.VehicleNumber.ToLower().Contains(s)) ||
+                    (!string.IsNullOrEmpty(v.VinOrChassisNumber) && v.VinOrChassisNumber.ToLower().Contains(s))
                 );
             }
 
-            // ✅ Join with Accounts
+            // Join with account table
             var query =
                 from v in vehicleQuery
                 join a in _db.Accounts
@@ -319,31 +325,36 @@ namespace Application.Services
                 on v.AccountId equals a.AccountId
                 select new
                 {
-                    a.AccountName,
-                    v.VehicleNumber,
-                    v.VinOrChassisNumber,
-                    v.Status, // Active / Inactive / Off-road
-                    v.UpdatedAt
+                    AccountName = a.AccountName,
+                    VehicleNumber = v.VehicleNumber,
+                    VinOrChassisNumber = v.VinOrChassisNumber,
+                    Status = v.Status,
+                    UpdatedAt = v.UpdatedAt
                 };
 
-            var rows = await query.ToListAsync();
+            // Apply ordering so latest updated records come first
+            var rows = await query
+                .OrderByDescending(x => x.UpdatedAt)
+                .ToListAsync();
 
-            // ✅ CSV Build
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine("Account,Vehicle Number,VIN/Chassis,Status,LastUpdated");
+            // Build CSV
+            var sb = new StringBuilder();
+            sb.AppendLine("Account,Vehicle Number,VIN/Chassis,Status,Last Updated");
 
             foreach (var v in rows)
             {
                 sb.AppendLine(
-                    $"{v.AccountName}," +
-                    $"{v.VehicleNumber}," +
-                    $"{v.VinOrChassisNumber}," +
-                    $"{v.Status}," +
-                    $"{v.UpdatedAt:yyyy-MM-dd HH:mm}"
+                    $"\"{v.AccountName}\"," +
+                    $"\"{v.VehicleNumber}\"," +
+                    $"\"{v.VinOrChassisNumber}\"," +
+                    $"\"{v.Status}\"," +
+                    $"\"{(v.UpdatedAt.HasValue ? v.UpdatedAt.Value.ToString("yyyy-MM-dd HH:mm") : "")}\""
                 );
             }
 
-            return System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+            return Encoding.UTF8.GetBytes(sb.ToString());
+
         }
     }
 }
+
