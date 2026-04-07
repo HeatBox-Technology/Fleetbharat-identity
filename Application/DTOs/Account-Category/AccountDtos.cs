@@ -49,7 +49,8 @@ public record CreateAccountRequest
     string share,
 
     int userId,
-    string Password = "123456"
+     string Password = "123456",
+    bool WhatsApp = false
 
 );
 
