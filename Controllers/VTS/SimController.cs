@@ -126,4 +126,18 @@ public class SimController : ControllerBase
             "SIMs created successfully",
             200));
     }
+
+    [HttpGet("export")]
+    public async Task<IActionResult> ExportSims(
+        [FromQuery] int? accountId = null,
+        [FromQuery] string? search = null)
+    {
+        var fileBytes = await _service.ExportSimsCsvAsync(accountId, search);
+
+        return File(
+            fileBytes,
+            "text/csv",
+            $"sims_{System.DateTime.UtcNow:yyyyMMddHHmmss}.csv"
+        );
+    }
 }

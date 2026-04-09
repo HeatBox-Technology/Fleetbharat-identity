@@ -46,6 +46,30 @@ public class CommonDropdownService : ICommonDropdownService
             .ToListAsync();
     }
 
+    public async Task<List<AccountDropdownDto>> GetAccountDropdownAsync(int? accountId, int? categoryId)
+    {
+        var query = _db.Accounts
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => !x.IsDeleted);
+
+        if (accountId.HasValue)
+            query = query.Where(x => x.AccountId == accountId.Value);
+
+        if (categoryId.HasValue)
+            query = query.Where(x => x.CategoryId == categoryId.Value);
+
+        return await query
+            .OrderBy(x => x.AccountName)
+            .Select(x => new AccountDropdownDto
+            {
+                AccountId = x.AccountId,
+                AccountCode = x.AccountCode,
+                AccountName = x.AccountName
+            })
+            .ToListAsync();
+    }
+
     public async Task<List<DropdownDto>> GetCategoriesAsync(string? search, int limit)
     {
         if (limit <= 0) limit = 20;
@@ -119,6 +143,69 @@ public class CommonDropdownService : ICommonDropdownService
             {
                 Id = x.UserId,
                 Value = $"{x.FirstName} {x.LastName} ({x.Email})"
+            })
+            .ToListAsync();
+    }
+    public async Task<List<DriverDropdownDto>> GetDriversDropdownAsync(
+        int? driverId,
+        int? accountId,
+        string? name,
+        string? mobile)
+    {
+        var query = _db.Drivers
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .ApplyAccountHierarchyFilter(_currentUser);
+
+        if (driverId.HasValue)
+            query = query.Where(x => x.DriverId == driverId.Value);
+
+        if (accountId.HasValue)
+            query = query.Where(x => x.AccountId == accountId.Value);
+
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            var normalizedName = name.Trim().ToLower();
+            query = query.Where(x =>
+                x.Name != null &&
+                x.Name.ToLower().Contains(normalizedName));
+        }
+
+        if (!string.IsNullOrWhiteSpace(mobile))
+        {
+            var normalizedMobile = mobile.Trim().ToLower();
+            query = query.Where(x =>
+                x.Mobile != null &&
+                x.Mobile.ToLower().Contains(normalizedMobile));
+        }
+
+        return await query
+            .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
+            .Select(x => new DriverDropdownDto
+            {
+                DriverId = x.DriverId,
+                AccountId = x.AccountId,
+                Name = x.Name,
+                Mobile = x.Mobile
+            })
+            .ToListAsync();
+    }
+    public async Task<List<VehicleTypeDropdownDto>> GetVehicleTypesAsync(int? id)
+    {
+        var query = _db.VehicleTypes
+            .AsNoTracking()
+            .Where(x => x.Status == "Active");
+
+        if (id.HasValue)
+            query = query.Where(x => x.Id == id.Value);
+
+        return await query
+            .OrderBy(x => x.VehicleTypeName)
+            .Select(x => new VehicleTypeDropdownDto
+            {
+                Id = x.Id,
+                VehicleTypeName = x.VehicleTypeName,
+                Category = x.Category
             })
             .ToListAsync();
     }
@@ -202,6 +289,19 @@ public class CommonDropdownService : ICommonDropdownService
     public async Task<List<DropdownDto>> GetDeviceType()
     {
         return await _db.DeviceTypes
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && x.IsActive && x.IsEnabled)
+            .OrderBy(x => x.Name)
+            .Select(x => new DropdownDto
+            {
+                Id = x.Id,
+                Value = x.Name
+            })
+            .ToListAsync();
+    }
+    public async Task<List<DropdownDto>> GetTripTypes()
+    {
+        return await _db.TripTypes
             .AsNoTracking()
             .Where(x => !x.IsDeleted && x.IsActive && x.IsEnabled)
             .OrderBy(x => x.Name)

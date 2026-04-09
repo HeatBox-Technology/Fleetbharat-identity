@@ -112,3 +112,35 @@ public class LeasedVendor
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
 }
+
+[Table("mst_trip_type")]
+public class mst_trip_type
+{
+    [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public int Id { get; set; }
+
+    [Required]
+    [MaxLength(50)]
+    public string Code { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(150)]
+    public string Name { get; set; } = string.Empty;
+
+    public string? Description { get; set; }
+
+    public bool IsEnabled { get; set; } = true;
+
+    public int CreatedBy { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public int? UpdatedBy { get; set; }
+
+    public DateTime? UpdatedAt { get; set; }
+
+    public bool IsDeleted { get; set; } = false;
+
+    public bool IsActive { get; set; } = true;
+}
