@@ -194,7 +194,7 @@ public class CommonDropdownService : ICommonDropdownService
     {
         var query = _db.VehicleTypes
             .AsNoTracking()
-            .Where(x => x.Status == "Active");
+            .Where(x => x.Status != null && new[] { "active", "true", "1", "enabled" }.Contains(x.Status.Trim().ToLower()));
 
         if (id.HasValue)
             query = query.Where(x => x.Id == id.Value);
