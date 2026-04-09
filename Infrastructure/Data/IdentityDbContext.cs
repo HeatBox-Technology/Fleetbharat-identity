@@ -357,13 +357,17 @@ public class IdentityDbContext : DbContext
 
                      entity.HasKey(x => x.Id);
 
-                     entity.Property(x => x.Code).HasMaxLength(50).IsRequired();
-                     entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
-                     entity.Property(x => x.Description);
-                     entity.Property(x => x.IsEnabled).HasDefaultValue(true);
-                     entity.Property(x => x.IsActive).HasDefaultValue(true);
-                     entity.Property(x => x.IsDeleted).HasDefaultValue(false);
-                     entity.Property(x => x.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                     entity.Property(x => x.Id).HasColumnName("id");
+                     entity.Property(x => x.Code).HasColumnName("code").HasMaxLength(50).IsRequired();
+                     entity.Property(x => x.Name).HasColumnName("name").HasMaxLength(150).IsRequired();
+                     entity.Property(x => x.Description).HasColumnName("description");
+                     entity.Property(x => x.IsEnabled).HasColumnName("is_enabled").HasDefaultValue(true);
+                     entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+                     entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                     entity.Property(x => x.UpdatedBy).HasColumnName("updated_by");
+                     entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+                     entity.Property(x => x.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false);
+                     entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
 
                      entity.HasIndex(x => x.Code).IsUnique();
                      entity.HasIndex(x => x.Name).IsUnique();
