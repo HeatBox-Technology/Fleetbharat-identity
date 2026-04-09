@@ -56,4 +56,9 @@ public interface ISimService
     /// Bulk create SIMs.
     /// </summary>
     Task<List<SimDto>> BulkCreateAsync(List<CreateSimDto> sims);
+
+    /// <summary>
+    /// Export SIMs as CSV with readable column names.
+    /// </summary>
+    Task<byte[]> ExportSimsCsvAsync(int? accountId = null, string? search = null);
 }

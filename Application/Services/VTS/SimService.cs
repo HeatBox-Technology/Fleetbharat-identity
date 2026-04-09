@@ -301,6 +301,85 @@ public class SimService : ISimService
         return entities.Select(MapToDto).ToList();
     }
 
+    public async Task<byte[]> ExportSimsCsvAsync(int? accountId = null, string? search = null)
+    {
+        var query = _db.Sims
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => !x.IsDeleted)
+            .AsQueryable();
+
+        if (accountId.HasValue)
+            query = query.Where(x => x.AccountId == accountId.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                (x.Iccid != null && x.Iccid.ToLower().Contains(s)) ||
+                (x.Msisdn != null && x.Msisdn.ToLower().Contains(s)) ||
+                (x.Imsi != null && x.Imsi.ToLower().Contains(s)));
+        }
+
+        var data = await (
+            from sim in query
+            join account in _db.Accounts.AsNoTracking() on sim.AccountId equals account.AccountId into accountJoin
+            from account in accountJoin.DefaultIfEmpty()
+            join provider in _db.NetworkProviders.AsNoTracking() on sim.NetworkProviderId equals provider.Id into providerJoin
+            from provider in providerJoin.DefaultIfEmpty()
+            orderby sim.UpdatedAt ?? sim.CreatedAt descending
+            select new
+            {
+                AccountCode = account != null ? account.AccountCode : string.Empty,
+                AccountName = account != null ? account.AccountName : string.Empty,
+                sim.Iccid,
+                sim.Msisdn,
+                sim.Imsi,
+                NetworkProvider = provider != null ? provider.Name : string.Empty,
+                sim.StatusKey,
+                sim.IsActive,
+                sim.ActivatedAt,
+                sim.ExpiryAt,
+                sim.CreatedAt,
+                sim.UpdatedAt
+            })
+            .ToListAsync();
+
+        static string Escape(string? value)
+        {
+            if (string.IsNullOrEmpty(value)) return "";
+            return $"\"{value.Replace("\"", "\"\"")}\"";
+        }
+
+        static string FormatDate(DateTime? value)
+        {
+            return value.HasValue ? value.Value.ToString("yyyy-MM-dd HH:mm:ss") : "";
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Account Code,Account Name,ICCID,Mobile Number,IMSI,Network Provider,Status Key,Active Status,Activated On,Expiry On,Created On,Updated On");
+
+        foreach (var item in data)
+        {
+            sb.AppendLine(
+                $"{Escape(item.AccountCode)}," +
+                $"{Escape(item.AccountName)}," +
+                $"{Escape(item.Iccid)}," +
+                $"{Escape(item.Msisdn)}," +
+                $"{Escape(item.Imsi)}," +
+                $"{Escape(item.NetworkProvider)}," +
+                $"{Escape(item.StatusKey)}," +
+                $"{Escape(item.IsActive ? "Active" : "Inactive")}," +
+                $"{Escape(FormatDate(item.ActivatedAt))}," +
+                $"{Escape(FormatDate(item.ExpiryAt))}," +
+                $"{Escape(FormatDate(item.CreatedAt))}," +
+                $"{Escape(FormatDate(item.UpdatedAt))}"
+            );
+        }
+
+        return System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+    }
+
     private static SimDto MapToDto(mst_sim x)
     {
         return new SimDto

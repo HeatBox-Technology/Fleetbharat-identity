@@ -52,6 +52,7 @@ public class IdentityDbContext : DbContext
        /// <param name="modelBuilder"></param>
        public DbSet<mst_device> Devices { get; set; }
        public DbSet<mst_device_type> DeviceTypes { get; set; }
+       public DbSet<mst_trip_type> TripTypes { get; set; }
        public DbSet<mst_vehicle> Vehicles { get; set; }
        public DbSet<mst_vehicle_type> VehicleTypes { get; set; }
        public DbSet<mst_sim> Sims { get; set; }
@@ -348,6 +349,24 @@ public class IdentityDbContext : DbContext
                       .OnDelete(DeleteBehavior.Restrict);
 
                      e.HasIndex(x => x.SolutionId);
+              });
+
+              modelBuilder.Entity<mst_trip_type>(entity =>
+              {
+                     entity.ToTable("mst_trip_type");
+
+                     entity.HasKey(x => x.Id);
+
+                     entity.Property(x => x.Code).HasMaxLength(50).IsRequired();
+                     entity.Property(x => x.Name).HasMaxLength(150).IsRequired();
+                     entity.Property(x => x.Description);
+                     entity.Property(x => x.IsEnabled).HasDefaultValue(true);
+                     entity.Property(x => x.IsActive).HasDefaultValue(true);
+                     entity.Property(x => x.IsDeleted).HasDefaultValue(false);
+                     entity.Property(x => x.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                     entity.HasIndex(x => x.Code).IsUnique();
+                     entity.HasIndex(x => x.Name).IsUnique();
               });
 
               modelBuilder.Entity<SolutionMaster>(e =>

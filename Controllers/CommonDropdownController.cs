@@ -19,6 +19,15 @@ public class CommonDropdownController : ControllerBase
         return Ok(ApiResponse<object>.Ok(data, "Success"));
     }
 
+    [HttpGet("accounts/filter")]
+    public async Task<IActionResult> AccountDropdown(
+        [FromQuery] int? accountId = null,
+        [FromQuery] int? categoryId = null)
+    {
+        var data = await _service.GetAccountDropdownAsync(accountId, categoryId);
+        return Ok(ApiResponse<object>.Ok(data, "Success"));
+    }
+
     [HttpGet("categories")]
     public async Task<IActionResult> Categories([FromQuery] string? search = null, [FromQuery] int limit = 20)
     {
@@ -43,6 +52,24 @@ public class CommonDropdownController : ControllerBase
         [FromQuery] int limit = 20)
     {
         var data = await _service.GetUsersAsync(accountId, search, limit);
+        return Ok(ApiResponse<object>.Ok(data, "Success"));
+    }
+
+    [HttpGet("drivers")]
+    public async Task<IActionResult> Drivers(
+        [FromQuery] int? driverId = null,
+        [FromQuery] int? accountId = null,
+        [FromQuery] string? name = null,
+        [FromQuery] string? mobile = null)
+    {
+        var data = await _service.GetDriversDropdownAsync(driverId, accountId, name, mobile);
+        return Ok(ApiResponse<object>.Ok(data, "Success"));
+    }
+
+    [HttpGet("vehicle-types")]
+    public async Task<IActionResult> VehicleTypes([FromQuery] int? id = null)
+    {
+        var data = await _service.GetVehicleTypesAsync(id);
         return Ok(ApiResponse<object>.Ok(data, "Success"));
     }
 
@@ -83,6 +110,12 @@ public class CommonDropdownController : ControllerBase
     public async Task<IActionResult> GetDeviceTypes()
     {
         var data = await _service.GetDeviceType();
+        return Ok(ApiResponse<object>.Ok(data, "Success", 200));
+    }
+    [HttpGet("trip-types")]
+    public async Task<IActionResult> GetTripTypes()
+    {
+        var data = await _service.GetTripTypes();
         return Ok(ApiResponse<object>.Ok(data, "Success", 200));
     }
     [HttpGet("geofences")]
