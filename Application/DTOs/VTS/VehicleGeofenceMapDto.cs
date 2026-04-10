@@ -35,14 +35,16 @@ public class CreateVehicleGeofenceMapDto
 {
     public int AccountId { get; set; }
 
-    public int VehicleId { get; set; }
+    //public int VehicleId { get; set; }
+    public List<int> VehicleIds { get; set; } = new();
 
-    // public int GeofenceId { get; set; }
-    public List<int> GeofenceIds { get; set; } = new();
+    public int GeofenceId { get; set; }
+    //public List<int> GeofenceIds { get; set; } = new();
 
     public string? Remarks { get; set; }
 
     public int CreatedBy { get; set; }
+    public Guid? CreatedByUserId { get; set; }
 }
 public class UpdateVehicleGeofenceMapDto
 {
@@ -55,6 +57,7 @@ public class UpdateVehicleGeofenceMapDto
     public bool IsActive { get; set; }
 
     public int? UpdatedBy { get; set; }
+    public Guid? UpdatedByUserId { get; set; }
 }
 public class VehicleGeofenceAssignmentSummaryDto
 {

@@ -37,51 +37,59 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
         if (!accountExists)
             throw new Exception("Invalid AccountId");
 
-        var vehicleExists = await _db.Vehicles
+        if (dto.VehicleIds == null || !dto.VehicleIds.Any())
+            throw new Exception("VehicleIds are required");
+
+        var vehicleIds = dto.VehicleIds
+            .Distinct()
+            .ToList();
+
+        var validVehicleIds = await _db.Vehicles
             .ApplyAccountHierarchyFilter(_currentUser)
-            .AnyAsync(x => x.Id == dto.VehicleId &&
-                           x.AccountId == dto.AccountId &&
-                           !x.IsDeleted);
-
-        if (!vehicleExists)
-            throw new Exception("Invalid VehicleId");
-
-        // dto.GeofenceIds should be List<int> or int[]
-        var geofenceIds = dto.GeofenceIds.Distinct().ToList();
-
-        var validGeofenceIds = await _db.GeofenceZones
-            .ApplyAccountHierarchyFilter(_currentUser)
-            .Where(x => geofenceIds.Contains(x.Id) &&
-                        x.AccountId == dto.AccountId &&
-                        !x.IsDeleted)
+            .Where(x =>
+                vehicleIds.Contains(x.Id) &&
+                x.AccountId == dto.AccountId &&
+                !x.IsDeleted)
             .Select(x => x.Id)
             .ToListAsync();
 
-        if (validGeofenceIds.Count != geofenceIds.Count)
-            throw new Exception("One or more GeofenceIds are invalid");
+        if (validVehicleIds.Count != vehicleIds.Count)
+            throw new Exception("One or more VehicleIds are invalid");
+
+        var geofenceExists = await _db.GeofenceZones
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AnyAsync(x =>
+                x.Id == dto.GeofenceId &&
+                x.AccountId == dto.AccountId &&
+                !x.IsDeleted);
+
+        if (!geofenceExists)
+            throw new Exception("Invalid GeofenceId");
 
         var existingMappings = await _db.VehicleGeofenceMaps
             .ApplyAccountHierarchyFilter(_currentUser)
-            .Where(x => x.VehicleId == dto.VehicleId &&
-                        geofenceIds.Contains(x.GeofenceId) &&
-                        !x.IsDeleted)
-            .Select(x => x.GeofenceId)
+            .Where(x =>
+                vehicleIds.Contains(x.VehicleId) &&
+                x.GeofenceId == dto.GeofenceId &&
+                !x.IsDeleted)
+            .Select(x => x.VehicleId)
             .ToListAsync();
 
         var newEntities = new List<map_vehicle_geofence>();
 
-        foreach (var geofenceId in geofenceIds)
+        foreach (var vehicleId in vehicleIds)
         {
-            if (existingMappings.Contains(geofenceId))
+            if (existingMappings.Contains(vehicleId))
                 continue;
 
             newEntities.Add(new map_vehicle_geofence
             {
                 AccountId = dto.AccountId,
-                VehicleId = dto.VehicleId,
-                GeofenceId = geofenceId,
+                VehicleId = vehicleId,
+                GeofenceId = dto.GeofenceId,
                 Remarks = dto.Remarks,
                 CreatedBy = dto.CreatedBy,
+                CreatedByUserId = dto.CreatedByUserId,
                 CreatedAt = DateTime.UtcNow,
                 IsActive = true,
                 IsDeleted = false,
@@ -118,18 +126,20 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
 
         var vehicleExists = await _db.Vehicles
             .ApplyAccountHierarchyFilter(_currentUser)
-            .AnyAsync(x => x.Id == dto.VehicleId &&
-                           x.AccountId == entity.AccountId &&
-                           !x.IsDeleted);
+            .AnyAsync(x =>
+                x.Id == dto.VehicleId &&
+                x.AccountId == entity.AccountId &&
+                !x.IsDeleted);
 
         if (!vehicleExists)
             throw new Exception("Invalid VehicleId");
 
         var geofenceExists = await _db.GeofenceZones
             .ApplyAccountHierarchyFilter(_currentUser)
-            .AnyAsync(x => x.Id == dto.GeofenceId &&
-                           x.AccountId == entity.AccountId &&
-                           !x.IsDeleted);
+            .AnyAsync(x =>
+                x.Id == dto.GeofenceId &&
+                x.AccountId == entity.AccountId &&
+                !x.IsDeleted);
 
         if (!geofenceExists)
             throw new Exception("Invalid GeofenceId");
@@ -150,6 +160,7 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
         entity.Remarks = dto.Remarks;
         entity.IsActive = dto.IsActive;
         entity.UpdatedBy = dto.UpdatedBy;
+        entity.UpdatedByUserId = dto.UpdatedByUserId;
         entity.UpdatedAt = DateTime.UtcNow;
         entity.SyncStatus = "PENDING";
 
@@ -159,7 +170,6 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
 
         return true;
     }
-
     #endregion
 
 
@@ -175,6 +185,8 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
             throw new Exception("Mapping not found");
 
         entity.IsActive = isActive;
+        entity.UpdatedBy = _currentUser.AccountId;
+        entity.UpdatedByUserId = _currentUser.UserId;
         entity.UpdatedAt = DateTime.UtcNow;
         entity.SyncStatus = "PENDING";
 
@@ -196,6 +208,8 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
 
         entity.IsDeleted = true;
         entity.IsActive = false;
+        entity.UpdatedBy = _currentUser.AccountId;
+        entity.UpdatedByUserId = _currentUser.UserId;
         entity.UpdatedAt = DateTime.UtcNow;
         entity.SyncStatus = "PENDING";
 

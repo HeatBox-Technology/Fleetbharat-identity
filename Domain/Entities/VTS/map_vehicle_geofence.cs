@@ -26,4 +26,7 @@ public class map_vehicle_geofence : IAccountEntity
     public string? SyncStatus { get; set; }
     public DateTime? LastSyncedAt { get; set; }
     public string? SyncError { get; set; }
+    public Guid? CreatedByUserId { get; set; }
+    public Guid? UpdatedByUserId { get; set; }
+    public Guid? DeletedByUserId { get; set; }
 }
