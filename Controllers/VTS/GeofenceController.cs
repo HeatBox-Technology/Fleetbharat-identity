@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -144,5 +145,17 @@ public class GeofenceController : ControllerBase
             result,
             "Geofences created successfully",
             200));
+    }
+    [HttpGet("export")]
+    public async Task<IActionResult> ExportGeofences(
+    [FromQuery] int? accountId = null,
+    [FromQuery] string? search = null)
+    {
+        var bytes = await _service.ExportGeofenceCsvAsync(accountId, search);
+
+        return File(
+            bytes,
+            "text/csv",
+            $"geofences_export_{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
     }
 }

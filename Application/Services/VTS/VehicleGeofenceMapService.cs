@@ -28,7 +28,7 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
 
     #region CREATE
 
-    public async Task<int> CreateAsync(CreateVehicleGeofenceMapDto dto)
+    public async Task<List<int>> CreateAsync(CreateVehicleGeofenceMapDto dto)
     {
         var accountExists = await _db.Accounts
             .ApplyAccountHierarchyFilter(_currentUser)
@@ -39,49 +39,69 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
 
         var vehicleExists = await _db.Vehicles
             .ApplyAccountHierarchyFilter(_currentUser)
-            .AnyAsync(x => x.Id == dto.VehicleId && x.AccountId == dto.AccountId && !x.IsDeleted);
+            .AnyAsync(x => x.Id == dto.VehicleId &&
+                           x.AccountId == dto.AccountId &&
+                           !x.IsDeleted);
 
         if (!vehicleExists)
             throw new Exception("Invalid VehicleId");
 
-        var geofenceExists = await _db.GeofenceZones
+        // dto.GeofenceIds should be List<int> or int[]
+        var geofenceIds = dto.GeofenceIds.Distinct().ToList();
+
+        var validGeofenceIds = await _db.GeofenceZones
             .ApplyAccountHierarchyFilter(_currentUser)
-            .AnyAsync(x => x.Id == dto.GeofenceId && x.AccountId == dto.AccountId && !x.IsDeleted);
+            .Where(x => geofenceIds.Contains(x.Id) &&
+                        x.AccountId == dto.AccountId &&
+                        !x.IsDeleted)
+            .Select(x => x.Id)
+            .ToListAsync();
 
-        if (!geofenceExists)
-            throw new Exception("Invalid GeofenceId");
+        if (validGeofenceIds.Count != geofenceIds.Count)
+            throw new Exception("One or more GeofenceIds are invalid");
 
-        var exists = await _db.VehicleGeofenceMaps
+        var existingMappings = await _db.VehicleGeofenceMaps
             .ApplyAccountHierarchyFilter(_currentUser)
-            .AnyAsync(x =>
-                x.VehicleId == dto.VehicleId &&
-                x.GeofenceId == dto.GeofenceId &&
-                !x.IsDeleted);
+            .Where(x => x.VehicleId == dto.VehicleId &&
+                        geofenceIds.Contains(x.GeofenceId) &&
+                        !x.IsDeleted)
+            .Select(x => x.GeofenceId)
+            .ToListAsync();
 
-        if (exists)
-            throw new InvalidOperationException("Mapping already exists.");
+        var newEntities = new List<map_vehicle_geofence>();
 
-        var entity = new map_vehicle_geofence
+        foreach (var geofenceId in geofenceIds)
         {
-            AccountId = dto.AccountId,
-            VehicleId = dto.VehicleId,
-            GeofenceId = dto.GeofenceId,
-            Remarks = dto.Remarks,
-            CreatedBy = dto.CreatedBy,
-            CreatedAt = DateTime.UtcNow,
-            IsActive = true,
-            IsDeleted = false,
-            SyncStatus = "PENDING"
-        };
+            if (existingMappings.Contains(geofenceId))
+                continue;
 
-        _db.VehicleGeofenceMaps.Add(entity);
+            newEntities.Add(new map_vehicle_geofence
+            {
+                AccountId = dto.AccountId,
+                VehicleId = dto.VehicleId,
+                GeofenceId = geofenceId,
+                Remarks = dto.Remarks,
+                CreatedBy = dto.CreatedBy,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true,
+                IsDeleted = false,
+                SyncStatus = "PENDING"
+            });
+        }
+
+        if (!newEntities.Any())
+            throw new InvalidOperationException("All mappings already exist.");
+
+        _db.VehicleGeofenceMaps.AddRange(newEntities);
         await _db.SaveChangesAsync();
 
-        await SyncVehicleGeofenceAsync(entity, HttpMethod.Post);
+        foreach (var entity in newEntities)
+        {
+            await SyncVehicleGeofenceAsync(entity, HttpMethod.Post);
+        }
 
-        return entity.Id;
+        return newEntities.Select(x => x.Id).ToList();
     }
-
     #endregion
 
 
@@ -95,6 +115,24 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
 
         if (entity == null)
             throw new Exception("Mapping not found");
+
+        var vehicleExists = await _db.Vehicles
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AnyAsync(x => x.Id == dto.VehicleId &&
+                           x.AccountId == entity.AccountId &&
+                           !x.IsDeleted);
+
+        if (!vehicleExists)
+            throw new Exception("Invalid VehicleId");
+
+        var geofenceExists = await _db.GeofenceZones
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AnyAsync(x => x.Id == dto.GeofenceId &&
+                           x.AccountId == entity.AccountId &&
+                           !x.IsDeleted);
+
+        if (!geofenceExists)
+            throw new Exception("Invalid GeofenceId");
 
         var duplicate = await _db.VehicleGeofenceMaps
             .ApplyAccountHierarchyFilter(_currentUser)
@@ -113,8 +151,12 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
         entity.IsActive = dto.IsActive;
         entity.UpdatedBy = dto.UpdatedBy;
         entity.UpdatedAt = DateTime.UtcNow;
+        entity.SyncStatus = "PENDING";
 
         await _db.SaveChangesAsync();
+
+        await SyncVehicleGeofenceAsync(entity, HttpMethod.Put);
+
         return true;
     }
 
@@ -134,15 +176,14 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
 
         entity.IsActive = isActive;
         entity.UpdatedAt = DateTime.UtcNow;
+        entity.SyncStatus = "PENDING";
 
         await _db.SaveChangesAsync();
+
+        await SyncVehicleGeofenceAsync(entity, HttpMethod.Put);
+
         return true;
     }
-
-    #endregion
-
-
-    #region DELETE
 
     public async Task<bool> DeleteAsync(int id)
     {
@@ -156,6 +197,7 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
         entity.IsDeleted = true;
         entity.IsActive = false;
         entity.UpdatedAt = DateTime.UtcNow;
+        entity.SyncStatus = "PENDING";
 
         await _db.SaveChangesAsync();
 

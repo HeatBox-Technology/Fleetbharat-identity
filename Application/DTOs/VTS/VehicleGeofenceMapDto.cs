@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 public class VehicleGeofenceMapDto
 {
@@ -36,7 +37,8 @@ public class CreateVehicleGeofenceMapDto
 
     public int VehicleId { get; set; }
 
-    public int GeofenceId { get; set; }
+    // public int GeofenceId { get; set; }
+    public List<int> GeofenceIds { get; set; } = new();
 
     public string? Remarks { get; set; }
 

@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Net.Http;
 using Microsoft.Extensions.Logging;
 using NetTopologySuite;
+using System.Text;
 
 public class GeofenceService : IGeofenceService
 {
@@ -566,5 +567,83 @@ public class GeofenceService : IGeofenceService
         {
             // Missing sync-log table or sync status persistence issues should not fail the API request.
         }
+    }
+    public async Task<byte[]> ExportGeofenceCsvAsync(int? accountId, string? search)
+    {
+        var query = _db.GeofenceZones
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => !x.IsDeleted);
+
+        if (accountId.HasValue)
+        {
+            query = query.Where(x => x.AccountId == accountId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+
+            query = query.Where(x =>
+                (!string.IsNullOrEmpty(x.UniqueCode) && x.UniqueCode.ToLower().Contains(s)) ||
+                (!string.IsNullOrEmpty(x.DisplayName) && x.DisplayName.ToLower().Contains(s)) ||
+                (!string.IsNullOrEmpty(x.GeometryType) && x.GeometryType.ToLower().Contains(s)) ||
+                (!string.IsNullOrEmpty(x.Status) && x.Status.ToLower().Contains(s))
+            );
+        }
+
+        var rows = await query
+            .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
+            .Select(x => new
+            {
+                x.AccountId,
+                x.UniqueCode,
+                x.DisplayName,
+                x.ClassificationCode,
+                x.GeometryType,
+                x.RadiusM,
+                x.Status,
+                x.ColorTheme,
+                LastUpdated = x.UpdatedAt ?? x.CreatedAt
+            })
+            .ToListAsync();
+
+        var accountIds = rows
+            .Select(x => x.AccountId)
+            .Distinct()
+            .ToList();
+
+        var accountNames = await _db.Accounts
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => accountIds.Contains(x.AccountId))
+            .ToDictionaryAsync(x => x.AccountId, x => x.AccountName);
+
+        var sb = new StringBuilder();
+
+        sb.AppendLine("Account,Unique Code,Display Name,Classification Code,Geometry Type,Radius (M),Status,Color Theme,Last Updated");
+
+        foreach (var g in rows)
+        {
+            var accountName = accountNames.ContainsKey(g.AccountId)
+                ? accountNames[g.AccountId]
+                : "";
+            var lastUpdated = g.LastUpdated.HasValue
+                ? g.LastUpdated.Value.ToLocalTime().ToString("dd/MM/yyyy, hh:mm tt")
+                : "";
+
+            sb.AppendLine(
+                $"\"{accountName}\"," +
+                $"\"{g.UniqueCode}\"," +
+                $"\"{g.DisplayName}\"," +
+                $"\"{g.ClassificationCode}\"," +
+                $"\"{g.GeometryType}\"," +
+                $"\"{g.RadiusM}\"," +
+                $"\"{g.Status}\"," +
+                $"\"{g.ColorTheme}\"," +
+                $"\"{lastUpdated}\"");
+        }
+
+        return Encoding.UTF8.GetBytes(sb.ToString());
     }
 }

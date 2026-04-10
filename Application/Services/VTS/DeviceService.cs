@@ -297,7 +297,7 @@ public class DeviceService : IDeviceService
     {
         var deviceQuery = _db.Devices
             .AsNoTracking()
-            .Where(x => !x.IsDeleted)
+            .Where(x => !x.IsDeleted && x.IsActive)
             .ApplyAccountHierarchyFilter(_currentUser)
             .AsQueryable();
 
