@@ -431,10 +431,10 @@ public class LiveTrackingController : ControllerBase
             .Select(x => new VehicleDeviceMatch(
                 x.AccountId,
                 x.Fk_VehicleId,
-                x.Vehicle?.VehicleNumber ?? string.Empty,
+                x.Vehicle.VehicleNumber,
                 x.Fk_DeviceId,
-                x.Device?.DeviceNo ?? string.Empty,
-                x.Device?.DeviceImeiOrSerial ?? string.Empty))
+                x.Device.DeviceNo,
+                x.Device.DeviceImeiOrSerial))
             .FirstOrDefaultAsync();
     }
 

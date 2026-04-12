@@ -147,7 +147,7 @@ public class SimController : ControllerBase
         if (format == "xlsx" || format == "excel")
         {
             var fileBytes = await _service.ExportSimsXlsxAsync(accountId, search);
-            var base64Data = Convert.ToBase64String(fileBytes);
+            var base64Data = System.Convert.ToBase64String(fileBytes);
             return Ok(ApiResponse<object>.Ok(
                 new { contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsx = base64Data },
                 "Export generated",
