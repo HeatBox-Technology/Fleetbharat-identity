@@ -47,13 +47,13 @@ public class InvoiceController : ControllerBase
     }
 
     [HttpGet("export")]
-    public async Task<IActionResult> Export([FromQuery] int skip = 0, [FromQuery] int take = 500, [FromQuery] string format = "csv", CancellationToken ct = default)
+    public async Task<IActionResult> Export([FromQuery] int skip = 0, [FromQuery] int take = 500, [FromQuery] string? format = null, CancellationToken ct = default)
     {
-        skip = Math.Max(0, skip);
-        take = Math.Clamp(take, 1, 500);
+        skip = System.Math.Max(0, skip);
+        take = System.Math.Clamp(take, 1, 500);
 
         // Normalize format to lowercase
-        format = format?.ToLower() ?? "csv";
+        format = (format?.ToLower() ?? "csv");
 
         // Validate format parameter
         if (format != "csv" && format != "xlsx" && format != "excel")
@@ -66,7 +66,7 @@ public class InvoiceController : ControllerBase
         if (format == "xlsx" || format == "excel")
         {
             var fileBytes = await _service.ExportInvoicesXlsxAsync(skip, take, ct);
-            var base64Data = Convert.ToBase64String(fileBytes);
+            var base64Data = System.Convert.ToBase64String(fileBytes);
             return Ok(ApiResponse<object>.Ok(
                 new { contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsx = base64Data },
                 "Export generated",
