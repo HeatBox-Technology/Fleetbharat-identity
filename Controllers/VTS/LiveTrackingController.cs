@@ -256,7 +256,7 @@ public class LiveTrackingController : ControllerBase
 
         var vehicleIds = await _db.VehicleDeviceMaps
             .AsNoTracking()
-            .Where(x => x.IsActive && !x.IsDeleted && normalizedVehicleNos.Contains(x.Vehicle.VehicleNumber))
+            .Where(x => x.IsActive && !x.IsDeleted && x.Vehicle != null && normalizedVehicleNos.Contains(x.Vehicle.VehicleNumber))
             .Select(x => x.Fk_VehicleId)
             .Distinct()
             .ToListAsync();
@@ -386,16 +386,16 @@ public class LiveTrackingController : ControllerBase
             .Where(x => x.IsActive && !x.IsDeleted)
             .Where(x =>
                 vehicleIds.Contains(x.Fk_VehicleId) ||
-                vehicleNos.Contains(x.Vehicle.VehicleNumber) ||
-                deviceNos.Contains(x.Device.DeviceNo) ||
-                imeis.Contains(x.Device.DeviceImeiOrSerial))
+                (x.Vehicle != null && vehicleNos.Contains(x.Vehicle.VehicleNumber)) ||
+                (x.Device != null && deviceNos.Contains(x.Device.DeviceNo)) ||
+                (x.Device != null && imeis.Contains(x.Device.DeviceImeiOrSerial)))
             .Select(x => new VehicleDeviceMatch(
                 x.AccountId,
                 x.Fk_VehicleId,
-                x.Vehicle.VehicleNumber,
+                x.Vehicle != null ? x.Vehicle.VehicleNumber : string.Empty,
                 x.Fk_DeviceId,
-                x.Device.DeviceNo,
-                x.Device.DeviceImeiOrSerial))
+                x.Device != null ? x.Device.DeviceNo : string.Empty,
+                x.Device != null ? x.Device.DeviceImeiOrSerial : string.Empty))
             .ToListAsync();
 
         foreach (var dto in dtos)
@@ -431,10 +431,10 @@ public class LiveTrackingController : ControllerBase
             .Select(x => new VehicleDeviceMatch(
                 x.AccountId,
                 x.Fk_VehicleId,
-                x.Vehicle.VehicleNumber,
+                x.Vehicle != null ? x.Vehicle.VehicleNumber : string.Empty,
                 x.Fk_DeviceId,
-                x.Device.DeviceNo,
-                x.Device.DeviceImeiOrSerial))
+                x.Device != null ? x.Device.DeviceNo : string.Empty,
+                x.Device != null ? x.Device.DeviceImeiOrSerial : string.Empty))
             .FirstOrDefaultAsync();
     }
 

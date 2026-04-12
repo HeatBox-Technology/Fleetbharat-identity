@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using System.Text;
 
 [ApiController]
 [Route("api/billing/invoices")]
@@ -73,7 +74,8 @@ public class InvoiceController : ControllerBase
         }
         else
         {
-            fileBytes = await _service.ExportInvoicesCsvAsync(skip, take, ct);
+            var csv = await _service.ExportInvoicesCsvAsync(skip, take, ct);
+            fileBytes = Encoding.UTF8.GetBytes(csv);
             contentType = "text/csv";
             fileExtension = "csv";
         }
