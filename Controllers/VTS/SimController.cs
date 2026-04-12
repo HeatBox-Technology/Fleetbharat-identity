@@ -141,14 +141,14 @@ public class SimController : ControllerBase
         format = format?.ToLower() ?? "csv";
 
         // Validate format parameter
-        if (format != "csv" && format != "xlsx")
+        if (format != "csv" && format != "xlsx" && format != "excel")
         {
             return BadRequest(ApiResponse<object>.Fail(
-                "Invalid format. Supported formats are 'csv' or 'xlsx'.",
+                "Invalid format. Supported formats are 'csv' or 'excel'.",
                 400));
         }
 
-        if (format == "xlsx")
+        if (format == "xlsx" || format == "excel")
         {
             fileBytes = await _service.ExportSimsXlsxAsync(accountId, search);
             contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
