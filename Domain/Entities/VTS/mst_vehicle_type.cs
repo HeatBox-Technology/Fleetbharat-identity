@@ -4,11 +4,12 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Domain.Entities
 {
     [Table("mst_vehicle_type")]
-    public class mst_vehicle_type
+    public class mst_vehicle_type : IAccountEntity
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int Id { get; set; }
+        public int AccountId { get; set; }
         [Required]
         [MaxLength(50)]
         public string VehicleTypeName { get; set; } = string.Empty;

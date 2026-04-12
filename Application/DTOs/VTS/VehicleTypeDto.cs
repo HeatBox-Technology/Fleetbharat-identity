@@ -8,6 +8,8 @@ namespace Application.DTOs
     {
         /// <summary>Unique vehicle type ID</summary>
         public int Id { get; set; }
+        /// <summary>Account ID (FK to mst_account)</summary>
+        public int AccountId { get; set; }
         /// <summary>Vehicle type name (e.g. 'Truck', 'Car')</summary>
         public string VehicleTypeName { get; set; } = string.Empty;
         /// <summary>Category (e.g. 'Heavy', 'Light')</summary>

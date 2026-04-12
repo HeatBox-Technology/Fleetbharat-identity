@@ -26,9 +26,13 @@ public class VehicleTypeController : ControllerBase
     /// </summary>
     /// <returns>List of vehicle types.</returns>
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] int? accountId = null,
+        [FromQuery] string? search = null)
     {
-        var result = await _service.GetAllAsync();
+        var result = await _service.GetAllAsync(page, pageSize, accountId, search);
         return Ok(result);
     }
 

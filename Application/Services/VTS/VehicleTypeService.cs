@@ -44,12 +44,18 @@ namespace Application.Services
         /// Gets all vehicle types.
         /// </summary>
         /// <returns>List of <see cref="VehicleTypeDto"/>.</returns>
-        public async Task<IEnumerable<VehicleTypeDto>> GetAllAsync(int page = 1, int pageSize = 10, string? search = null)
+        public async Task<IEnumerable<VehicleTypeDto>> GetAllAsync(int page = 1, int pageSize = 10, int? accountId = null, string? search = null)
         {
             if (page <= 0) page = 1;
             if (pageSize <= 0) pageSize = 10;
 
-            var query = _context.Set<Domain.Entities.mst_vehicle_type>().AsNoTracking().AsQueryable();
+            var query = _context.Set<Domain.Entities.mst_vehicle_type>()
+                .AsNoTracking()
+                .ApplyAccountHierarchyFilter(_currentUser)
+                .AsQueryable();
+
+            if (accountId.HasValue)
+                query = query.Where(x => x.AccountId == accountId.Value);
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -67,6 +73,7 @@ namespace Application.Services
                 .Select(x => new VehicleTypeDto
                 {
                     Id = x.Id,
+                    AccountId = x.AccountId,
                     VehicleTypeName = x.VehicleTypeName,
                     Category = x.Category,
                     MovingIcon = x.MovingIcon,
@@ -93,7 +100,10 @@ namespace Application.Services
         /// <returns>The <see cref="VehicleTypeDto"/> if found; otherwise, null.</returns>
         public async Task<VehicleTypeDto?> GetByIdAsync(int id)
         {
-            var entity = await _context.Set<Domain.Entities.mst_vehicle_type>().FindAsync(id);
+            var entity = await _context.Set<Domain.Entities.mst_vehicle_type>()
+                .AsNoTracking()
+                .ApplyAccountHierarchyFilter(_currentUser)
+                .FirstOrDefaultAsync(x => x.Id == id);
             return entity == null ? null : MapToDto(entity);
         }
 
@@ -104,6 +114,13 @@ namespace Application.Services
         /// <returns>The created <see cref="VehicleTypeDto"/>.</returns>
         public async Task<VehicleTypeDto> CreateAsync(VehicleTypeDto dto)
         {
+            var accountExists = await _context.Accounts
+                .ApplyAccountHierarchyFilter(_currentUser)
+                .AnyAsync(x => x.AccountId == dto.AccountId && !x.IsDeleted);
+
+            if (!accountExists)
+                throw new KeyNotFoundException("Account not found");
+
             var entity = MapToEntity(dto, false);
             _context.Set<Domain.Entities.mst_vehicle_type>().Add(entity);
             await _context.SaveChangesAsync();
@@ -118,8 +135,18 @@ namespace Application.Services
         /// <returns>The updated <see cref="VehicleTypeDto"/>.</returns>
         public async Task<VehicleTypeDto> UpdateAsync(int id, VehicleTypeDto dto)
         {
-            var entity = await _context.Set<Domain.Entities.mst_vehicle_type>().FindAsync(id);
+            var accountExists = await _context.Accounts
+                .ApplyAccountHierarchyFilter(_currentUser)
+                .AnyAsync(x => x.AccountId == dto.AccountId && !x.IsDeleted);
+
+            if (!accountExists)
+                throw new KeyNotFoundException("Account not found");
+
+            var entity = await _context.Set<Domain.Entities.mst_vehicle_type>()
+                .ApplyAccountHierarchyFilter(_currentUser)
+                .FirstOrDefaultAsync(x => x.Id == id);
             if (entity == null) throw new KeyNotFoundException();
+            entity.AccountId = dto.AccountId;
             entity.VehicleTypeName = dto.VehicleTypeName;
             entity.Category = dto.Category;
             entity.MovingIcon = dto.MovingIcon;
@@ -154,6 +181,9 @@ namespace Application.Services
             var entity = await _context.Set<Domain.Entities.mst_vehicle_type>().FindAsync(id);
             if (entity == null)
                 throw new KeyNotFoundException("Vehicle type not found");
+
+            if (entity.AccountId != accountId)
+                throw new InvalidOperationException("Vehicle type does not belong to the specified account");
 
             if (req.MovingIcon != null && req.MovingIcon.Length > 0)
             {
@@ -213,7 +243,9 @@ namespace Application.Services
         /// <returns>True if deleted; otherwise, false.</returns>
         public async Task<bool> DeleteAsync(int id)
         {
-            var entity = await _context.Set<Domain.Entities.mst_vehicle_type>().FindAsync(id);
+            var entity = await _context.Set<Domain.Entities.mst_vehicle_type>()
+                .ApplyAccountHierarchyFilter(_currentUser)
+                .FirstOrDefaultAsync(x => x.Id == id);
             if (entity == null) return false;
             _context.Set<Domain.Entities.mst_vehicle_type>().Remove(entity);
             await _context.SaveChangesAsync();
@@ -225,6 +257,7 @@ namespace Application.Services
             return new VehicleTypeDto
             {
                 Id = entity.Id,
+                AccountId = entity.AccountId,
                 VehicleTypeName = entity.VehicleTypeName,
                 Category = entity.Category,
                 MovingIcon = entity.MovingIcon,
@@ -252,6 +285,7 @@ namespace Application.Services
         {
             var entity = new Domain.Entities.mst_vehicle_type
             {
+                AccountId = dto.AccountId,
                 VehicleTypeName = dto.VehicleTypeName,
                 Category = dto.Category,
                 MovingIcon = dto.MovingIcon,
