@@ -185,6 +185,56 @@ public class BillingInvoiceService : IBillingInvoiceService
         return sb.ToString();
     }
 
+    public async Task<byte[]> ExportInvoicesXlsxAsync(int skip, int take, CancellationToken ct = default)
+    {
+        var rows = await GetInvoicesAsync(skip, take, ct);
+
+        using (var workbook = new ClosedXML.Excel.XLWorkbook())
+        {
+            var worksheet = workbook.Worksheets.Add("Invoices");
+
+            // Add headers
+            worksheet.Cell(1, 1).Value = "Invoice Number";
+            worksheet.Cell(1, 2).Value = "Account ID";
+            worksheet.Cell(1, 3).Value = "Subscription ID";
+            worksheet.Cell(1, 4).Value = "Amount";
+            worksheet.Cell(1, 5).Value = "Currency";
+            worksheet.Cell(1, 6).Value = "Status";
+            worksheet.Cell(1, 7).Value = "Invoice Date";
+            worksheet.Cell(1, 8).Value = "Due Date";
+
+            // Style header row
+            var headerRow = worksheet.Row(1);
+            headerRow.Style.Font.Bold = true;
+            headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+
+            // Add data
+            int rowNumber = 2;
+            foreach (var row in rows)
+            {
+                worksheet.Cell(rowNumber, 1).Value = row.InvoiceNumber;
+                worksheet.Cell(rowNumber, 2).Value = row.AccountId;
+                worksheet.Cell(rowNumber, 3).Value = row.SubscriptionId;
+                worksheet.Cell(rowNumber, 4).Value = row.Amount;
+                worksheet.Cell(rowNumber, 5).Value = row.Currency;
+                worksheet.Cell(rowNumber, 6).Value = row.Status;
+                worksheet.Cell(rowNumber, 7).Value = row.InvoiceDate.ToString("yyyy-MM-dd");
+                worksheet.Cell(rowNumber, 8).Value = row.DueDate.ToString("yyyy-MM-dd");
+                rowNumber++;
+            }
+
+            // Auto-fit columns
+            worksheet.Columns().AdjustToContents();
+
+            // Return as bytes
+            using (var stream = new System.IO.MemoryStream())
+            {
+                workbook.SaveAs(stream);
+                return stream.ToArray();
+            }
+        }
+    }
+
     public async Task<int> GenerateDueInvoicesBatchAsync(int take, CancellationToken ct = default)
     {
         take = Math.Clamp(take, 1, 500);

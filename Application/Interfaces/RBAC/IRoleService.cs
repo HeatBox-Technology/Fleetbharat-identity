@@ -26,4 +26,5 @@ public interface IRoleService
     Task<RoleDetailResponseDto?> GetByRoleIdAsync(int roleId, int? accountId);
 
     Task<byte[]> ExportRolesCsvAsync(int? accountId, string? search);
+    Task<byte[]> ExportRolesXlsxAsync(int? accountId, string? search);
 }

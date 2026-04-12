@@ -85,11 +85,42 @@ public class RolesController : ControllerBase
     [HttpGet("export")]
     public async Task<IActionResult> ExportRoles(
         [FromQuery] int? accountId = null,
-        [FromQuery] string? search = null)
+        [FromQuery] string? search = null,
+        [FromQuery] string format = "csv")
     {
-        var bytes = await _service.ExportRolesCsvAsync(accountId, search);
+        byte[] fileBytes;
+        string contentType;
+        string fileExtension;
 
-        return File(bytes, "text/csv", $"roles_export_{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
+        // Normalize format to lowercase
+        format = format?.ToLower() ?? "csv";
+
+        // Validate format parameter
+        if (format != "csv" && format != "xlsx")
+        {
+            return BadRequest(ApiResponse<object>.Fail(
+                "Invalid format. Supported formats are 'csv' or 'xlsx'.",
+                400));
+        }
+
+        if (format == "xlsx")
+        {
+            fileBytes = await _service.ExportRolesXlsxAsync(accountId, search);
+            contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            fileExtension = "xlsx";
+        }
+        else
+        {
+            fileBytes = await _service.ExportRolesCsvAsync(accountId, search);
+            contentType = "text/csv";
+            fileExtension = "csv";
+        }
+
+        return File(
+            fileBytes,
+            contentType,
+            $"roles_export_{System.DateTime.UtcNow:yyyyMMddHHmmss}.{fileExtension}"
+        );
     }
 
 

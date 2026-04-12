@@ -47,9 +47,39 @@ public class InvoiceController : ControllerBase
     }
 
     [HttpGet("export")]
-    public async Task<IActionResult> Export([FromQuery] int skip = 0, [FromQuery] int take = 500, CancellationToken ct = default)
+    public async Task<IActionResult> Export([FromQuery] int skip = 0, [FromQuery] int take = 500, [FromQuery] string format = "csv", CancellationToken ct = default)
     {
-        var csv = await _service.ExportInvoicesCsvAsync(skip, take, ct);
-        return Ok(ApiResponse<object>.Ok(new { contentType = "text/csv", csv }, "Export generated", 200));
+        skip = Math.Max(0, skip);
+        take = Math.Clamp(take, 1, 500);
+
+        // Normalize format to lowercase
+        format = format?.ToLower() ?? "csv";
+
+        // Validate format parameter
+        if (format != "csv" && format != "xlsx")
+        {
+            return BadRequest(ApiResponse<object>.Fail(
+                "Invalid format. Supported formats are 'csv' or 'xlsx'.",
+                400));
+        }
+
+        if (format == "xlsx")
+        {
+            var fileBytes = await _service.ExportInvoicesXlsxAsync(skip, take, ct);
+            return File(
+                fileBytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"invoices_export_{System.DateTime.UtcNow:yyyyMMddHHmmss}.xlsx"
+            );
+        }
+        else
+        {
+            var csv = await _service.ExportInvoicesCsvAsync(skip, take, ct);
+            return File(
+                System.Text.Encoding.UTF8.GetBytes(csv),
+                "text/csv",
+                $"invoices_export_{System.DateTime.UtcNow:yyyyMMddHHmmss}.csv"
+            );
+        }
     }
 }

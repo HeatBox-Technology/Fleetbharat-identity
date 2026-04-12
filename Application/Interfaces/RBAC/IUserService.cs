@@ -30,6 +30,8 @@ public interface IUserService
     Task<bool> SendResetPasswordAsync(Guid userId);
     Task<string?> UpdateProfileImageAsync(Guid userId, IFormFile file);
     Task<bool> SoftDeleteAsync(Guid userId);
+    Task<byte[]> ExportUsersCsvAsync(int? accountId, string? search);
+    Task<byte[]> ExportUsersXlsxAsync(int? accountId, string? search);
 }
 
 

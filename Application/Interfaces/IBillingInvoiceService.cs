@@ -9,5 +9,6 @@ public interface IBillingInvoiceService
     Task<InvoiceResponseDto> CreateManualInvoiceAsync(InvoiceManualCreateDto dto, CancellationToken ct = default);
     Task<bool> DeleteInvoiceAsync(int id, CancellationToken ct = default);
     Task<string> ExportInvoicesCsvAsync(int skip, int take, CancellationToken ct = default);
+    Task<byte[]> ExportInvoicesXlsxAsync(int skip, int take, CancellationToken ct = default);
     Task<int> GenerateDueInvoicesBatchAsync(int take, CancellationToken ct = default);
 }

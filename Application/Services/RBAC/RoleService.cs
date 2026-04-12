@@ -422,4 +422,97 @@ public class RoleService : IRoleService
 
         return System.Text.Encoding.UTF8.GetBytes(sb.ToString());
     }
+
+    public async Task<byte[]> ExportRolesXlsxAsync(int? accountId, string? search)
+    {
+        // ✅ Base role query (exclude deleted + apply hierarchy)
+        var roleQuery = _db.Roles
+            .AsNoTracking()
+            .Where(r => !r.IsDeleted)
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AsQueryable();
+
+        // ✅ Apply account filter correctly
+        if (accountId.HasValue)
+            roleQuery = roleQuery.Where(r => r.AccountId == accountId.Value);
+
+        // ✅ Apply search filter
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+
+            roleQuery = roleQuery.Where(r =>
+                r.RoleName.ToLower().Contains(s) ||
+                (r.Description != null && r.Description.ToLower().Contains(s))
+            );
+        }
+
+        // ✅ Join with accounts (exclude deleted)
+        var query =
+            from r in roleQuery
+            join a in _db.Accounts
+                .AsNoTracking()
+                .Where(x => !x.IsDeleted)
+                .ApplyAccountHierarchyFilter(_currentUser)
+            on r.AccountId equals a.AccountId
+            select new
+            {
+                a.AccountName,
+                r.RoleName,
+                r.Description,
+                r.IsSystemRole,
+                r.CreatedOn,
+
+                // ✅ Correct AssignedUsers count
+                AssignedUsers = _db.Users
+                    .Where(u =>
+                        !u.IsDeleted &&
+                        u.roleId == r.RoleId
+                    )
+                    .Count()
+            };
+
+        var rows = await query.ToListAsync();
+
+        using (var workbook = new ClosedXML.Excel.XLWorkbook())
+        {
+            var worksheet = workbook.Worksheets.Add("Roles");
+
+            // Add headers
+            worksheet.Cell(1, 1).Value = "Account";
+            worksheet.Cell(1, 2).Value = "Role Name";
+            worksheet.Cell(1, 3).Value = "Description";
+            worksheet.Cell(1, 4).Value = "Assigned Users";
+            worksheet.Cell(1, 5).Value = "Is System Role";
+            worksheet.Cell(1, 6).Value = "Created On";
+
+            // Style header row
+            var headerRow = worksheet.Row(1);
+            headerRow.Style.Font.Bold = true;
+            headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+
+            // Add data
+            int rowNumber = 2;
+            foreach (var item in rows)
+            {
+                worksheet.Cell(rowNumber, 1).Value = item.AccountName;
+                worksheet.Cell(rowNumber, 2).Value = item.RoleName;
+                worksheet.Cell(rowNumber, 3).Value = item.Description;
+                worksheet.Cell(rowNumber, 4).Value = item.AssignedUsers;
+                worksheet.Cell(rowNumber, 5).Value = item.IsSystemRole ? "Yes" : "No";
+                worksheet.Cell(rowNumber, 6).Value = item.CreatedOn.ToString("yyyy-MM-dd");
+                rowNumber++;
+            }
+
+            // Auto-fit columns
+            worksheet.Columns().AdjustToContents();
+
+            // Return as bytes
+            using (var stream = new System.IO.MemoryStream())
+            {
+                workbook.SaveAs(stream);
+                return stream.ToArray();
+            }
+        }
+    }
 }

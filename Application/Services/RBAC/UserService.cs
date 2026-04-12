@@ -806,5 +806,178 @@ public class UserService : IUserService
         await _db.SaveChangesAsync();
         return true;
     }
+
+    public async Task<byte[]> ExportUsersCsvAsync(int? accountId = null, string? search = null)
+    {
+        var query = _db.Users
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => !x.IsDeleted)
+            .AsQueryable();
+
+        if (accountId.HasValue)
+            query = query.Where(x => x.AccountId == accountId.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                (x.User_name != null && x.User_name.ToLower().Contains(s)) ||
+                (x.Email != null && x.Email.ToLower().Contains(s)) ||
+                (x.FirstName != null && x.FirstName.ToLower().Contains(s)) ||
+                (x.LastName != null && x.LastName.ToLower().Contains(s)) ||
+                (x.MobileNo != null && x.MobileNo.ToLower().Contains(s)));
+        }
+
+        var data = await (
+            from user in query
+            join account in _db.Accounts.AsNoTracking() on user.AccountId equals account.AccountId into accountJoin
+            from account in accountJoin.DefaultIfEmpty()
+            join role in _db.Roles.AsNoTracking() on user.roleId equals role.RoleId into roleJoin
+            from role in roleJoin.DefaultIfEmpty()
+            orderby user.UpdatedAt ?? user.CreatedAt descending
+            select new
+            {
+                AccountName = account != null ? account.AccountName : string.Empty,
+                user.User_name,
+                user.Email,
+                user.FirstName,
+                user.LastName,
+                user.MobileNo,
+                RoleName = role != null ? role.RoleName : string.Empty,
+                user.Status,
+                user.TwoFactorEnabled,
+                user.EmailVerified,
+                user.CreatedAt,
+                user.UpdatedAt
+            })
+            .ToListAsync();
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Account Name,Username,Email,First Name,Last Name,Mobile No,Role,Status,Two Factor Enabled,Email Verified,Created On,Updated On");
+
+        foreach (var item in data)
+        {
+            var Escape = (string? value) => string.IsNullOrEmpty(value) ? "" : $"\"{value.Replace("\\"", "\\"\\"\\"\")}\"";
+            var FormatDate = (DateTime? value) => value.HasValue ? value.Value.ToString("yyyy-MM-dd HH:mm:ss") : "";
+
+            sb.AppendLine(
+                $"{Escape(item.AccountName)}," +
+                $"{Escape(item.User_name)}," +
+                $"{Escape(item.Email)}," +
+                $"{Escape(item.FirstName)}," +
+                $"{Escape(item.LastName)}," +
+                $"{Escape(item.MobileNo)}," +
+                $"{Escape(item.RoleName)}," +
+                $"{Escape(item.Status ? "Active" : "Inactive")}," +
+                $"{Escape(item.TwoFactorEnabled ? "Enabled" : "Disabled")}," +
+                $"{Escape(item.EmailVerified ? "Yes" : "No")}," +
+                $"{Escape(FormatDate(item.CreatedAt))}," +
+                $"{Escape(FormatDate(item.UpdatedAt))}"
+            );
+        }
+
+        return System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+    }
+
+    public async Task<byte[]> ExportUsersXlsxAsync(int? accountId = null, string? search = null)
+    {
+        var query = _db.Users
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => !x.IsDeleted)
+            .AsQueryable();
+
+        if (accountId.HasValue)
+            query = query.Where(x => x.AccountId == accountId.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                (x.User_name != null && x.User_name.ToLower().Contains(s)) ||
+                (x.Email != null && x.Email.ToLower().Contains(s)) ||
+                (x.FirstName != null && x.FirstName.ToLower().Contains(s)) ||
+                (x.LastName != null && x.LastName.ToLower().Contains(s)) ||
+                (x.MobileNo != null && x.MobileNo.ToLower().Contains(s)));
+        }
+
+        var data = await (
+            from user in query
+            join account in _db.Accounts.AsNoTracking() on user.AccountId equals account.AccountId into accountJoin
+            from account in accountJoin.DefaultIfEmpty()
+            join role in _db.Roles.AsNoTracking() on user.roleId equals role.RoleId into roleJoin
+            from role in roleJoin.DefaultIfEmpty()
+            orderby user.UpdatedAt ?? user.CreatedAt descending
+            select new
+            {
+                AccountName = account != null ? account.AccountName : string.Empty,
+                user.User_name,
+                user.Email,
+                user.FirstName,
+                user.LastName,
+                user.MobileNo,
+                RoleName = role != null ? role.RoleName : string.Empty,
+                user.Status,
+                user.TwoFactorEnabled,
+                user.EmailVerified,
+                user.CreatedAt,
+                user.UpdatedAt
+            })
+            .ToListAsync();
+
+        using (var workbook = new ClosedXML.Excel.XLWorkbook())
+        {
+            var worksheet = workbook.Worksheets.Add("Users");
+
+            // Add headers
+            worksheet.Cell(1, 1).Value = "Account Name";
+            worksheet.Cell(1, 2).Value = "Username";
+            worksheet.Cell(1, 3).Value = "Email";
+            worksheet.Cell(1, 4).Value = "First Name";
+            worksheet.Cell(1, 5).Value = "Last Name";
+            worksheet.Cell(1, 6).Value = "Mobile No";
+            worksheet.Cell(1, 7).Value = "Role";
+            worksheet.Cell(1, 8).Value = "Status";
+            worksheet.Cell(1, 9).Value = "Two Factor Enabled";
+            worksheet.Cell(1, 10).Value = "Email Verified";
+            worksheet.Cell(1, 11).Value = "Created On";
+            worksheet.Cell(1, 12).Value = "Updated On";
+
+            // Style header row
+            var headerRow = worksheet.Row(1);
+            headerRow.Style.Font.Bold = true;
+            headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+
+            // Add data
+            int rowNumber = 2;
+            foreach (var item in data)
+            {
+                worksheet.Cell(rowNumber, 1).Value = item.AccountName;
+                worksheet.Cell(rowNumber, 2).Value = item.User_name;
+                worksheet.Cell(rowNumber, 3).Value = item.Email;
+                worksheet.Cell(rowNumber, 4).Value = item.FirstName;
+                worksheet.Cell(rowNumber, 5).Value = item.LastName;
+                worksheet.Cell(rowNumber, 6).Value = item.MobileNo;
+                worksheet.Cell(rowNumber, 7).Value = item.RoleName;
+                worksheet.Cell(rowNumber, 8).Value = item.Status ? "Active" : "Inactive";
+                worksheet.Cell(rowNumber, 9).Value = item.TwoFactorEnabled ? "Enabled" : "Disabled";
+                worksheet.Cell(rowNumber, 10).Value = item.EmailVerified ? "Yes" : "No";
+                worksheet.Cell(rowNumber, 11).Value = item.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss");
+                worksheet.Cell(rowNumber, 12).Value = item.UpdatedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "";
+                rowNumber++;
+            }
+
+            // Auto-fit columns
+            worksheet.Columns().AdjustToContents();
+
+            // Return as bytes
+            using (var stream = new System.IO.MemoryStream())
+            {
+                workbook.SaveAs(stream);
+                return stream.ToArray();
+            }
+        }
+    }
 }
 
