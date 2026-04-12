@@ -130,14 +130,41 @@ public class SimController : ControllerBase
     [HttpGet("export")]
     public async Task<IActionResult> ExportSims(
         [FromQuery] int? accountId = null,
-        [FromQuery] string? search = null)
+        [FromQuery] string? search = null,
+        [FromQuery] string format = "csv")
     {
-        var fileBytes = await _service.ExportSimsCsvAsync(accountId, search);
+        byte[] fileBytes;
+        string contentType;
+        string fileExtension;
+
+        // Normalize format to lowercase
+        format = format?.ToLower() ?? "csv";
+
+        // Validate format parameter
+        if (format != "csv" && format != "xlsx")
+        {
+            return BadRequest(ApiResponse<object>.Fail(
+                "Invalid format. Supported formats are 'csv' or 'xlsx'.",
+                400));
+        }
+
+        if (format == "xlsx")
+        {
+            fileBytes = await _service.ExportSimsXlsxAsync(accountId, search);
+            contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            fileExtension = "xlsx";
+        }
+        else
+        {
+            fileBytes = await _service.ExportSimsCsvAsync(accountId, search);
+            contentType = "text/csv";
+            fileExtension = "csv";
+        }
 
         return File(
             fileBytes,
-            "text/csv",
-            $"sims_{System.DateTime.UtcNow:yyyyMMddHHmmss}.csv"
+            contentType,
+            $"sims_{System.DateTime.UtcNow:yyyyMMddHHmmss}.{fileExtension}"
         );
     }
 }

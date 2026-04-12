@@ -61,4 +61,9 @@ public interface ISimService
     /// Export SIMs as CSV with readable column names.
     /// </summary>
     Task<byte[]> ExportSimsCsvAsync(int? accountId = null, string? search = null);
+
+    /// <summary>
+    /// Export SIMs as XLSX with readable column names.
+    /// </summary>
+    Task<byte[]> ExportSimsXlsxAsync(int? accountId = null, string? search = null);
 }

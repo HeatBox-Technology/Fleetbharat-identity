@@ -402,6 +402,104 @@ public class SimService : ISimService
         };
     }
 
+    public async Task<byte[]> ExportSimsXlsxAsync(int? accountId = null, string? search = null)
+    {
+        var query = _db.Sims
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => !x.IsDeleted)
+            .AsQueryable();
+
+        if (accountId.HasValue)
+            query = query.Where(x => x.AccountId == accountId.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                (x.Iccid != null && x.Iccid.ToLower().Contains(s)) ||
+                (x.Msisdn != null && x.Msisdn.ToLower().Contains(s)) ||
+                (x.Imsi != null && x.Imsi.ToLower().Contains(s)));
+        }
+
+        var data = await (
+            from sim in query
+            join account in _db.Accounts.AsNoTracking() on sim.AccountId equals account.AccountId into accountJoin
+            from account in accountJoin.DefaultIfEmpty()
+            join provider in _db.NetworkProviders.AsNoTracking() on sim.NetworkProviderId equals provider.Id into providerJoin
+            from provider in providerJoin.DefaultIfEmpty()
+            orderby sim.UpdatedAt ?? sim.CreatedAt descending
+            select new
+            {
+                AccountCode = account != null ? account.AccountCode : string.Empty,
+                AccountName = account != null ? account.AccountName : string.Empty,
+                sim.Iccid,
+                sim.Msisdn,
+                sim.Imsi,
+                NetworkProvider = provider != null ? provider.Name : string.Empty,
+                sim.StatusKey,
+                sim.IsActive,
+                sim.ActivatedAt,
+                sim.ExpiryAt,
+                sim.CreatedAt,
+                sim.UpdatedAt
+            })
+            .ToListAsync();
+
+        using (var workbook = new ClosedXML.Excel.XLWorkbook())
+        {
+            var worksheet = workbook.Worksheets.Add("SIMs");
+
+            // Add headers
+            worksheet.Cell(1, 1).Value = "Account Code";
+            worksheet.Cell(1, 2).Value = "Account Name";
+            worksheet.Cell(1, 3).Value = "ICCID";
+            worksheet.Cell(1, 4).Value = "Mobile Number";
+            worksheet.Cell(1, 5).Value = "IMSI";
+            worksheet.Cell(1, 6).Value = "Network Provider";
+            worksheet.Cell(1, 7).Value = "Status Key";
+            worksheet.Cell(1, 8).Value = "Active Status";
+            worksheet.Cell(1, 9).Value = "Activated On";
+            worksheet.Cell(1, 10).Value = "Expiry On";
+            worksheet.Cell(1, 11).Value = "Created On";
+            worksheet.Cell(1, 12).Value = "Updated On";
+
+            // Style header row
+            var headerRow = worksheet.Row(1);
+            headerRow.Style.Font.Bold = true;
+            headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+
+            // Add data
+            int rowNumber = 2;
+            foreach (var item in data)
+            {
+                worksheet.Cell(rowNumber, 1).Value = item.AccountCode;
+                worksheet.Cell(rowNumber, 2).Value = item.AccountName;
+                worksheet.Cell(rowNumber, 3).Value = item.Iccid;
+                worksheet.Cell(rowNumber, 4).Value = item.Msisdn;
+                worksheet.Cell(rowNumber, 5).Value = item.Imsi;
+                worksheet.Cell(rowNumber, 6).Value = item.NetworkProvider;
+                worksheet.Cell(rowNumber, 7).Value = item.StatusKey;
+                worksheet.Cell(rowNumber, 8).Value = item.IsActive ? "Active" : "Inactive";
+                worksheet.Cell(rowNumber, 9).Value = item.ActivatedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "";
+                worksheet.Cell(rowNumber, 10).Value = item.ExpiryAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "";
+                worksheet.Cell(rowNumber, 11).Value = item.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss");
+                worksheet.Cell(rowNumber, 12).Value = item.UpdatedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "";
+                rowNumber++;
+            }
+
+            // Auto-fit columns
+            worksheet.Columns().AdjustToContents();
+
+            // Return as bytes
+            using (var stream = new System.IO.MemoryStream())
+            {
+                workbook.SaveAs(stream);
+                return stream.ToArray();
+            }
+        }
+    }
+
     private async Task<int?> NormalizeAndValidateNetworkProviderIdAsync(int? networkProviderId)
     {
         if (!networkProviderId.HasValue || networkProviderId.Value <= 0)
