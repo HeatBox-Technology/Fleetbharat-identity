@@ -88,10 +88,6 @@ public class RolesController : ControllerBase
         [FromQuery] string? search = null,
         [FromQuery] string format = "csv")
     {
-        byte[] fileBytes;
-        string contentType;
-        string fileExtension;
-
         // Normalize format to lowercase
         format = format?.ToLower() ?? "csv";
 
@@ -105,22 +101,22 @@ public class RolesController : ControllerBase
 
         if (format == "xlsx")
         {
-            fileBytes = await _service.ExportRolesXlsxAsync(accountId, search);
-            contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-            fileExtension = "xlsx";
+            var fileBytes = await _service.ExportRolesXlsxAsync(accountId, search);
+            var base64Data = Convert.ToBase64String(fileBytes);
+            return Ok(ApiResponse<object>.Ok(
+                new { contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsx = base64Data },
+                "Export generated",
+                200));
         }
         else
         {
-            fileBytes = await _service.ExportRolesCsvAsync(accountId, search);
-            contentType = "text/csv";
-            fileExtension = "csv";
+            var csv = await _service.ExportRolesCsvAsync(accountId, search);
+            var csvString = System.Text.Encoding.UTF8.GetString(csv);
+            return Ok(ApiResponse<object>.Ok(
+                new { contentType = "text/csv", csv = csvString },
+                "Export generated",
+                200));
         }
-
-        return File(
-            fileBytes,
-            contentType,
-            $"roles_export_{System.DateTime.UtcNow:yyyyMMddHHmmss}.{fileExtension}"
-        );
     }
 
 

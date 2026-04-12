@@ -66,20 +66,19 @@ public class InvoiceController : ControllerBase
         if (format == "xlsx")
         {
             var fileBytes = await _service.ExportInvoicesXlsxAsync(skip, take, ct);
-            return File(
-                fileBytes,
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                $"invoices_export_{System.DateTime.UtcNow:yyyyMMddHHmmss}.xlsx"
-            );
+            var base64Data = Convert.ToBase64String(fileBytes);
+            return Ok(ApiResponse<object>.Ok(
+                new { contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsx = base64Data },
+                "Export generated",
+                200));
         }
         else
         {
             var csv = await _service.ExportInvoicesCsvAsync(skip, take, ct);
-            return File(
-                System.Text.Encoding.UTF8.GetBytes(csv),
-                "text/csv",
-                $"invoices_export_{System.DateTime.UtcNow:yyyyMMddHHmmss}.csv"
-            );
+            return Ok(ApiResponse<object>.Ok(
+                new { contentType = "text/csv", csv = csv },
+                "Export generated",
+                200));
         }
     }
 }
