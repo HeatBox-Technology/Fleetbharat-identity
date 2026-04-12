@@ -133,10 +133,8 @@ public class SimController : ControllerBase
         [FromQuery] string? search = null,
         [FromQuery] string format = "csv")
     {
-        // Normalize format to lowercase
         format = format?.ToLower() ?? "csv";
 
-        // Validate format parameter
         if (format != "csv" && format != "xlsx" && format != "excel")
         {
             return BadRequest(ApiResponse<object>.Fail(
@@ -144,23 +142,26 @@ public class SimController : ControllerBase
                 400));
         }
 
+        byte[] fileBytes;
+        string contentType;
+        string fileExtension;
+
         if (format == "xlsx" || format == "excel")
         {
-            var fileBytes = await _service.ExportSimsXlsxAsync(accountId, search);
-            var base64Data = System.Convert.ToBase64String(fileBytes);
-            return Ok(ApiResponse<object>.Ok(
-                new { contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsx = base64Data },
-                "Export generated",
-                200));
+            fileBytes = await _service.ExportSimsXlsxAsync(accountId, search);
+            contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            fileExtension = "xlsx";
         }
         else
         {
-            var csv = await _service.ExportSimsCsvAsync(accountId, search);
-            var csvString = System.Text.Encoding.UTF8.GetString(csv);
-            return Ok(ApiResponse<object>.Ok(
-                new { contentType = "text/csv", csv = csvString },
-                "Export generated",
-                200));
+            fileBytes = await _service.ExportSimsCsvAsync(accountId, search);
+            contentType = "text/csv";
+            fileExtension = "csv";
         }
+
+        return File(
+            fileBytes,
+            contentType,
+            $"sims_{System.DateTime.UtcNow:yyyyMMddHHmmss}.{fileExtension}");
     }
 }
