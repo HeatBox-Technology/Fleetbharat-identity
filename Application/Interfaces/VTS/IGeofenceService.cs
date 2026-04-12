@@ -14,4 +14,5 @@ public interface IGeofenceService
     Task<bool> DeleteAsync(int id);
     Task<List<GeofenceDto>> BulkCreateAsync(List<CreateGeofenceDto> items);
     Task<byte[]> ExportGeofenceCsvAsync(int? accountId, string? search);
+    Task<byte[]> ExportGeofencesXlsxAsync(int? accountId, string? search);
 }

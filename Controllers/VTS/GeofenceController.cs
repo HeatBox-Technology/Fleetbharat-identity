@@ -149,13 +149,41 @@ public class GeofenceController : ControllerBase
     [HttpGet("export")]
     public async Task<IActionResult> ExportGeofences(
     [FromQuery] int? accountId = null,
-    [FromQuery] string? search = null)
+    [FromQuery] string? search = null,
+    [FromQuery] string format = "csv")
     {
-        var bytes = await _service.ExportGeofenceCsvAsync(accountId, search);
+        byte[] fileBytes;
+        string contentType;
+        string fileExtension;
+
+        // Normalize format to lowercase
+        format = format?.ToLower() ?? "csv";
+
+        // Validate format parameter
+        if (format != "csv" && format != "xlsx" && format != "excel")
+        {
+            return BadRequest(ApiResponse<object>.Fail(
+                "Invalid format. Supported formats are 'csv' or 'excel'.",
+                400));
+        }
+
+        if (format == "xlsx" || format == "excel")
+        {
+            fileBytes = await _service.ExportGeofencesXlsxAsync(accountId, search);
+            contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            fileExtension = "xlsx";
+        }
+        else
+        {
+            fileBytes = await _service.ExportGeofenceCsvAsync(accountId, search);
+            contentType = "text/csv";
+            fileExtension = "csv";
+        }
 
         return File(
-            bytes,
-            "text/csv",
-            $"geofences_export_{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
+            fileBytes,
+            contentType,
+            $"geofences_{System.DateTime.UtcNow:yyyyMMddHHmmss}.{fileExtension}"
+        );
     }
 }

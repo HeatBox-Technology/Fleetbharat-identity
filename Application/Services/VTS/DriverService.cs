@@ -423,4 +423,74 @@ public class DriverService : IDriverService
 
         return System.Text.Encoding.UTF8.GetBytes(sb.ToString());
     }
+
+    public async Task<byte[]> ExportDriversXlsxAsync(int? accountId, string? search)
+    {
+        var query = _db.Drivers
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .ApplyAccountHierarchyFilter(_currentUser);
+
+        if (accountId.HasValue)
+            query = query.Where(x => x.AccountId == accountId.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim();
+            query = query.Where(x =>
+                (x.Name != null && x.Name.Contains(s)) ||
+                (x.Mobile != null && x.Mobile.Contains(s)) ||
+                (x.LicenseNumber != null && x.LicenseNumber.Contains(s))
+            );
+        }
+
+        var data = await query
+            .OrderByDescending(x => x.DriverId)
+            .Select(x => new
+            {
+                x.DriverId,
+                x.Name,
+                x.Mobile,
+                x.LicenseNumber,
+                x.LicenseExpiry,
+                Status = x.IsActive ? "Active" : "Inactive"
+            })
+            .ToListAsync();
+
+        using (var workbook = new ClosedXML.Excel.XLWorkbook())
+        {
+            var worksheet = workbook.Worksheets.Add("Drivers");
+
+            worksheet.Cell(1, 1).Value = "Driver ID";
+            worksheet.Cell(1, 2).Value = "Name";
+            worksheet.Cell(1, 3).Value = "Mobile";
+            worksheet.Cell(1, 4).Value = "License Number";
+            worksheet.Cell(1, 5).Value = "License Expiry";
+            worksheet.Cell(1, 6).Value = "Status";
+
+            var headerRow = worksheet.Row(1);
+            headerRow.Style.Font.Bold = true;
+            headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+
+            int rowNumber = 2;
+            foreach (var item in data)
+            {
+                worksheet.Cell(rowNumber, 1).Value = item.DriverId;
+                worksheet.Cell(rowNumber, 2).Value = item.Name;
+                worksheet.Cell(rowNumber, 3).Value = item.Mobile;
+                worksheet.Cell(rowNumber, 4).Value = item.LicenseNumber;
+                worksheet.Cell(rowNumber, 5).Value = item.LicenseExpiry.HasValue ? item.LicenseExpiry.Value.ToString("yyyy-MM-dd") : "";
+                worksheet.Cell(rowNumber, 6).Value = item.Status;
+                rowNumber++;
+            }
+
+            worksheet.Columns().AdjustToContents();
+
+            using (var stream = new System.IO.MemoryStream())
+            {
+                workbook.SaveAs(stream);
+                return stream.ToArray();
+            }
+        }
+    }
 }

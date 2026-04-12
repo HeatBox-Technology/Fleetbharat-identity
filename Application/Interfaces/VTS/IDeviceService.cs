@@ -59,4 +59,5 @@ public interface IDeviceService
     /// Export devices as CSV.
     /// </summary>
     Task<byte[]> ExportdeviceCsvAsync(int? accountId, string? search);
+    Task<byte[]> ExportDevicesXlsxAsync(int? accountId, string? search);
 }

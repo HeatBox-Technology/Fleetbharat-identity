@@ -356,4 +356,76 @@ public class DeviceService : IDeviceService
 
         return Encoding.UTF8.GetBytes(sb.ToString());
     }
+
+    public async Task<byte[]> ExportDevicesXlsxAsync(int? accountId, string? search)
+    {
+        var deviceQuery = _db.Devices
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && x.IsActive)
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AsQueryable();
+
+        if (accountId.HasValue)
+        {
+            deviceQuery = deviceQuery.Where(x => x.AccountId == accountId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            deviceQuery = deviceQuery.Where(x =>
+                (!string.IsNullOrEmpty(x.DeviceNo) && x.DeviceNo.ToLower().Contains(s)) ||
+                (!string.IsNullOrEmpty(x.DeviceImeiOrSerial) && x.DeviceImeiOrSerial.ToLower().Contains(s)) ||
+                (!string.IsNullOrEmpty(x.DeviceStatus) && x.DeviceStatus.ToLower().Contains(s))
+            );
+        }
+
+        var data = await (from d in deviceQuery
+                          join a in _db.Accounts.AsNoTracking().Where(x => !x.IsDeleted).ApplyAccountHierarchyFilter(_currentUser)
+                          on d.AccountId equals a.AccountId
+                          orderby d.updatedAt ?? d.createdAt descending
+                          select new
+                          {
+                              a.AccountName,
+                              d.DeviceNo,
+                              d.DeviceImeiOrSerial,
+                              d.DeviceStatus,
+                              LastUpdated = d.updatedAt ?? d.createdAt
+                          })
+            .ToListAsync();
+
+        using (var workbook = new ClosedXML.Excel.XLWorkbook())
+        {
+            var worksheet = workbook.Worksheets.Add("Devices");
+
+            worksheet.Cell(1, 1).Value = "Account";
+            worksheet.Cell(1, 2).Value = "Device Number";
+            worksheet.Cell(1, 3).Value = "Device IMEI/Serial";
+            worksheet.Cell(1, 4).Value = "Status";
+            worksheet.Cell(1, 5).Value = "Last Updated";
+
+            var headerRow = worksheet.Row(1);
+            headerRow.Style.Font.Bold = true;
+            headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+
+            int rowNumber = 2;
+            foreach (var item in data)
+            {
+                worksheet.Cell(rowNumber, 1).Value = item.AccountName;
+                worksheet.Cell(rowNumber, 2).Value = item.DeviceNo;
+                worksheet.Cell(rowNumber, 3).Value = item.DeviceImeiOrSerial;
+                worksheet.Cell(rowNumber, 4).Value = item.DeviceStatus;
+                worksheet.Cell(rowNumber, 5).Value = item.LastUpdated.ToLocalTime().ToString("dd/MM/yyyy, hh:mm tt");
+                rowNumber++;
+            }
+
+            worksheet.Columns().AdjustToContents();
+
+            using (var stream = new System.IO.MemoryStream())
+            {
+                workbook.SaveAs(stream);
+                return stream.ToArray();
+            }
+        }
+    }
 }

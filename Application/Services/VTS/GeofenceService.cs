@@ -646,4 +646,96 @@ public class GeofenceService : IGeofenceService
 
         return Encoding.UTF8.GetBytes(sb.ToString());
     }
+
+    public async Task<byte[]> ExportGeofencesXlsxAsync(int? accountId, string? search)
+    {
+        var query = _db.GeofenceZones
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => !x.IsDeleted);
+
+        if (accountId.HasValue)
+        {
+            query = query.Where(x => x.AccountId == accountId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLower();
+            query = query.Where(x =>
+                (!string.IsNullOrEmpty(x.UniqueCode) && x.UniqueCode.ToLower().Contains(s)) ||
+                (!string.IsNullOrEmpty(x.DisplayName) && x.DisplayName.ToLower().Contains(s)) ||
+                (!string.IsNullOrEmpty(x.GeometryType) && x.GeometryType.ToLower().Contains(s)) ||
+                (!string.IsNullOrEmpty(x.Status) && x.Status.ToLower().Contains(s))
+            );
+        }
+
+        var rows = await query
+            .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
+            .Select(x => new
+            {
+                x.AccountId,
+                x.UniqueCode,
+                x.DisplayName,
+                x.ClassificationCode,
+                x.GeometryType,
+                x.RadiusM,
+                x.Status,
+                x.ColorTheme,
+                LastUpdated = x.UpdatedAt ?? x.CreatedAt
+            })
+            .ToListAsync();
+
+        var accountIds = rows.Select(x => x.AccountId).Distinct().ToList();
+        var accountNames = await _db.Accounts
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .Where(x => accountIds.Contains(x.AccountId))
+            .ToDictionaryAsync(x => x.AccountId, x => x.AccountName);
+
+        using (var workbook = new ClosedXML.Excel.XLWorkbook())
+        {
+            var worksheet = workbook.Worksheets.Add("Geofences");
+
+            worksheet.Cell(1, 1).Value = "Account";
+            worksheet.Cell(1, 2).Value = "Unique Code";
+            worksheet.Cell(1, 3).Value = "Display Name";
+            worksheet.Cell(1, 4).Value = "Classification Code";
+            worksheet.Cell(1, 5).Value = "Geometry Type";
+            worksheet.Cell(1, 6).Value = "Radius (M)";
+            worksheet.Cell(1, 7).Value = "Status";
+            worksheet.Cell(1, 8).Value = "Color Theme";
+            worksheet.Cell(1, 9).Value = "Last Updated";
+
+            var headerRow = worksheet.Row(1);
+            headerRow.Style.Font.Bold = true;
+            headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+
+            int rowNumber = 2;
+            foreach (var g in rows)
+            {
+                var accountName = accountNames.ContainsKey(g.AccountId) ? accountNames[g.AccountId] : "";
+                var lastUpdated = g.LastUpdated.HasValue ? g.LastUpdated.Value.ToLocalTime().ToString("dd/MM/yyyy, hh:mm tt") : "";
+
+                worksheet.Cell(rowNumber, 1).Value = accountName;
+                worksheet.Cell(rowNumber, 2).Value = g.UniqueCode;
+                worksheet.Cell(rowNumber, 3).Value = g.DisplayName;
+                worksheet.Cell(rowNumber, 4).Value = g.ClassificationCode;
+                worksheet.Cell(rowNumber, 5).Value = g.GeometryType;
+                worksheet.Cell(rowNumber, 6).Value = g.RadiusM;
+                worksheet.Cell(rowNumber, 7).Value = g.Status;
+                worksheet.Cell(rowNumber, 8).Value = g.ColorTheme;
+                worksheet.Cell(rowNumber, 9).Value = lastUpdated;
+                rowNumber++;
+            }
+
+            worksheet.Columns().AdjustToContents();
+
+            using (var stream = new System.IO.MemoryStream())
+            {
+                workbook.SaveAs(stream);
+                return stream.ToArray();
+            }
+        }
+    }
 }

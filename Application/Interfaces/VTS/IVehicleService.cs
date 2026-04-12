@@ -52,4 +52,5 @@ public interface IVehicleService
     /// </summary>
     Task<List<VehicleDto>> BulkCreateAsync(List<CreateVehicleDto> vehicles);
     Task<byte[]> ExportVehiclesCsvAsync(int? accountId, string? search);
+    Task<byte[]> ExportVehiclesXlsxAsync(int? accountId, string? search);
 }

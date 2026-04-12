@@ -129,14 +129,41 @@ public class DriverController : ControllerBase
     [HttpGet("export")]
     public async Task<IActionResult> ExportDrivers(
     [FromQuery] int? accountId,
-    [FromQuery] string? search)
+    [FromQuery] string? search,
+    [FromQuery] string format = "csv")
     {
-        var fileBytes = await _service.ExportDriversCsvAsync(accountId, search);
+        byte[] fileBytes;
+        string contentType;
+        string fileExtension;
+
+        // Normalize format to lowercase
+        format = format?.ToLower() ?? "csv";
+
+        // Validate format parameter
+        if (format != "csv" && format != "xlsx" && format != "excel")
+        {
+            return BadRequest(ApiResponse<object>.Fail(
+                "Invalid format. Supported formats are 'csv' or 'excel'.",
+                400));
+        }
+
+        if (format == "xlsx" || format == "excel")
+        {
+            fileBytes = await _service.ExportDriversXlsxAsync(accountId, search);
+            contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            fileExtension = "xlsx";
+        }
+        else
+        {
+            fileBytes = await _service.ExportDriversCsvAsync(accountId, search);
+            contentType = "text/csv";
+            fileExtension = "csv";
+        }
 
         return File(
             fileBytes,
-            "text/csv",
-            $"drivers_{DateTime.UtcNow:yyyyMMddHHmmss}.csv"
+            contentType,
+            $"drivers_{System.DateTime.UtcNow:yyyyMMddHHmmss}.{fileExtension}"
         );
     }
 }

@@ -137,10 +137,41 @@ public class DeviceController : ControllerBase
     [HttpGet("export")]
     public async Task<IActionResult> ExportDevices(
         [FromQuery] int? accountId = null,
-        [FromQuery] string? search = null)
+        [FromQuery] string? search = null,
+        [FromQuery] string format = "csv")
     {
-        var bytes = await _service.ExportdeviceCsvAsync(accountId, search);
+        byte[] fileBytes;
+        string contentType;
+        string fileExtension;
 
-        return File(bytes, "text/csv", $"devices_export_{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
+        // Normalize format to lowercase
+        format = format?.ToLower() ?? "csv";
+
+        // Validate format parameter
+        if (format != "csv" && format != "xlsx" && format != "excel")
+        {
+            return BadRequest(ApiResponse<object>.Fail(
+                "Invalid format. Supported formats are 'csv' or 'excel'.",
+                400));
+        }
+
+        if (format == "xlsx" || format == "excel")
+        {
+            fileBytes = await _service.ExportDevicesXlsxAsync(accountId, search);
+            contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            fileExtension = "xlsx";
+        }
+        else
+        {
+            fileBytes = await _service.ExportdeviceCsvAsync(accountId, search);
+            contentType = "text/csv";
+            fileExtension = "csv";
+        }
+
+        return File(
+            fileBytes,
+            contentType,
+            $"devices_{System.DateTime.UtcNow:yyyyMMddHHmmss}.{fileExtension}"
+        );
     }
 }

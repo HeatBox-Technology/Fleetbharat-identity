@@ -352,7 +352,76 @@ namespace Application.Services
             return Encoding.UTF8.GetBytes(sb.ToString());
         }
 
+        public async Task<byte[]> ExportVehiclesXlsxAsync(int? accountId, string? search)
+        {
+            var vehicleQuery = _db.Vehicles
+                .AsNoTracking()
+                .Where(v => !v.IsDeleted)
+                .ApplyAccountHierarchyFilter(_currentUserService)
+                .AsQueryable();
 
+            if (accountId.HasValue)
+            {
+                vehicleQuery = vehicleQuery.Where(v => v.AccountId == accountId.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                vehicleQuery = vehicleQuery.Where(v =>
+                    (!string.IsNullOrEmpty(v.VehicleNumber) && v.VehicleNumber.ToLower().Contains(s)) ||
+                    (!string.IsNullOrEmpty(v.VinOrChassisNumber) && v.VinOrChassisNumber.ToLower().Contains(s))
+                );
+            }
+
+            var data = await (from v in vehicleQuery
+                              join a in _db.Accounts.AsNoTracking().Where(x => !x.IsDeleted).ApplyAccountHierarchyFilter(_currentUserService)
+                              on v.AccountId equals a.AccountId
+                              orderby v.UpdatedAt ?? v.CreatedAt descending
+                              select new
+                              {
+                                  a.AccountName,
+                                  v.VehicleNumber,
+                                  v.VinOrChassisNumber,
+                                  v.Status,
+                                  LastUpdated = v.UpdatedAt ?? v.CreatedAt
+                              })
+                .ToListAsync();
+
+            using (var workbook = new ClosedXML.Excel.XLWorkbook())
+            {
+                var worksheet = workbook.Worksheets.Add("Vehicles");
+
+                worksheet.Cell(1, 1).Value = "Account";
+                worksheet.Cell(1, 2).Value = "Vehicle Number";
+                worksheet.Cell(1, 3).Value = "VIN/Chassis";
+                worksheet.Cell(1, 4).Value = "Status";
+                worksheet.Cell(1, 5).Value = "Last Updated";
+
+                var headerRow = worksheet.Row(1);
+                headerRow.Style.Font.Bold = true;
+                headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+
+                int rowNumber = 2;
+                foreach (var item in data)
+                {
+                    worksheet.Cell(rowNumber, 1).Value = item.AccountName;
+                    worksheet.Cell(rowNumber, 2).Value = item.VehicleNumber;
+                    worksheet.Cell(rowNumber, 3).Value = item.VinOrChassisNumber;
+                    worksheet.Cell(rowNumber, 4).Value = item.Status;
+                    worksheet.Cell(rowNumber, 5).Value = item.LastUpdated.ToString("dd/MM/yyyy, hh:mm tt");
+                    rowNumber++;
+                }
+
+                worksheet.Columns().AdjustToContents();
+
+                using (var stream = new System.IO.MemoryStream())
+                {
+                    workbook.SaveAs(stream);
+                    return stream.ToArray();
+                }
+            }
+        }
     }
 }
 
