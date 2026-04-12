@@ -489,6 +489,7 @@ public class DriverService : IDriverService
             using (var stream = new System.IO.MemoryStream())
             {
                 workbook.SaveAs(stream);
+                stream.Flush();
                 return stream.ToArray();
             }
         }
