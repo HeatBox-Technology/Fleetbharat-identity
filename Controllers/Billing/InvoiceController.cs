@@ -52,10 +52,8 @@ public class InvoiceController : ControllerBase
         skip = System.Math.Max(0, skip);
         take = System.Math.Clamp(take, 1, 500);
 
-        // Normalize format to lowercase
         format = (format?.ToLower() ?? "csv");
 
-        // Validate format parameter
         if (format != "csv" && format != "xlsx" && format != "excel")
         {
             return BadRequest(ApiResponse<object>.Fail(
@@ -63,22 +61,26 @@ public class InvoiceController : ControllerBase
                 400));
         }
 
+        byte[] fileBytes;
+        string contentType;
+        string fileExtension;
+
         if (format == "xlsx" || format == "excel")
         {
-            var fileBytes = await _service.ExportInvoicesXlsxAsync(skip, take, ct);
-            var base64Data = System.Convert.ToBase64String(fileBytes);
-            return Ok(ApiResponse<object>.Ok(
-                new { contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsx = base64Data },
-                "Export generated",
-                200));
+            fileBytes = await _service.ExportInvoicesXlsxAsync(skip, take, ct);
+            contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            fileExtension = "xlsx";
         }
         else
         {
-            var csv = await _service.ExportInvoicesCsvAsync(skip, take, ct);
-            return Ok(ApiResponse<object>.Ok(
-                new { contentType = "text/csv", csv = csv },
-                "Export generated",
-                200));
+            fileBytes = await _service.ExportInvoicesCsvAsync(skip, take, ct);
+            contentType = "text/csv";
+            fileExtension = "csv";
         }
+
+        return File(
+            fileBytes,
+            contentType,
+            $"invoices_{System.DateTime.UtcNow:yyyyMMddHHmmss}.{fileExtension}");
     }
 }
