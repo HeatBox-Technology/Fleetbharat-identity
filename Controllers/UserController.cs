@@ -202,14 +202,14 @@ public class UsersController : ControllerBase
         format = format?.ToLower() ?? "csv";
 
         // Validate format parameter
-        if (format != "csv" && format != "xlsx")
+        if (format != "csv" && format != "xlsx" && format != "excel")
         {
             return BadRequest(ApiResponse<object>.Fail(
-                "Invalid format. Supported formats are 'csv' or 'xlsx'.",
+                "Invalid format. Supported formats are 'csv', 'xlsx' or 'excel'.",
                 400));
         }
 
-        if (format == "xlsx")
+        if (format == "xlsx" || format == "excel")
         {
             var fileBytes = await _service.ExportUsersXlsxAsync(accountId, search);
             var base64Data = Convert.ToBase64String(fileBytes);
