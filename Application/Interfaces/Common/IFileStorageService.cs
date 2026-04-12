@@ -12,4 +12,5 @@ public interface IFileStorageService
     Task<string> SaveFaviconAsync(int accountId, IFormFile file);
     Task<string> SaveDarkLogoAsync(int accountId, IFormFile file);
     Task<string> SaveLightLogoAsync(int accountId, IFormFile file);
+    Task<string> SaveVehicleTypeIconAsync(int accountId, int vehicleTypeId, string iconType, IFormFile file);
 }

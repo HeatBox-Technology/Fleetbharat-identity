@@ -56,6 +56,9 @@ public class FileStorageService : IFileStorageService
     public Task<string> SaveLightLogoAsync(int accountId, IFormFile file) =>
         SaveWhiteLabelVariantAsync(accountId, "light", file);
 
+    public Task<string> SaveVehicleTypeIconAsync(int accountId, int vehicleTypeId, string iconType, IFormFile file) =>
+        SaveVehicleTypeVariantAsync(accountId, vehicleTypeId, iconType, file);
+
     private async Task<string> SaveWhiteLabelVariantAsync(int accountId, string variant, IFormFile file)
     {
         var allowed = new[] { "image/jpeg", "image/jpg", "image/png" };
@@ -63,6 +66,30 @@ public class FileStorageService : IFileStorageService
 
         var extension = file.ContentType.Contains("png", StringComparison.OrdinalIgnoreCase) ? "png" : "jpg";
         var relativePath = Path.Combine("uploads", "whitelabel", accountId.ToString(), variant, $"{accountId}.{extension}");
+        var physicalPath = Path.Combine(_env.ContentRootPath, relativePath);
+
+        var dir = Path.GetDirectoryName(physicalPath)!;
+        Directory.CreateDirectory(dir);
+
+        await using var fs = new FileStream(physicalPath, FileMode.Create, FileAccess.Write);
+        await file.CopyToAsync(fs);
+
+        return "/" + relativePath.Replace("\\", "/");
+    }
+
+    private async Task<string> SaveVehicleTypeVariantAsync(int accountId, int vehicleTypeId, string iconType, IFormFile file)
+    {
+        var allowed = new[] { "image/jpeg", "image/jpg", "image/png" };
+        ValidateFile(file, allowed);
+
+        var extension = file.ContentType.Contains("png", StringComparison.OrdinalIgnoreCase) ? "png" : "jpg";
+        var relativePath = Path.Combine(
+            "uploads",
+            "vehicle-types",
+            accountId.ToString(),
+            vehicleTypeId.ToString(),
+            iconType,
+            $"{vehicleTypeId}.{extension}");
         var physicalPath = Path.Combine(_env.ContentRootPath, relativePath);
 
         var dir = Path.GetDirectoryName(physicalPath)!;

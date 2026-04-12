@@ -14,9 +14,12 @@ namespace Domain.Entities
         public string VehicleTypeName { get; set; } = string.Empty;
         [MaxLength(30)]
         public string Category { get; set; } = string.Empty;
-        public string? DefaultVehicleIcon { get; set; }
-        public string? DefaultAlarmIcon { get; set; }
-        public string? DefaultIconColor { get; set; }
+        public string? MovingIcon { get; set; }
+        public string? StoppedIcon { get; set; }
+        public string? IdleIcon { get; set; }
+        public string? ParkedIcon { get; set; }
+        public string? OfflineIcon { get; set; }
+        public string? BreakdownIcon { get; set; }
         public int SeatingCapacity { get; set; }
         public int WheelsCount { get; set; }
         [MaxLength(20)]

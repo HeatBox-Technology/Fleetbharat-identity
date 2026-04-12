@@ -8,5 +8,6 @@ public interface IVehicleTypeService
     Task<VehicleTypeDto?> GetByIdAsync(int id);
     Task<VehicleTypeDto> CreateAsync(VehicleTypeDto dto);
     Task<VehicleTypeDto> UpdateAsync(int id, VehicleTypeDto dto);
+    Task<VehicleTypeIconUploadResponseDto> UploadIconsAsync(int accountId, int id, VehicleTypeIconUploadRequest req);
     Task<bool> DeleteAsync(int id);
 }

@@ -1,6 +1,8 @@
 using Application.DTOs;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
 using Infrastructure.Data;
@@ -13,14 +15,29 @@ namespace Application.Services
     /// </summary>
     public class VehicleTypeService : IVehicleTypeService
     {
+        private const long MaxIconFileSizeBytes = 2 * 1024 * 1024;
+        private static readonly HashSet<string> AllowedIconContentTypes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "image/png",
+            "image/jpg",
+            "image/jpeg"
+        };
+
         private readonly IdentityDbContext _context;
+        private readonly ICurrentUserService _currentUser;
+        private readonly IFileStorageService _fileStorage;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="VehicleTypeService"/> class.
         /// </summary>
-        public VehicleTypeService(IdentityDbContext context)
+        public VehicleTypeService(
+            IdentityDbContext context,
+            ICurrentUserService currentUser,
+            IFileStorageService fileStorage)
         {
             _context = context;
+            _currentUser = currentUser;
+            _fileStorage = fileStorage;
         }
 
         /// <summary>
@@ -52,9 +69,12 @@ namespace Application.Services
                     Id = x.Id,
                     VehicleTypeName = x.VehicleTypeName,
                     Category = x.Category,
-                    DefaultVehicleIcon = x.DefaultVehicleIcon,
-                    DefaultAlarmIcon = x.DefaultAlarmIcon,
-                    DefaultIconColor = x.DefaultIconColor,
+                    MovingIcon = x.MovingIcon,
+                    StoppedIcon = x.StoppedIcon,
+                    IdleIcon = x.IdleIcon,
+                    ParkedIcon = x.ParkedIcon,
+                    OfflineIcon = x.OfflineIcon,
+                    BreakdownIcon = x.BreakdownIcon,
                     SeatingCapacity = x.SeatingCapacity,
                     WheelsCount = x.WheelsCount,
                     FuelCategory = x.FuelCategory,
@@ -102,9 +122,12 @@ namespace Application.Services
             if (entity == null) throw new KeyNotFoundException();
             entity.VehicleTypeName = dto.VehicleTypeName;
             entity.Category = dto.Category;
-            entity.DefaultVehicleIcon = dto.DefaultVehicleIcon;
-            entity.DefaultAlarmIcon = dto.DefaultAlarmIcon;
-            entity.DefaultIconColor = dto.DefaultIconColor;
+            entity.MovingIcon = dto.MovingIcon;
+            entity.StoppedIcon = dto.StoppedIcon;
+            entity.IdleIcon = dto.IdleIcon;
+            entity.ParkedIcon = dto.ParkedIcon;
+            entity.OfflineIcon = dto.OfflineIcon;
+            entity.BreakdownIcon = dto.BreakdownIcon;
             entity.SeatingCapacity = dto.SeatingCapacity;
             entity.WheelsCount = dto.WheelsCount;
             entity.FuelCategory = dto.FuelCategory;
@@ -114,6 +137,73 @@ namespace Application.Services
             entity.Status = dto.Status;
             await _context.SaveChangesAsync();
             return MapToDto(entity);
+        }
+
+        public async Task<VehicleTypeIconUploadResponseDto> UploadIconsAsync(int accountId, int id, VehicleTypeIconUploadRequest req)
+        {
+            if (!HasAnyIcon(req))
+                throw new InvalidOperationException("At least one icon file is required.");
+
+            var accountExists = await _context.Accounts
+                .ApplyAccountHierarchyFilter(_currentUser)
+                .AnyAsync(x => x.AccountId == accountId && !x.IsDeleted);
+
+            if (!accountExists)
+                throw new KeyNotFoundException("Account not found");
+
+            var entity = await _context.Set<Domain.Entities.mst_vehicle_type>().FindAsync(id);
+            if (entity == null)
+                throw new KeyNotFoundException("Vehicle type not found");
+
+            if (req.MovingIcon != null && req.MovingIcon.Length > 0)
+            {
+                ValidateIconFile(req.MovingIcon, nameof(req.MovingIcon));
+                entity.MovingIcon = await _fileStorage.SaveVehicleTypeIconAsync(accountId, id, "moving", req.MovingIcon);
+            }
+
+            if (req.StoppedIcon != null && req.StoppedIcon.Length > 0)
+            {
+                ValidateIconFile(req.StoppedIcon, nameof(req.StoppedIcon));
+                entity.StoppedIcon = await _fileStorage.SaveVehicleTypeIconAsync(accountId, id, "stopped", req.StoppedIcon);
+            }
+
+            if (req.IdleIcon != null && req.IdleIcon.Length > 0)
+            {
+                ValidateIconFile(req.IdleIcon, nameof(req.IdleIcon));
+                entity.IdleIcon = await _fileStorage.SaveVehicleTypeIconAsync(accountId, id, "idle", req.IdleIcon);
+            }
+
+            if (req.ParkedIcon != null && req.ParkedIcon.Length > 0)
+            {
+                ValidateIconFile(req.ParkedIcon, nameof(req.ParkedIcon));
+                entity.ParkedIcon = await _fileStorage.SaveVehicleTypeIconAsync(accountId, id, "parked", req.ParkedIcon);
+            }
+
+            if (req.OfflineIcon != null && req.OfflineIcon.Length > 0)
+            {
+                ValidateIconFile(req.OfflineIcon, nameof(req.OfflineIcon));
+                entity.OfflineIcon = await _fileStorage.SaveVehicleTypeIconAsync(accountId, id, "offline", req.OfflineIcon);
+            }
+
+            if (req.BreakdownIcon != null && req.BreakdownIcon.Length > 0)
+            {
+                ValidateIconFile(req.BreakdownIcon, nameof(req.BreakdownIcon));
+                entity.BreakdownIcon = await _fileStorage.SaveVehicleTypeIconAsync(accountId, id, "breakdown", req.BreakdownIcon);
+            }
+
+            await _context.SaveChangesAsync();
+
+            return new VehicleTypeIconUploadResponseDto
+            {
+                AccountId = accountId,
+                VehicleTypeId = id,
+                MovingIcon = entity.MovingIcon,
+                StoppedIcon = entity.StoppedIcon,
+                IdleIcon = entity.IdleIcon,
+                ParkedIcon = entity.ParkedIcon,
+                OfflineIcon = entity.OfflineIcon,
+                BreakdownIcon = entity.BreakdownIcon
+            };
         }
 
         /// <summary>
@@ -137,9 +227,12 @@ namespace Application.Services
                 Id = entity.Id,
                 VehicleTypeName = entity.VehicleTypeName,
                 Category = entity.Category,
-                DefaultVehicleIcon = entity.DefaultVehicleIcon,
-                DefaultAlarmIcon = entity.DefaultAlarmIcon,
-                DefaultIconColor = entity.DefaultIconColor,
+                MovingIcon = entity.MovingIcon,
+                StoppedIcon = entity.StoppedIcon,
+                IdleIcon = entity.IdleIcon,
+                ParkedIcon = entity.ParkedIcon,
+                OfflineIcon = entity.OfflineIcon,
+                BreakdownIcon = entity.BreakdownIcon,
                 SeatingCapacity = entity.SeatingCapacity,
                 WheelsCount = entity.WheelsCount,
                 FuelCategory = entity.FuelCategory,
@@ -161,9 +254,12 @@ namespace Application.Services
             {
                 VehicleTypeName = dto.VehicleTypeName,
                 Category = dto.Category,
-                DefaultVehicleIcon = dto.DefaultVehicleIcon,
-                DefaultAlarmIcon = dto.DefaultAlarmIcon,
-                DefaultIconColor = dto.DefaultIconColor,
+                MovingIcon = dto.MovingIcon,
+                StoppedIcon = dto.StoppedIcon,
+                IdleIcon = dto.IdleIcon,
+                ParkedIcon = dto.ParkedIcon,
+                OfflineIcon = dto.OfflineIcon,
+                BreakdownIcon = dto.BreakdownIcon,
                 SeatingCapacity = dto.SeatingCapacity,
                 WheelsCount = dto.WheelsCount,
                 FuelCategory = dto.FuelCategory,
@@ -174,6 +270,28 @@ namespace Application.Services
             };
             if (includeId) entity.Id = dto.Id;
             return entity;
+        }
+
+        private static void ValidateIconFile(IFormFile file, string iconType)
+        {
+            if (file == null || file.Length == 0)
+                throw new InvalidOperationException($"{iconType} file is required.");
+
+            if (!AllowedIconContentTypes.Contains(file.ContentType))
+                throw new InvalidOperationException($"{iconType} format is invalid. Allowed formats: PNG, JPG, JPEG.");
+
+            if (file.Length > MaxIconFileSizeBytes)
+                throw new InvalidOperationException($"{iconType} file size must be 2 MB or less.");
+        }
+
+        private static bool HasAnyIcon(VehicleTypeIconUploadRequest req)
+        {
+            return (req.MovingIcon?.Length ?? 0) > 0 ||
+                   (req.StoppedIcon?.Length ?? 0) > 0 ||
+                   (req.IdleIcon?.Length ?? 0) > 0 ||
+                   (req.ParkedIcon?.Length ?? 0) > 0 ||
+                   (req.OfflineIcon?.Length ?? 0) > 0 ||
+                   (req.BreakdownIcon?.Length ?? 0) > 0;
         }
     }
 }

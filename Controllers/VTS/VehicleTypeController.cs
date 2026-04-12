@@ -1,4 +1,5 @@
 using Application.DTOs;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 
@@ -67,6 +68,14 @@ public class VehicleTypeController : ControllerBase
     public async Task<IActionResult> Update(int id, [FromBody] VehicleTypeDto dto)
     {
         var result = await _service.UpdateAsync(id, dto);
+        return Ok(result);
+    }
+
+    [HttpPost("{accountId:int}/{id:int}/icons")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadIcons(int accountId, int id, [FromForm] VehicleTypeIconUploadRequest req)
+    {
+        var result = await _service.UploadIconsAsync(accountId, id, req);
         return Ok(result);
     }
 
