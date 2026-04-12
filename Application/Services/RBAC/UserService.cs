@@ -856,11 +856,19 @@ public class UserService : IUserService
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("Account Name,Username,Email,First Name,Last Name,Mobile No,Role,Status,Two Factor Enabled,Email Verified,Created On,Updated On");
 
+        static string Escape(string? value)
+        {
+            if (string.IsNullOrEmpty(value)) return "";
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
+        }
+
+        static string FormatDate(DateTime? value)
+        {
+            return value.HasValue ? value.Value.ToString("yyyy-MM-dd HH:mm:ss") : "";
+        }
+
         foreach (var item in data)
         {
-            var Escape = (string? value) => string.IsNullOrEmpty(value) ? "" : $"\"{value.Replace("\\"", "\\"\\"\\"\")}\"";
-            var FormatDate = (DateTime? value) => value.HasValue ? value.Value.ToString("yyyy-MM-dd HH:mm:ss") : "";
-
             sb.AppendLine(
                 $"{Escape(item.AccountName)}," +
                 $"{Escape(item.User_name)}," +
