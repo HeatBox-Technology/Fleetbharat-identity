@@ -425,16 +425,16 @@ public class LiveTrackingController : ControllerBase
             .Include(x => x.Device)
             .Where(x => x.IsActive && !x.IsDeleted)
             .Where(x =>
-                (!string.IsNullOrWhiteSpace(vehicleNo) && x.Vehicle.VehicleNumber == vehicleNo) ||
-                (!string.IsNullOrWhiteSpace(deviceNo) && x.Device.DeviceNo == deviceNo) ||
-                (!string.IsNullOrWhiteSpace(imei) && x.Device.DeviceImeiOrSerial == imei))
+                (!string.IsNullOrWhiteSpace(vehicleNo) && x.Vehicle != null && x.Vehicle.VehicleNumber == vehicleNo) ||
+                (!string.IsNullOrWhiteSpace(deviceNo) && x.Device != null && x.Device.DeviceNo == deviceNo) ||
+                (!string.IsNullOrWhiteSpace(imei) && x.Device != null && x.Device.DeviceImeiOrSerial == imei))
             .Select(x => new VehicleDeviceMatch(
                 x.AccountId,
                 x.Fk_VehicleId,
-                x.Vehicle.VehicleNumber,
+                x.Vehicle?.VehicleNumber ?? string.Empty,
                 x.Fk_DeviceId,
-                x.Device.DeviceNo,
-                x.Device.DeviceImeiOrSerial))
+                x.Device?.DeviceNo ?? string.Empty,
+                x.Device?.DeviceImeiOrSerial ?? string.Empty))
             .FirstOrDefaultAsync();
     }
 

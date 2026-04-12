@@ -267,9 +267,9 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
                 Id = x.Id,
                 AccountId = x.AccountId,
                 VehicleId = x.Fk_VehicleId,
-                VehicleNo = x.Vehicle.VehicleNumber,
+                VehicleNo = x.Vehicle?.VehicleNumber ?? string.Empty,
                 DeviceId = x.Fk_DeviceId,
-                DeviceNo = x.Device.DeviceNo,
+                DeviceNo = x.Device?.DeviceNo ?? string.Empty,
                 DeviceTypeId = x.fk_devicetypeid,
                 DeviceTypeName = _db.DeviceTypes
                     .Where(dt => dt.Id == x.fk_devicetypeid)
@@ -344,9 +344,9 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
                 Id = x.Id,
                 AccountId = x.AccountId,
                 VehicleId = x.Fk_VehicleId,
-                VehicleNo = x.Vehicle.VehicleNumber,
+                VehicleNo = x.Vehicle?.VehicleNumber ?? string.Empty,
                 DeviceId = x.Fk_DeviceId,
-                DeviceNo = x.Device.DeviceNo,
+                DeviceNo = x.Device?.DeviceNo ?? string.Empty,
                 DeviceTypeId = x.fk_devicetypeid,
                 DeviceTypeName = _db.DeviceTypes
                     .Where(dt => dt.Id == x.fk_devicetypeid)
@@ -399,8 +399,8 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
         {
             var s = search.Trim().ToLower();
             query = query.Where(x =>
-                (x.Vehicle.VehicleNumber != null && x.Vehicle.VehicleNumber.ToLower().Contains(s)) ||
-                (x.Device.DeviceNo != null && x.Device.DeviceNo.ToLower().Contains(s)) ||
+                (x.Vehicle != null && x.Vehicle.VehicleNumber != null && x.Vehicle.VehicleNumber.ToLower().Contains(s)) ||
+                (x.Device != null && x.Device.DeviceNo != null && x.Device.DeviceNo.ToLower().Contains(s)) ||
                 (x.simnno != null && x.simnno.ToLower().Contains(s)) ||
                 (x.Remarks != null && x.Remarks.ToLower().Contains(s)));
         }
@@ -416,9 +416,9 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
                 Id = x.Id,
                 AccountId = x.AccountId,
                 VehicleId = x.Fk_VehicleId,
-                VehicleNo = x.Vehicle.VehicleNumber,
+                VehicleNo = x.Vehicle?.VehicleNumber ?? string.Empty,
                 DeviceId = x.Fk_DeviceId,
-                DeviceNo = x.Device.DeviceNo,
+                DeviceNo = x.Device?.DeviceNo ?? string.Empty,
                 DeviceTypeId = x.fk_devicetypeid,
                 DeviceTypeName = _db.DeviceTypes
                     .Where(dt => dt.Id == x.fk_devicetypeid)
