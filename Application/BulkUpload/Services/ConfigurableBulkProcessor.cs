@@ -7,14 +7,14 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Domain.Entities;
 
-public class BulkProcessor : IBulkProcessor
+public class ConfigurableBulkProcessor : IBulkProcessor
 {
     private const int DefaultBatchSize = 100;
     private const int DefaultMaxParallelism = 8;
@@ -24,21 +24,30 @@ public class BulkProcessor : IBulkProcessor
     private readonly IValidationService _validationService;
     private readonly IExternalBulkSyncService _externalSyncService;
     private readonly ICurrentUserService _currentUser;
-    private readonly ILogger<BulkProcessor> _logger;
+    private readonly ILookupResolverService _lookupResolverService;
+    private readonly IUniqueFieldValidator _uniqueFieldValidator;
+    private readonly IReadOnlyCollection<IBulkCustomValidator> _customValidators;
+    private readonly ILogger<ConfigurableBulkProcessor> _logger;
 
-    public BulkProcessor(
+    public ConfigurableBulkProcessor(
         IdentityDbContext db,
         IServiceResolver serviceResolver,
         IValidationService validationService,
         IExternalBulkSyncService externalSyncService,
         ICurrentUserService currentUser,
-        ILogger<BulkProcessor> logger)
+        ILookupResolverService lookupResolverService,
+        IUniqueFieldValidator uniqueFieldValidator,
+        IEnumerable<IBulkCustomValidator> customValidators,
+        ILogger<ConfigurableBulkProcessor> logger)
     {
         _db = db;
         _serviceResolver = serviceResolver;
         _validationService = validationService;
         _externalSyncService = externalSyncService;
         _currentUser = currentUser;
+        _lookupResolverService = lookupResolverService;
+        _uniqueFieldValidator = uniqueFieldValidator;
+        _customValidators = customValidators.ToList();
         _logger = logger;
     }
 
@@ -62,11 +71,19 @@ public class BulkProcessor : IBulkProcessor
 
         var columns = BulkUploadColumnDefinitionParser.Parse(config.ColumnsJson);
         var dtoType = _serviceResolver.ResolveDtoType(config.DtoName);
+        ValidateColumnConfiguration(dtoType, columns, workItem.ModuleKey);
         var service = _serviceResolver.ResolveService(config.ServiceInterface);
         var method = ResolveMethod(service.GetType(), config.ServiceMethod, dtoType);
-        var lookupContext = await BuildLookupContextAsync(columns, ct);
+        var customValidator = _customValidators.FirstOrDefault(x => string.Equals(x.ModuleKey, workItem.ModuleKey, StringComparison.OrdinalIgnoreCase));
 
-        var validItems = new ConcurrentBag<(int RowNumber, object Dto)>();
+        await _lookupResolverService.PreloadAsync(
+            columns
+                .Select(x => x.LookupType)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Cast<string>(),
+            ct);
+
+        var candidates = new ConcurrentBag<RowCandidate>();
         var errors = new ConcurrentBag<BulkRowErrorDto>();
 
         var parallelOptions = new ParallelOptions
@@ -78,28 +95,30 @@ public class BulkProcessor : IBulkProcessor
         await Parallel.ForEachAsync(
             Enumerable.Range(0, workItem.Rows.Count),
             parallelOptions,
-            (i, token) =>
+            async (i, token) =>
             {
                 var rowNumber = i + 2;
                 var rowData = workItem.Rows[i];
 
                 try
                 {
-                    var dto = MapRowToDto(dtoType, rowData, columns, lookupContext);
-                    var validationErrors = _validationService.ValidateObject(dto);
+                    var dto = await MapRowToDtoAsync(dtoType, rowData, columns, token);
+                    var rowErrors = _validationService.ValidateObject(dto);
 
-                    if (validationErrors.Count > 0)
+                    if (customValidator != null)
+                        rowErrors.AddRange(await customValidator.ValidateAsync(rowData, dto, token));
+
+                    if (rowErrors.Count > 0)
                     {
                         errors.Add(new BulkRowErrorDto
                         {
                             RowNumber = rowNumber,
-                            Message = string.Join("; ", validationErrors)
+                            Message = string.Join("; ", rowErrors.Distinct(StringComparer.OrdinalIgnoreCase))
                         });
+                        return;
                     }
-                    else
-                    {
-                        validItems.Add((rowNumber, dto));
-                    }
+
+                    candidates.Add(new RowCandidate(rowNumber, dto));
                 }
                 catch (Exception ex)
                 {
@@ -109,15 +128,33 @@ public class BulkProcessor : IBulkProcessor
                         Message = ex.Message
                     });
                 }
-
-                return ValueTask.CompletedTask;
             });
 
-        var sortedValid = validItems.OrderBy(x => x.RowNumber).ToList();
+        var sortedCandidates = candidates.OrderBy(x => x.RowNumber).ToList();
+
+        ApplyInFileDuplicateValidation(sortedCandidates, columns);
+        await ApplyDatabaseUniquenessValidationAsync(workItem.ModuleKey, sortedCandidates, columns, ct);
+
+        var validItems = new List<RowCandidate>();
+        foreach (var candidate in sortedCandidates)
+        {
+            if (candidate.Errors.Count == 0)
+            {
+                validItems.Add(candidate);
+                continue;
+            }
+
+            errors.Add(new BulkRowErrorDto
+            {
+                RowNumber = candidate.RowNumber,
+                Message = string.Join("; ", candidate.Errors.Distinct(StringComparer.OrdinalIgnoreCase))
+            });
+        }
+
         int success = 0;
         int failed = errors.Count;
 
-        foreach (var batch in Chunk(sortedValid, DefaultBatchSize))
+        foreach (var batch in Chunk(validItems, DefaultBatchSize))
         {
             ct.ThrowIfCancellationRequested();
             var dtoBatch = batch.Select(x => x.Dto).ToList();
@@ -196,11 +233,35 @@ public class BulkProcessor : IBulkProcessor
             : Math.Min(Environment.ProcessorCount, DefaultMaxParallelism);
     }
 
-    private object MapRowToDto(
+    private static void ValidateColumnConfiguration(
+        Type dtoType,
+        IReadOnlyCollection<BulkUploadColumnDefinition> columns,
+        string moduleKey)
+    {
+        var writableProperties = dtoType
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(x => x.CanWrite)
+            .Select(x => x.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var invalidColumns = columns
+            .Where(x => !writableProperties.Contains(x.PropertyName))
+            .Select(x => x.PropertyName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (invalidColumns.Count == 0)
+            return;
+
+        throw new InvalidOperationException(
+            $"Bulk upload config for module '{moduleKey}' contains invalid property mappings: {string.Join(", ", invalidColumns)}.");
+    }
+
+    private async Task<object> MapRowToDtoAsync(
         Type dtoType,
         Dictionary<string, string> row,
         IReadOnlyCollection<BulkUploadColumnDefinition> columns,
-        BulkLookupContext lookupContext)
+        CancellationToken ct)
     {
         var dto = Activator.CreateInstance(dtoType)
             ?? throw new InvalidOperationException($"Unable to create DTO instance for '{dtoType.Name}'.");
@@ -212,6 +273,9 @@ public class BulkProcessor : IBulkProcessor
 
             if (!TryGetRowValue(row, property.Name, column, out var raw))
             {
+                if (column?.Required == true)
+                    throw new InvalidOperationException($"Column '{GetColumnLabel(column, property.Name)}' was not found in the uploaded file.");
+
                 TryApplySystemManagedDefault(dto, property);
                 continue;
             }
@@ -219,13 +283,16 @@ public class BulkProcessor : IBulkProcessor
             if (string.IsNullOrWhiteSpace(raw))
             {
                 if (column?.Required == true)
-                    throw new InvalidOperationException($"Column '{column.Header}' is required.");
+                    throw new InvalidOperationException($"{GetColumnLabel(column, property.Name)} is required.");
 
                 TryApplySystemManagedDefault(dto, property);
                 continue;
             }
 
-            var resolved = ResolveLookupValue(property, raw, column, lookupContext);
+            if (column != null)
+                ValidateConfiguredRules(column, raw);
+
+            var resolved = await ResolveLookupValueAsync(property, raw, column, ct);
             var converted = ConvertTo(property.PropertyType, resolved, property.Name);
             property.SetValue(dto, converted);
         }
@@ -286,133 +353,164 @@ public class BulkProcessor : IBulkProcessor
         }
     }
 
-    private static string ResolveLookupValue(
+    private async Task<string> ResolveLookupValueAsync(
         PropertyInfo property,
         string raw,
         BulkUploadColumnDefinition? column,
-        BulkLookupContext lookupContext)
+        CancellationToken ct)
     {
         var trimmed = raw.Trim();
         var underlying = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-
-        if (underlying != typeof(int))
-            return trimmed;
-
-        if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
-            return trimmed;
 
         var lookupType = column?.LookupType ?? BulkUploadColumnDefinitionParser.InferLookupType(property.Name);
         if (string.IsNullOrWhiteSpace(lookupType))
             return trimmed;
 
-        return lookupType switch
+        if (underlying == typeof(int) &&
+            int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
         {
-            "account" => lookupContext.ResolveAccountId(trimmed, column?.Header).ToString(CultureInfo.InvariantCulture),
-            "vehicleType" => lookupContext.ResolveVehicleTypeId(trimmed, column?.Header).ToString(CultureInfo.InvariantCulture),
-            "deviceType" => lookupContext.ResolveDeviceTypeId(trimmed, column?.Header).ToString(CultureInfo.InvariantCulture),
-            "manufacturer" => lookupContext.ResolveManufacturerId(trimmed, column?.Header).ToString(CultureInfo.InvariantCulture),
-            _ => trimmed
-        };
+            return trimmed;
+        }
+
+        var result = await _lookupResolverService.ResolveAsync(lookupType, trimmed, ct);
+        if (!result.Success || result.Value == null)
+            throw new InvalidOperationException(result.Error ?? $"Lookup resolution failed for '{trimmed}'.");
+
+        return Convert.ToString(result.Value, CultureInfo.InvariantCulture) ?? trimmed;
     }
 
-    private async Task<BulkLookupContext> BuildLookupContextAsync(
+    private static void ValidateConfiguredRules(BulkUploadColumnDefinition column, string raw)
+    {
+        var trimmed = raw.Trim();
+        var label = GetColumnLabel(column, column.PropertyName);
+
+        if (column.MinLength.HasValue && trimmed.Length < column.MinLength.Value)
+            throw new InvalidOperationException($"{label} must be at least {column.MinLength.Value} characters.");
+
+        if (column.MaxLength.HasValue && trimmed.Length > column.MaxLength.Value)
+            throw new InvalidOperationException($"{label} cannot exceed {column.MaxLength.Value} characters.");
+
+        if (!string.IsNullOrWhiteSpace(column.Regex) && !Regex.IsMatch(trimmed, column.Regex))
+            throw new InvalidOperationException($"{label} format is invalid.");
+
+        if (column.AllowedValues.Count > 0 &&
+            !column.AllowedValues.Any(x => string.Equals(x, trimmed, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"{label} must be one of: {string.Join(", ", column.AllowedValues)}.");
+        }
+    }
+
+    private async Task ApplyDatabaseUniquenessValidationAsync(
+        string moduleKey,
+        IReadOnlyCollection<RowCandidate> candidates,
         IReadOnlyCollection<BulkUploadColumnDefinition> columns,
         CancellationToken ct)
     {
-        var context = new BulkLookupContext();
-        var lookupTypes = columns
-            .Select(x => x.LookupType)
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        if (lookupTypes.Contains("account", StringComparer.OrdinalIgnoreCase))
+        foreach (var candidate in candidates.Where(x => x.Errors.Count == 0))
         {
-            var accounts = await _db.Accounts
-                .AsNoTracking()
-                .Where(x => !x.IsDeleted)
-                .ApplyAccountHierarchyFilter(_currentUser)
-                .Select(x => new { x.AccountId, x.AccountName, x.AccountCode })
-                .ToListAsync(ct);
-
-            context.Accounts = BuildLookupMap(
-                accounts,
-                x => x.AccountId,
-                x => new[] { x.AccountName, $"{x.AccountName} ({x.AccountCode})", x.AccountCode });
-        }
-
-        if (lookupTypes.Contains("vehicleType", StringComparer.OrdinalIgnoreCase))
-        {
-            var vehicleTypes = await _db.VehicleTypes
-                .AsNoTracking()
-                .Where(x => x.Status != null && new[] { "active", "true", "1", "enabled" }.Contains(x.Status.Trim().ToLower()))
-                .Select(x => new { x.Id, x.VehicleTypeName })
-                .ToListAsync(ct);
-
-            context.VehicleTypes = BuildLookupMap(vehicleTypes, x => x.Id, x => new[] { x.VehicleTypeName });
-        }
-
-        if (lookupTypes.Contains("deviceType", StringComparer.OrdinalIgnoreCase))
-        {
-            var deviceTypes = await _db.DeviceTypes
-                .AsNoTracking()
-                .Where(x => !x.IsDeleted && x.IsActive && x.IsEnabled)
-                .Select(x => new { x.Id, Name = x.Name })
-                .ToListAsync(ct);
-
-            context.DeviceTypes = BuildLookupMap(deviceTypes, x => x.Id, x => new[] { x.Name });
-        }
-
-        if (lookupTypes.Contains("manufacturer", StringComparer.OrdinalIgnoreCase))
-        {
-            var manufacturers = await _db.OemManufacturers
-                .AsNoTracking()
-                .Where(x => !x.IsDeleted && x.IsEnabled)
-                .Select(x => new { x.Id, x.Name, x.Code })
-                .ToListAsync(ct);
-
-            context.Manufacturers = BuildLookupMap(
-                manufacturers,
-                x => x.Id,
-                x => new[] { x.Name, x.Code, $"{x.Name} ({x.Code})" });
-        }
-
-        return context;
-    }
-
-    private static Dictionary<string, List<int>> BuildLookupMap<T>(
-        IEnumerable<T> items,
-        Func<T, int> idSelector,
-        Func<T, IEnumerable<string?>> aliasesSelector)
-    {
-        var map = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var item in items)
-        {
-            foreach (var alias in aliasesSelector(item))
+            foreach (var column in columns.Where(x => x.Unique))
             {
-                var normalized = NormalizeLookup(alias);
-                if (string.IsNullOrWhiteSpace(normalized))
+                var value = GetPropertyString(candidate.Dto, column.PropertyName);
+                if (string.IsNullOrWhiteSpace(value))
                     continue;
 
-                if (!map.TryGetValue(normalized, out var ids))
+                var scopeValues = BuildScopeValues(candidate.Dto, column.UniqueWith);
+                var result = await _uniqueFieldValidator.ValidateAsync(moduleKey, column.PropertyName, value, scopeValues, ct);
+
+                if (!string.IsNullOrWhiteSpace(result.Error))
                 {
-                    ids = new List<int>();
-                    map[normalized] = ids;
+                    candidate.Errors.Add(result.Error);
+                    continue;
                 }
 
-                var id = idSelector(item);
-                if (!ids.Contains(id))
-                    ids.Add(id);
+                if (result.IsDuplicate)
+                    candidate.Errors.Add(BuildDuplicateMessage(column, value, scopeValues, "already exists in the database"));
             }
         }
-
-        return map;
     }
 
-    private static string NormalizeLookup(string? value)
+    private static void ApplyInFileDuplicateValidation(
+        IReadOnlyCollection<RowCandidate> candidates,
+        IReadOnlyCollection<BulkUploadColumnDefinition> columns)
     {
-        return string.IsNullOrWhiteSpace(value) ? "" : value.Trim().ToLowerInvariant();
+        foreach (var column in columns.Where(x => x.Unique))
+        {
+            var groups = candidates
+                .Where(x => x.Errors.Count == 0)
+                .Select(x => new
+                {
+                    Candidate = x,
+                    Value = GetPropertyString(x.Dto, column.PropertyName),
+                    Scope = BuildScopeValues(x.Dto, column.UniqueWith)
+                })
+                .Where(x => !string.IsNullOrWhiteSpace(x.Value))
+                .GroupBy(x => BuildUniqueSignature(column.PropertyName, x.Value!, x.Scope), StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .ToList();
+
+            foreach (var group in groups)
+            {
+                foreach (var item in group)
+                {
+                    item.Candidate.Errors.Add(BuildDuplicateMessage(column, item.Value!, item.Scope, "is duplicated inside the uploaded file"));
+                }
+            }
+        }
+    }
+
+    private static string BuildUniqueSignature(string propertyName, string value, Dictionary<string, object> scopeValues)
+    {
+        var scope = string.Join("|", scopeValues
+            .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(x => $"{x.Key}:{NormalizeKeyValue(x.Value)}"));
+
+        return $"{propertyName}:{NormalizeKeyValue(value)}|{scope}";
+    }
+
+    private static string BuildDuplicateMessage(
+        BulkUploadColumnDefinition column,
+        string value,
+        Dictionary<string, object> scopeValues,
+        string suffix)
+    {
+        if (scopeValues.Count == 0)
+            return $"{GetColumnLabel(column, column.PropertyName)} '{value}' {suffix}.";
+
+        var scope = string.Join(", ", scopeValues.Select(x => $"{x.Key}={x.Value}"));
+        return $"{GetColumnLabel(column, column.PropertyName)} '{value}' {suffix} for scope [{scope}].";
+    }
+
+    private static Dictionary<string, object> BuildScopeValues(object dto, IReadOnlyCollection<string> scopeProperties)
+    {
+        var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        var type = dto.GetType();
+
+        foreach (var propertyName in scopeProperties.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var property = type.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            var value = property?.GetValue(dto);
+            if (value != null)
+                result[propertyName] = value;
+        }
+
+        return result;
+    }
+
+    private static string? GetPropertyString(object dto, string propertyName)
+    {
+        var property = dto.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+        var value = property?.GetValue(dto);
+        return value?.ToString()?.Trim();
+    }
+
+    private static string NormalizeKeyValue(object? value)
+    {
+        return value == null ? "" : value.ToString()?.Trim().ToLowerInvariant() ?? "";
+    }
+
+    private static string GetColumnLabel(BulkUploadColumnDefinition? column, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(column?.Header) ? fallback : column.Header;
     }
 
     private static object ConvertTo(Type targetType, string value, string propertyName)
@@ -468,9 +566,9 @@ public class BulkProcessor : IBulkProcessor
         }
     }
 
-    private static List<List<(int RowNumber, object Dto)>> Chunk(List<(int RowNumber, object Dto)> source, int size)
+    private static List<List<RowCandidate>> Chunk(List<RowCandidate> source, int size)
     {
-        var chunks = new List<List<(int RowNumber, object Dto)>>();
+        var chunks = new List<List<RowCandidate>>();
         for (int i = 0; i < source.Count; i += size)
             chunks.Add(source.Skip(i).Take(size).ToList());
         return chunks;
@@ -552,33 +650,16 @@ public class BulkProcessor : IBulkProcessor
         await _db.bulk_job_rows.AddRangeAsync(rowEntities, ct);
     }
 
-    private sealed class BulkLookupContext
+    private sealed class RowCandidate
     {
-        public Dictionary<string, List<int>> Accounts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-        public Dictionary<string, List<int>> VehicleTypes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-        public Dictionary<string, List<int>> DeviceTypes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-        public Dictionary<string, List<int>> Manufacturers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-
-        public int ResolveAccountId(string raw, string? header) => ResolveSingle("account", header, raw, Accounts);
-        public int ResolveVehicleTypeId(string raw, string? header) => ResolveSingle("vehicle type", header, raw, VehicleTypes);
-        public int ResolveDeviceTypeId(string raw, string? header) => ResolveSingle("device type", header, raw, DeviceTypes);
-        public int ResolveManufacturerId(string raw, string? header) => ResolveSingle("manufacturer", header, raw, Manufacturers);
-
-        private static int ResolveSingle(string label, string? header, string raw, Dictionary<string, List<int>> source)
+        public RowCandidate(int rowNumber, object dto)
         {
-            var normalized = NormalizeLookup(raw);
-            if (string.IsNullOrWhiteSpace(normalized) || !source.TryGetValue(normalized, out var ids) || ids.Count == 0)
-                throw new InvalidOperationException($"{GetDisplayLabel(label, header)} '{raw}' was not found.");
-
-            if (ids.Count > 1)
-                throw new InvalidOperationException($"{GetDisplayLabel(label, header)} '{raw}' matched multiple records. Please use a unique value.");
-
-            return ids[0];
+            RowNumber = rowNumber;
+            Dto = dto;
         }
 
-        private static string GetDisplayLabel(string label, string? header)
-        {
-            return string.IsNullOrWhiteSpace(header) ? label : header;
-        }
+        public int RowNumber { get; }
+        public object Dto { get; }
+        public List<string> Errors { get; } = new();
     }
 }
