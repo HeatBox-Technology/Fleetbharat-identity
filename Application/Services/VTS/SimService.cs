@@ -351,6 +351,16 @@ public class SimService : ISimService
             return $"\"{value.Replace("\"", "\"\"")}\"";
         }
 
+        static string EscapeExcelText(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "";
+            var trimmed = value.Trim();
+
+            // CSV has no type metadata, so Excel guesses these long identifiers as numbers.
+            // Emit them as a text formula so Excel preserves all digits on open.
+            return Escape($"=\"{trimmed.Replace("\"", "\"\"")}\"");
+        }
+
         static string FormatDate(DateTime? value)
         {
             return value.HasValue ? value.Value.ToString("yyyy-MM-dd HH:mm:ss") : "";
@@ -364,9 +374,9 @@ public class SimService : ISimService
             sb.AppendLine(
                 $"{Escape(item.AccountCode)}," +
                 $"{Escape(item.AccountName)}," +
-                $"{Escape(item.Iccid)}," +
-                $"{Escape(item.Msisdn)}," +
-                $"{Escape(item.Imsi)}," +
+                $"{EscapeExcelText(item.Iccid)}," +
+                $"{EscapeExcelText(item.Msisdn)}," +
+                $"{EscapeExcelText(item.Imsi)}," +
                 $"{Escape(item.NetworkProvider)}," +
                 $"{Escape(item.StatusKey)}," +
                 $"{Escape(item.IsActive ? "Active" : "Inactive")}," +
@@ -468,6 +478,11 @@ public class SimService : ISimService
             var headerRow = worksheet.Row(1);
             headerRow.Style.Font.Bold = true;
             headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+
+            // Keep long SIM identifiers as text in Excel.
+            worksheet.Column(3).Style.NumberFormat.Format = "@";
+            worksheet.Column(4).Style.NumberFormat.Format = "@";
+            worksheet.Column(5).Style.NumberFormat.Format = "@";
 
             // Add data
             int rowNumber = 2;

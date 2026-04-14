@@ -570,6 +570,12 @@ public class GeofenceService : IGeofenceService
     }
     public async Task<byte[]> ExportGeofenceCsvAsync(int? accountId, string? search)
     {
+        static string Escape(string? value)
+        {
+            if (string.IsNullOrEmpty(value)) return "";
+            return $"\"{value.Replace("\"", "\"\"")}\"";
+        }
+
         var query = _db.GeofenceZones
             .AsNoTracking()
             .ApplyAccountHierarchyFilter(_currentUser)
@@ -633,15 +639,15 @@ public class GeofenceService : IGeofenceService
                 : "";
 
             sb.AppendLine(
-                $"\"{accountName}\"," +
-                $"\"{g.UniqueCode}\"," +
-                $"\"{g.DisplayName}\"," +
-                $"\"{g.ClassificationCode}\"," +
-                $"\"{g.GeometryType}\"," +
-                $"\"{g.RadiusM}\"," +
-                $"\"{g.Status}\"," +
-                $"\"{g.ColorTheme}\"," +
-                $"\"{lastUpdated}\"");
+                $"{Escape(accountName)}," +
+                $"{Escape(g.UniqueCode)}," +
+                $"{Escape(g.DisplayName)}," +
+                $"{Escape(g.ClassificationCode)}," +
+                $"{Escape(g.GeometryType)}," +
+                $"{Escape(g.RadiusM?.ToString())}," +
+                $"{Escape(g.Status)}," +
+                $"{Escape(g.ColorTheme)}," +
+                $"{Escape(lastUpdated)}");
         }
 
         return Encoding.UTF8.GetBytes(sb.ToString());
