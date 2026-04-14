@@ -14,15 +14,18 @@ public abstract class BulkLookupResolverBase : IBulkLookupResolver, IBulkLookupC
 
     public abstract string LookupType { get; }
 
+    private DateTime _lastLoadedAt = DateTime.MinValue;
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
+
     public async Task PreloadAsync(CancellationToken cancellationToken = default)
     {
-        if (_isLoaded)
+        if (_isLoaded && DateTime.UtcNow - _lastLoadedAt < CacheDuration)
             return;
 
         _lookup = await LoadAsync(cancellationToken);
         _isLoaded = true;
+        _lastLoadedAt = DateTime.UtcNow;
     }
-
     public async Task<(bool Success, object? Value, string? Error)> ResolveAsync(
         string input,
         CancellationToken cancellationToken = default)
@@ -138,18 +141,86 @@ public class AccountBulkLookupResolver : BulkLookupResolverBase
 
     public override string LookupType => "account";
 
+    private static string NormalizeLookupValue(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        value = value.Replace("\t", " ")
+                     .Replace("\n", " ")
+                     .Replace("\r", " ")
+                     .Replace("-", " ")
+                     .Replace("_", " ");
+
+        return string.Join(
+            " ",
+            value.Trim()
+                 .ToLowerInvariant()
+                 .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+        );
+    }
+
     protected override async Task<Dictionary<string, List<int>>> LoadAsync(CancellationToken cancellationToken)
     {
         var accounts = await _db.Accounts
             .AsNoTracking()
             .Where(x => !x.IsDeleted)
-            .Select(x => new { x.AccountId, x.AccountName, x.AccountCode })
+            .Select(x => new
+            {
+                x.AccountId,
+                x.AccountName,
+                x.AccountCode
+            })
             .ToListAsync(cancellationToken);
 
-        return BuildLookupMap(
-            accounts,
-            x => x.AccountId,
-            x => new[] { x.AccountName, x.AccountCode, $"{x.AccountName} ({x.AccountCode})" });
+        var lookup = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var account in accounts)
+        {
+            var accountId = account.AccountId;
+            var accountName = account.AccountName ?? string.Empty;
+            var accountCode = account.AccountCode ?? string.Empty;
+
+            var keys = new[]
+            {
+            accountName,
+            accountName.Trim(),
+            accountName.ToLowerInvariant(),
+            NormalizeLookupValue(accountName),
+
+            accountCode,
+            accountCode.Trim(),
+            accountCode.ToLowerInvariant(),
+            NormalizeLookupValue(accountCode),
+
+            $"{accountName} ({accountCode})",
+            $"{accountName.Trim()} ({accountCode.Trim()})",
+            $"{accountName.ToLowerInvariant()} ({accountCode.ToLowerInvariant()})",
+            NormalizeLookupValue($"{accountName} ({accountCode})")
+        }
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var key in keys)
+            {
+                var normalizedKey = NormalizeLookupValue(key);
+
+                if (string.IsNullOrWhiteSpace(normalizedKey))
+                    continue;
+
+                if (!lookup.ContainsKey(normalizedKey))
+                {
+                    lookup[normalizedKey] = new List<int>();
+                }
+
+                if (!lookup[normalizedKey].Contains(accountId))
+                {
+                    lookup[normalizedKey].Add(accountId);
+                }
+            }
+        }
+
+        return lookup;
     }
 }
 
