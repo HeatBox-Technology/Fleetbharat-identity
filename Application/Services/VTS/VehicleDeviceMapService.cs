@@ -73,7 +73,17 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
         await _db.SaveChangesAsync();
 
         //await _externalSyncEnqueueService.EnqueueVehicleDeviceMappingAsync(entity);
+        _ = Task.Run(async () =>
+{
+    try
+    {
         await SendExternalMapping(entity);
+    }
+    catch
+    {
+    }
+});
+
         return entity.Id;
     }
 

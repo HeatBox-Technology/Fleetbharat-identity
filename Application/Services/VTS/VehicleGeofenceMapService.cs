@@ -103,10 +103,21 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
         _db.VehicleGeofenceMaps.AddRange(newEntities);
         await _db.SaveChangesAsync();
 
-        foreach (var entity in newEntities)
-        {
-            await SyncVehicleGeofenceAsync(entity, HttpMethod.Post);
-        }
+        _ = Task.Run(async () =>
+ {
+     var tasks = newEntities.Select(async entity =>
+     {
+         try
+         {
+             await SyncVehicleGeofenceAsync(entity, HttpMethod.Post);
+         }
+         catch
+         {
+         }
+     });
+
+     await Task.WhenAll(tasks);
+ });
 
         return newEntities.Select(x => x.Id).ToList();
     }

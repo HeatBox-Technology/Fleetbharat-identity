@@ -66,11 +66,16 @@ public class GeofenceService : IGeofenceService
         _db.GeofenceZones.Add(entity);
         await _db.SaveChangesAsync();
 
-        try
-        {
-            await SyncGeofenceAsync(entity, dto.Coordinates, HttpMethod.Post);
-        }
-        catch { }
+        _ = Task.Run(async () =>
+ {
+     try
+     {
+         await SyncGeofenceAsync(entity, dto.Coordinates, HttpMethod.Post);
+     }
+     catch
+     {
+     }
+ });
 
         return entity.Id;
     }
