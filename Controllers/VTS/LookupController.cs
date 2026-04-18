@@ -52,7 +52,11 @@ public class LookupController : ControllerBase
     [HttpGet("network-providers")]
     public async Task<IActionResult> GetNetworkProviders()
     {
-        var data = await _context.NetworkProviders.Select(x => new { x.Id, x.Name }).ToListAsync();
+        var data = await _context.NetworkProviders
+            .Where(x => !x.IsDeleted && x.IsEnabled)
+            .Select(x => new { x.Id, x.Name })
+            .ToListAsync();
+
         return Ok(data);
     }
 
@@ -63,7 +67,11 @@ public class LookupController : ControllerBase
     [HttpGet("vehicle-brand-oems")]
     public async Task<IActionResult> GetVehicleBrandOems()
     {
-        var data = await _context.VehicleBrandOems.Select(x => new { x.Id, x.Name }).ToListAsync();
+        var data = await _context.VehicleBrandOems
+            .Where(x => !x.IsDeleted && x.IsEnabled)
+            .Select(x => new { x.Id, x.Name })
+            .ToListAsync();
+
         return Ok(data);
     }
 

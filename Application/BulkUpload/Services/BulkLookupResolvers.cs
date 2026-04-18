@@ -32,22 +32,23 @@ public abstract class BulkLookupResolverBase : IBulkLookupResolver, IBulkLookupC
     {
         await PreloadAsync(cancellationToken);
 
-        var normalized = Normalize(input);
-        var compact = NormalizeCompact(input);
+        var possibleKeys = GetLookupKeys(input).ToList();
+        Console.WriteLine($"[BulkLookup][{LookupType}] ResolveAsync input: '{input ?? string.Empty}'");
+        Console.WriteLine($"[BulkLookup][{LookupType}] ResolveAsync normalized keys: {string.Join(", ", possibleKeys.Select(x => $"'{x}'"))}");
 
         List<int>? ids = null;
-        if (!string.IsNullOrWhiteSpace(normalized))
-            _lookup.TryGetValue(normalized, out ids);
+        var matchedKeys = new List<string>();
 
-        if ((ids == null || ids.Count == 0) && !string.IsNullOrWhiteSpace(compact))
-            _lookup.TryGetValue(compact, out ids);
-
-        if ((ids == null || ids.Count == 0) && string.Equals(normalized, compact, StringComparison.OrdinalIgnoreCase) == false)
+        foreach (var key in possibleKeys)
         {
-            var normalizedNoQuotes = NormalizeWithoutQuotes(input);
-            if (!string.IsNullOrWhiteSpace(normalizedNoQuotes))
-                _lookup.TryGetValue(normalizedNoQuotes, out ids);
+            if (_lookup.TryGetValue(key, out ids) && ids?.Count > 0)
+            {
+                matchedKeys.Add($"{key} => [{string.Join(", ", ids)}]");
+                break;
+            }
         }
+
+        Console.WriteLine($"[BulkLookup][{LookupType}] ResolveAsync matching keys: {(matchedKeys.Count == 0 ? "none" : string.Join("; ", matchedKeys))}");
 
         if (ids == null || ids.Count == 0)
             return (false, null, $"'{input}' was not found for lookup '{LookupType}'.");
@@ -112,6 +113,58 @@ public abstract class BulkLookupResolverBase : IBulkLookupResolver, IBulkLookupC
             .ToLowerInvariant();
     }
 
+    protected static string NormalizeLookupValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var normalizedChars = value
+            .Trim()
+            .Select(c =>
+            {
+                if (char.IsControl(c))
+                    return ' ';
+
+                if (c == '\u00A0')
+                    return ' ';
+
+                if (c == '\t' || c == '\n' || c == '\r' || c == '-' || c == '_')
+                    return ' ';
+
+                return c;
+            })
+            .ToArray();
+
+        return string.Join(
+            " ",
+            new string(normalizedChars)
+                 .ToLowerInvariant()
+                 .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+        );
+    }
+
+    protected static IEnumerable<string> GetLookupKeys(string? value)
+    {
+        var normalized = Normalize(value);
+        var compact = NormalizeCompact(value);
+        var withoutQuotes = NormalizeWithoutQuotes(value);
+        var normalizedLookup = NormalizeLookupValue(value);
+        var compactNormalizedLookup = NormalizeCompact(normalizedLookup);
+        var withoutQuotesNormalizedLookup = NormalizeWithoutQuotes(normalizedLookup);
+
+        return new[]
+        {
+            normalized,
+            compact,
+            withoutQuotes,
+            normalizedLookup,
+            compactNormalizedLookup,
+            withoutQuotesNormalizedLookup
+        }
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
     private static void AddAlias(Dictionary<string, List<int>> map, string key, int id)
     {
         if (string.IsNullOrWhiteSpace(key))
@@ -141,29 +194,11 @@ public class AccountBulkLookupResolver : BulkLookupResolverBase
 
     public override string LookupType => "account";
 
-    private static string NormalizeLookupValue(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return string.Empty;
-
-        value = value.Replace("\t", " ")
-                     .Replace("\n", " ")
-                     .Replace("\r", " ")
-                     .Replace("-", " ")
-                     .Replace("_", " ");
-
-        return string.Join(
-            " ",
-            value.Trim()
-                 .ToLowerInvariant()
-                 .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
-        );
-    }
-
     protected override async Task<Dictionary<string, List<int>>> LoadAsync(CancellationToken cancellationToken)
     {
         var accounts = await _db.Accounts
             .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x => !x.IsDeleted)
             .Select(x => new
             {
@@ -173,6 +208,7 @@ public class AccountBulkLookupResolver : BulkLookupResolverBase
             })
             .ToListAsync(cancellationToken);
 
+        Console.WriteLine($"[BulkLookup][account] LoadAsync total accounts loaded: {accounts.Count}");
         var lookup = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var account in accounts)
@@ -180,43 +216,33 @@ public class AccountBulkLookupResolver : BulkLookupResolverBase
             var accountId = account.AccountId;
             var accountName = account.AccountName ?? string.Empty;
             var accountCode = account.AccountCode ?? string.Empty;
+            var combined = string.IsNullOrWhiteSpace(accountCode)
+                ? accountName
+                : $"{accountName} ({accountCode})";
 
             var keys = new[]
             {
-            accountName,
-            accountName.Trim(),
-            accountName.ToLowerInvariant(),
-            NormalizeLookupValue(accountName),
+                accountName,
+                accountCode,
+                combined
+            }
+            .SelectMany(GetLookupKeys)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
-            accountCode,
-            accountCode.Trim(),
-            accountCode.ToLowerInvariant(),
-            NormalizeLookupValue(accountCode),
-
-            $"{accountName} ({accountCode})",
-            $"{accountName.Trim()} ({accountCode.Trim()})",
-            $"{accountName.ToLowerInvariant()} ({accountCode.ToLowerInvariant()})",
-            NormalizeLookupValue($"{accountName} ({accountCode})")
-        }
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct(StringComparer.OrdinalIgnoreCase);
+            Console.WriteLine(
+                $"[BulkLookup][account] LoadAsync account loaded: Id={accountId}, Name='{accountName}', Code='{accountCode}', Keys={string.Join(", ", keys.Select(x => $"'{x}'"))}");
 
             foreach (var key in keys)
             {
-                var normalizedKey = NormalizeLookupValue(key);
-
-                if (string.IsNullOrWhiteSpace(normalizedKey))
-                    continue;
-
-                if (!lookup.ContainsKey(normalizedKey))
+                if (!lookup.TryGetValue(key, out var ids))
                 {
-                    lookup[normalizedKey] = new List<int>();
+                    ids = new List<int>();
+                    lookup[key] = ids;
                 }
 
-                if (!lookup[normalizedKey].Contains(accountId))
-                {
-                    lookup[normalizedKey].Add(accountId);
-                }
+                if (!ids.Contains(accountId))
+                    ids.Add(accountId);
             }
         }
 
@@ -320,3 +346,4 @@ public class GeofenceBulkLookupResolver : BulkLookupResolverBase
         return BuildLookupMap(items, x => x.Id, x => new[] { x.DisplayName, x.UniqueCode });
     }
 }
+

@@ -95,16 +95,54 @@ public class DeviceCategory
 }
 
 
+[Table("NetworkProviders")]
 public class NetworkProvider
 {
+    [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
+
+    [MaxLength(50)]
+    public string Code { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(150)]
     public string Name { get; set; } = string.Empty;
+
+    public string? Description { get; set; }
+
+    public bool IsEnabled { get; set; } = true;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public DateTime? UpdatedAt { get; set; }
+
+    public bool IsDeleted { get; set; } = false;
 }
 
+[Table("VehicleBrandOems")]
 public class VehicleBrandOem
 {
+    [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int Id { get; set; }
+
+    [MaxLength(50)]
+    public string Code { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(150)]
     public string Name { get; set; } = string.Empty;
+
+    public string? Description { get; set; }
+
+    public bool IsEnabled { get; set; } = true;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public DateTime? UpdatedAt { get; set; }
+
+    public bool IsDeleted { get; set; } = false;
 }
 
 public class LeasedVendor

@@ -504,7 +504,7 @@ public class BulkProcessor : IBulkProcessor
 
     private async Task<string> GenerateErrorReportAsync(int jobId, List<BulkRowErrorDto> errors, CancellationToken ct)
     {
-        var folder = Path.Combine("uploads", "bulk-errors");
+        var folder = Path.Combine(AppContext.BaseDirectory, "uploads", "bulk-errors");
         Directory.CreateDirectory(folder);
 
         var filePath = Path.Combine(folder, $"bulk_errors_{jobId}_{DateTime.UtcNow:yyyyMMddHHmmss}.xlsx");

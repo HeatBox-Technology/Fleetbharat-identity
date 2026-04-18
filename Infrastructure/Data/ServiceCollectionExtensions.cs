@@ -19,6 +19,7 @@ namespace Infrastructure.Data
                 options.UseNpgsql(connectionString));
 
             services.AddScoped<IDeviceService, DeviceService>();
+            services.AddScoped<IDeviceTransferService, DeviceTransferService>();
             services.AddScoped<IDeviceTypeService, DeviceTypeService>();
             services.AddScoped<IVehicleService, VehicleService>();
             services.AddScoped<IVehicleTypeService, VehicleTypeService>();
@@ -30,6 +31,8 @@ namespace Infrastructure.Data
             services.AddScoped<IDeviceSimMapService, DeviceSimMapService>();
             services.AddScoped<IVehicleSensorMapService, VehicleSensorMapService>();
             services.AddScoped<IOemManufacturerService, OemManufacturerService>();
+            services.AddScoped<INetworkProviderService, NetworkProviderService>();
+            services.AddScoped<IVehicleBrandService, VehicleBrandService>();
             services.AddScoped<IDriverService, DriverService>();
             services.AddScoped<IGeofenceService, GeofenceService>();
             services.AddScoped<IVehicleGeofenceMapService, VehicleGeofenceMapService>();

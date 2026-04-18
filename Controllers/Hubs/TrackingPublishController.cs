@@ -50,7 +50,7 @@ public class TrackingPublishController : ControllerBase
         var payload = JsonSerializer.Serialize(dto);
 
         var sub = _mux.GetSubscriber();
-        await sub.PublishAsync(channel, payload);
+        await sub.PublishAsync(RedisChannel.Literal(channel), payload);
 
         return Ok(new { ok = true, channel });
     }

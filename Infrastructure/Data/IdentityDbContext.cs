@@ -51,6 +51,8 @@ public class IdentityDbContext : DbContext
        /// </summary>
        /// <param name="modelBuilder"></param>
        public DbSet<mst_device> Devices { get; set; }
+       public DbSet<device_transfer> DeviceTransfers { get; set; }
+       public DbSet<device_transfer_item> DeviceTransferItems { get; set; }
        public DbSet<mst_device_type> DeviceTypes { get; set; }
        public DbSet<mst_trip_type> TripTypes { get; set; }
        public DbSet<mst_vehicle> Vehicles { get; set; }
@@ -349,6 +351,71 @@ public class IdentityDbContext : DbContext
                       .OnDelete(DeleteBehavior.Restrict);
 
                      e.HasIndex(x => x.SolutionId);
+              });
+
+              modelBuilder.Entity<mst_device>(entity =>
+              {
+                     entity.HasIndex(x => x.AccountId)
+                           .HasDatabaseName("idx_mst_device_accountid");
+              });
+
+              modelBuilder.Entity<device_transfer>(entity =>
+              {
+                     entity.ToTable("device_transfer");
+                     entity.HasKey(x => x.Id);
+
+                     entity.Property(x => x.TransferCode)
+                           .HasMaxLength(50)
+                           .IsRequired();
+
+                     entity.Property(x => x.Status)
+                           .HasMaxLength(20)
+                           .IsRequired();
+
+                     entity.Property(x => x.Remarks)
+                           .HasMaxLength(255);
+
+                     entity.Property(x => x.CreatedAt)
+                           .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                     entity.HasIndex(x => x.TransferCode)
+                           .IsUnique()
+                           .HasDatabaseName("ux_device_transfer_code");
+
+                     entity.HasIndex(x => x.Status)
+                           .HasDatabaseName("idx_device_transfer_status");
+
+                     entity.HasIndex(x => x.FromAccountId)
+                           .HasDatabaseName("idx_device_transfer_from_account");
+
+                     entity.HasIndex(x => x.ToAccountId)
+                           .HasDatabaseName("idx_device_transfer_to_account");
+              });
+
+              modelBuilder.Entity<device_transfer_item>(entity =>
+              {
+                     entity.ToTable("device_transfer_items");
+                     entity.HasKey(x => x.Id);
+
+                     entity.Property(x => x.CreatedAt)
+                           .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                     entity.HasIndex(x => x.TransferId)
+                           .HasDatabaseName("idx_transfer_items_transferid");
+
+                     entity.HasIndex(x => new { x.TransferId, x.DeviceId })
+                           .IsUnique()
+                           .HasDatabaseName("ux_transfer_items_transfer_device");
+
+                     entity.HasOne(x => x.Transfer)
+                           .WithMany(x => x.Items)
+                           .HasForeignKey(x => x.TransferId)
+                           .OnDelete(DeleteBehavior.Cascade);
+
+                     entity.HasOne(x => x.Device)
+                           .WithMany()
+                           .HasForeignKey(x => x.DeviceId)
+                           .OnDelete(DeleteBehavior.Restrict);
               });
 
               modelBuilder.Entity<mst_trip_type>(entity =>

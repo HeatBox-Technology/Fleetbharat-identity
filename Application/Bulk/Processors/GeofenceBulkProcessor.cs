@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -14,7 +15,8 @@ public class GeofenceBulkProcessor : IBulkModuleProcessor
 
     public async Task ProcessAsync(string payloadJson)
     {
-        var dto = JsonSerializer.Deserialize<CreateGeofenceDto>(payloadJson);
+        var dto = JsonSerializer.Deserialize<CreateGeofenceDto>(payloadJson)
+            ?? throw new InvalidOperationException("Invalid geofence bulk payload.");
 
         await _service.CreateAsync(dto);
     }
