@@ -844,6 +844,7 @@ public class AccountProvisionService : IAccountProvisionService
                 businessEmail: req.BusinessEmail,
                 phone: req.phone,
                 userName: req.UserName,
+                email: req.email,
                 excludeAccountId: accountId);
 
             // Account Code
@@ -1130,11 +1131,13 @@ public class AccountProvisionService : IAccountProvisionService
         string? businessEmail,
         string? phone,
         string? userName,
+        string? email = null,
         int? excludeAccountId = null)
     {
         var normalizedBusinessEmail = businessEmail?.Trim().ToLowerInvariant();
         var normalizedPhone = phone?.Trim();
         var normalizedUserName = userName?.Trim();
+        var normalizedEmail = email?.Trim().ToLowerInvariant();
 
         if (!string.IsNullOrWhiteSpace(normalizedBusinessEmail))
         {
@@ -1153,6 +1156,24 @@ public class AccountProvisionService : IAccountProvisionService
 
             if (businessEmailExistsInUsers)
                 throw new InvalidOperationException("Business email already exists in user table");
+        }
+        if (!string.IsNullOrWhiteSpace(normalizedEmail))
+        {
+            var emailExistsInAccounts = await _db.Accounts.AnyAsync(x =>
+                !x.IsDeleted &&
+                (!excludeAccountId.HasValue || x.AccountId != excludeAccountId.Value) &&
+                x.email.ToLower() == normalizedEmail);
+
+            if (emailExistsInAccounts)
+                throw new InvalidOperationException("Email already exists");
+
+            var emailExistsInUsers = await _db.Users.AnyAsync(x =>
+                !x.IsDeleted &&
+                (!excludeAccountId.HasValue || x.AccountId != excludeAccountId.Value) &&
+                x.Email.ToLower() == normalizedEmail);
+
+            if (emailExistsInUsers)
+                throw new InvalidOperationException("Email already exists in user table");
         }
 
         if (!string.IsNullOrWhiteSpace(normalizedPhone))
