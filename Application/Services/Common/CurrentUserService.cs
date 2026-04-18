@@ -7,15 +7,24 @@ using Microsoft.AspNetCore.Http;
 public class CurrentUserService : ICurrentUserService
 {
     private readonly IHttpContextAccessor _http;
+    private readonly BackgroundCurrentUserContext _backgroundContext;
 
-    public CurrentUserService(IHttpContextAccessor http)
+    public CurrentUserService(IHttpContextAccessor http, BackgroundCurrentUserContext backgroundContext)
     {
         _http = http;
+        _backgroundContext = backgroundContext;
     }
 
-    private ClaimsPrincipal User => _http.HttpContext?.User;
+    private ClaimsPrincipal? User => _http.HttpContext?.User;
+    private bool HasBackgroundContext =>
+        _backgroundContext.IsAuthenticated ||
+        _backgroundContext.AccountId > 0 ||
+        _backgroundContext.AccessibleAccountIds.Count > 0;
 
     public Guid UserId =>
+        HasBackgroundContext
+            ? _backgroundContext.UserId
+            :
         Guid.TryParse(
             User?.FindFirstValue("UserId") ??
             User?.FindFirstValue(ClaimTypes.NameIdentifier) ??
@@ -25,6 +34,9 @@ public class CurrentUserService : ICurrentUserService
             : Guid.Empty;
 
     public int AccountId =>
+        HasBackgroundContext
+            ? _backgroundContext.AccountId
+            :
         int.TryParse(
             User?.FindFirstValue("AccountId") ??
             User?.FindFirstValue("accountId"),
@@ -32,6 +44,9 @@ public class CurrentUserService : ICurrentUserService
             ? id : 0;
 
     public int RoleId =>
+        HasBackgroundContext
+            ? _backgroundContext.RoleId
+            :
         int.TryParse(
             User?.FindFirstValue("RoleId") ??
             User?.FindFirstValue("roleId"),
@@ -39,19 +54,31 @@ public class CurrentUserService : ICurrentUserService
             ? roleId : 0;
 
     public string Role =>
+        HasBackgroundContext
+            ? _backgroundContext.Role
+            :
         User?.FindFirstValue(ClaimTypes.Role) ??
         User?.FindFirstValue("Role") ??
         "";
 
     public string HierarchyPath =>
+        HasBackgroundContext
+            ? _backgroundContext.HierarchyPath
+            :
         User?.FindFirstValue("HierarchyPath") ??
         User?.FindFirstValue("hierarchyPath") ??
         "";
 
     public bool IsAuthenticated =>
+        HasBackgroundContext
+            ? _backgroundContext.IsAuthenticated
+            :
         User?.Identity?.IsAuthenticated == true;
 
     public bool IsSystemRole =>
+        HasBackgroundContext
+            ? _backgroundContext.IsSystemRole
+            :
         bool.TryParse(User?.FindFirstValue("IsSystemRole"), out var isSystemRole)
             ? isSystemRole
             : false;
@@ -60,6 +87,9 @@ public class CurrentUserService : ICurrentUserService
     {
         get
         {
+            if (HasBackgroundContext)
+                return _backgroundContext.AccessibleAccountIds;
+
             var raw = User?.FindFirstValue("AccessibleAccountIds");
 
             if (string.IsNullOrWhiteSpace(raw))

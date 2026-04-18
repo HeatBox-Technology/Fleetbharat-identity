@@ -30,6 +30,9 @@ public class TemplateService : ITemplateService
             .Where(x => !BulkUploadColumnDefinitionParser.IsSystemManagedFieldName(x.PropertyName))
             .ToList();
 
+        if (string.Equals(moduleKey, "geofence-master", System.StringComparison.OrdinalIgnoreCase))
+            return GenerateGeofenceTemplate(format);
+
         if (columns.Count == 0)
             throw new InvalidDataException($"ColumnsJson is empty for module '{moduleKey}'.");
 
@@ -50,6 +53,39 @@ public class TemplateService : ITemplateService
         using var ms = new MemoryStream();
         workbook.SaveAs(ms);
         return (ms.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{moduleKey}_template.xlsx");
+    }
+
+    private static (byte[] Content, string ContentType, string FileName) GenerateGeofenceTemplate(string format)
+    {
+        var headers = new[]
+        {
+            "AccountName",
+            "UniqueCode",
+            "DisplayName",
+            "GeometryType",
+            "Latitude",
+            "Longitude",
+            "GeoPoint",
+            "RadiusM"
+        };
+
+        if (string.Equals(format, "csv", System.StringComparison.OrdinalIgnoreCase))
+        {
+            var csv = string.Join(",", headers.Select(EscapeCsv));
+            return (Encoding.UTF8.GetBytes(csv), "text/csv", "geofence-master_template.csv");
+        }
+
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("Template");
+        for (int i = 0; i < headers.Length; i++)
+            ws.Cell(1, i + 1).Value = headers[i];
+
+        ws.Row(1).Style.Font.Bold = true;
+        ws.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        workbook.SaveAs(ms);
+        return (ms.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "geofence-master_template.xlsx");
     }
 
     private static string EscapeCsv(string value)

@@ -70,7 +70,6 @@ builder.Services.AddHttpClient<IExternalMappingApiService, ExternalMappingApiSer
 {
     //client.BaseAddress = new Uri("http://47.131.171.150:5000/api/v1/"); // external base url
     client.BaseAddress = new Uri("http://92.4.76.230:8083/api/v1/"); // local for testing
-
 });
 builder.Services.AddHttpClient<IWhatsAppService, WhatsAppService>();
 
@@ -93,6 +92,7 @@ builder.Services.AddScoped<IPlanAddonService, PlanAddonService>();
 builder.Services.AddScoped<ICustomerPlanService, CustomerPlanService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<BackgroundCurrentUserContext>();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<AuditSaveChangesInterceptor>();
 builder.Services.AddSingleton<AuditQueue>();
@@ -152,10 +152,10 @@ builder.Services.AddSingleton<IExternalSyncConcurrencyLimiter>(sp =>
     var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ExternalSyncWorkerOptions>>().Value;
     return new ExternalSyncConcurrencyLimiter(options.MaxConcurrency);
 });
-if (IsHostedServiceEnabled("ExternalSyncWorker"))
-{
-    builder.Services.AddHostedService<ExternalSyncWorker>();
-}
+// if (IsHostedServiceEnabled("ExternalSyncWorker"))
+// {
+//     builder.Services.AddHostedService<ExternalSyncWorker>();
+// }
 
 if (IsHostedServiceEnabled("BillingScheduler"))
 {
@@ -267,7 +267,7 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "IOT.IdentityService API",
+        Title = "FleetBharat.IdentityService API",
         Version = "v1"
     });
     // 🔐 Bearer Token Configuration
