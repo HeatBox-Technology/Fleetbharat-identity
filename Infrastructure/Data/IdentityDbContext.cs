@@ -69,6 +69,7 @@ public class IdentityDbContext : DbContext
        public DbSet<OemManufacturer> OemManufacturers { get; set; }
        public DbSet<DeviceCategory> DeviceCategories { get; set; }
        public DbSet<NetworkProvider> NetworkProviders { get; set; }
+       public DbSet<ServiceVendor> ServiceVendors { get; set; }
        public DbSet<VehicleBrandOem> VehicleBrandOems { get; set; }
        public DbSet<LeasedVendor> LeasedVendors { get; set; }
        public DbSet<mst_Geofence> GeofenceZones { get; set; }
