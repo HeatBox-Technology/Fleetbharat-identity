@@ -32,6 +32,7 @@ namespace Infrastructure.Data
             services.AddScoped<IVehicleSensorMapService, VehicleSensorMapService>();
             services.AddScoped<IOemManufacturerService, OemManufacturerService>();
             services.AddScoped<INetworkProviderService, NetworkProviderService>();
+            services.AddScoped<IServiceVendorService, ServiceVendorService>();
             services.AddScoped<IVehicleBrandService, VehicleBrandService>();
             services.AddScoped<IDriverService, DriverService>();
             services.AddScoped<IGeofenceService, GeofenceService>();
