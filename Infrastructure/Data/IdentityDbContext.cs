@@ -56,6 +56,7 @@ public class IdentityDbContext : DbContext
        public DbSet<mst_device_type> DeviceTypes { get; set; }
        public DbSet<mst_trip_type> TripTypes { get; set; }
        public DbSet<mst_vehicle> Vehicles { get; set; }
+       public DbSet<vehicle_compliance> VehicleCompliances { get; set; }
        public DbSet<mst_vehicle_type> VehicleTypes { get; set; }
        public DbSet<mst_sim> Sims { get; set; }
        public DbSet<lkp_sensor_type> SensorTypes { get; set; }
@@ -70,6 +71,7 @@ public class IdentityDbContext : DbContext
        public DbSet<DeviceCategory> DeviceCategories { get; set; }
        public DbSet<NetworkProvider> NetworkProviders { get; set; }
        public DbSet<ServiceVendor> ServiceVendors { get; set; }
+       public DbSet<DeviceModel> DeviceModels { get; set; }
        public DbSet<VehicleBrandOem> VehicleBrandOems { get; set; }
        public DbSet<LeasedVendor> LeasedVendors { get; set; }
        public DbSet<mst_Geofence> GeofenceZones { get; set; }
