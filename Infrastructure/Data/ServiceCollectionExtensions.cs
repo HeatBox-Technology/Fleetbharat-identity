@@ -22,6 +22,7 @@ namespace Infrastructure.Data
             services.AddScoped<IDeviceTransferService, DeviceTransferService>();
             services.AddScoped<IDeviceTypeService, DeviceTypeService>();
             services.AddScoped<IVehicleService, VehicleService>();
+            services.AddScoped<IVehicleComplianceService, VehicleComplianceService>();
             services.AddScoped<IVehicleTypeService, VehicleTypeService>();
             services.AddScoped<ISimService, SimService>();
             services.AddScoped<ISensorTypeService, SensorTypeService>();
@@ -32,6 +33,8 @@ namespace Infrastructure.Data
             services.AddScoped<IVehicleSensorMapService, VehicleSensorMapService>();
             services.AddScoped<IOemManufacturerService, OemManufacturerService>();
             services.AddScoped<INetworkProviderService, NetworkProviderService>();
+            services.AddScoped<IServiceVendorService, ServiceVendorService>();
+            services.AddScoped<IDeviceModelService, DeviceModelService>();
             services.AddScoped<IVehicleBrandService, VehicleBrandService>();
             services.AddScoped<IDriverService, DriverService>();
             services.AddScoped<IGeofenceService, GeofenceService>();

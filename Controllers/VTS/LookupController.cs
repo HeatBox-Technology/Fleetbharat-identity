@@ -60,6 +60,17 @@ public class LookupController : ControllerBase
         return Ok(data);
     }
 
+    [HttpGet("service-vendors")]
+    public async Task<IActionResult> GetServiceVendors()
+    {
+        var data = await _context.ServiceVendors
+            .Where(x => !x.IsDeleted && x.IsEnabled)
+            .Select(x => new { x.Id, x.Name })
+            .ToListAsync();
+
+        return Ok(data);
+    }
+
     /// <summary>
     /// Gets all vehicle brand OEMs.
     /// </summary>
