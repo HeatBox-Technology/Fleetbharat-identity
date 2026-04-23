@@ -24,7 +24,7 @@ public class VehicleDto
 
     /// <summary>VIN or chassis number</summary>
     [Required(ErrorMessage = "VIN/Chassis number is required.")]
-    [RegularExpression(VehicleValidationRules.VinPattern, ErrorMessage = "VIN/Chassis number must be exactly 17 characters and can contain only A-H, J-N, P, R-Z, and digits.")]
+    [StringLength(17, ErrorMessage = "VIN/Chassis number must be exactly 17 characters.")]
     public string VinOrChassisNumber { get; set; } = string.Empty;
 
     /// <summary>Vehicle type ID (FK to mst_vehicle_type)</summary>
@@ -52,7 +52,7 @@ public class CreateVehicleDto
     public string VehicleNumber { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "VIN/Chassis number is required.")]
-    [RegularExpression(VehicleValidationRules.VinPattern, ErrorMessage = "VIN/Chassis number must be exactly 17 characters and can contain only A-H, J-N, P, R-Z, and digits.")]
+    [StringLength(17, ErrorMessage = "VIN/Chassis number must be exactly 17 characters.")]
     public string VinOrChassisNumber { get; set; } = string.Empty;
 
     public int VehicleTypeId { get; set; }
@@ -67,7 +67,7 @@ public class UpdateVehicleDto
     public string VehicleNumber { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "VIN/Chassis number is required.")]
-    [RegularExpression(VehicleValidationRules.VinPattern, ErrorMessage = "VIN/Chassis number must be exactly 17 characters and can contain only A-H, J-N, P, R-Z, and digits.")]
+    [StringLength(17, ErrorMessage = "VIN/Chassis number must be exactly 17 characters.")]
     public string VinOrChassisNumber { get; set; } = string.Empty;
 
     public int VehicleTypeId { get; set; }
