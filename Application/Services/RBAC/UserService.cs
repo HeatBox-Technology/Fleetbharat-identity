@@ -847,7 +847,6 @@ public class UserService : IUserService
                 RoleName = role != null ? role.RoleName : string.Empty,
                 user.Status,
                 user.TwoFactorEnabled,
-                user.EmailVerified,
                 user.CreatedAt,
                 user.UpdatedAt
             })
@@ -879,7 +878,6 @@ public class UserService : IUserService
                 $"{Escape(item.RoleName)}," +
                 $"{Escape(item.Status ? "Active" : "Inactive")}," +
                 $"{Escape(item.TwoFactorEnabled ? "Enabled" : "Disabled")}," +
-                $"{Escape(item.EmailVerified ? "Yes" : "No")}," +
                 $"{Escape(FormatDate(item.CreatedAt))}," +
                 $"{Escape(FormatDate(item.UpdatedAt))}"
             );
@@ -928,7 +926,6 @@ public class UserService : IUserService
                 RoleName = role != null ? role.RoleName : string.Empty,
                 user.Status,
                 user.TwoFactorEnabled,
-                user.EmailVerified,
                 user.CreatedAt,
                 user.UpdatedAt
             })
@@ -948,7 +945,6 @@ public class UserService : IUserService
             worksheet.Cell(1, 7).Value = "Role";
             worksheet.Cell(1, 8).Value = "Status";
             worksheet.Cell(1, 9).Value = "Two Factor Enabled";
-            worksheet.Cell(1, 10).Value = "Email Verified";
             worksheet.Cell(1, 11).Value = "Created On";
             worksheet.Cell(1, 12).Value = "Updated On";
 
@@ -970,7 +966,6 @@ public class UserService : IUserService
                 worksheet.Cell(rowNumber, 7).Value = item.RoleName;
                 worksheet.Cell(rowNumber, 8).Value = item.Status ? "Active" : "Inactive";
                 worksheet.Cell(rowNumber, 9).Value = item.TwoFactorEnabled ? "Enabled" : "Disabled";
-                worksheet.Cell(rowNumber, 10).Value = item.EmailVerified ? "Yes" : "No";
                 worksheet.Cell(rowNumber, 11).Value = item.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss");
                 worksheet.Cell(rowNumber, 12).Value = item.UpdatedAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "";
                 rowNumber++;
