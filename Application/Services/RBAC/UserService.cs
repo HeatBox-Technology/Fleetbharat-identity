@@ -853,7 +853,7 @@ public class UserService : IUserService
             .ToListAsync();
 
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine("Account Name,Username,Email,First Name,Last Name,Mobile No,Role,Status,Two Factor Enabled,Email Verified,Created On,Updated On");
+        sb.AppendLine("Account Name,Username,Email,First Name,Last Name,Mobile No,Role,Status,Two Factor Enabled,Created On,Updated On");
 
         static string Escape(string? value)
         {
