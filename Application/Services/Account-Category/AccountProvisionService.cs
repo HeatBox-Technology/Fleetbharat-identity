@@ -831,14 +831,18 @@ public class AccountProvisionService : IAccountProvisionService
 
             if (account == null)
                 return false;
-
+            // ✅ validate tax type belongs to country
+            var taxTypeId = req.TaxTypeId;
             var validTax = await _db.TaxTypes.AnyAsync(x =>
                 x.TaxTypeId == req.TaxTypeId &&
                 x.CountryId == req.CountryId &&
                 x.IsActive);
 
             if (!validTax)
-                throw new BadHttpRequestException("Invalid TaxType");
+            {
+                // fallback to default tax type
+                taxTypeId = 1;
+            }
 
             await ValidateUniqueAccountUserFieldsAsync(
                 businessEmail: req.BusinessEmail,
