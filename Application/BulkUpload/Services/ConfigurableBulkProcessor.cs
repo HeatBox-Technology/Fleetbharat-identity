@@ -74,7 +74,7 @@ public class ConfigurableBulkProcessor : IBulkProcessor
         ValidateColumnConfiguration(dtoType, columns, workItem.ModuleKey);
         var service = _serviceResolver.ResolveService(config.ServiceInterface);
         var method = ResolveMethod(service.GetType(), config.ServiceMethod, dtoType);
-        var customValidator = _customValidators.FirstOrDefault(x => string.Equals(x.ModuleKey, workItem.ModuleKey, StringComparison.OrdinalIgnoreCase));
+        var customValidator = _customValidators.FirstOrDefault(x => ModuleKeysMatch(x.ModuleKey, workItem.ModuleKey));
 
         await _lookupResolverService.PreloadAsync(
             columns
@@ -648,6 +648,30 @@ public class ConfigurableBulkProcessor : IBulkProcessor
         }).ToList();
 
         await _db.bulk_job_rows.AddRangeAsync(rowEntities, ct);
+    }
+
+    private static bool ModuleKeysMatch(string? left, string? right)
+    {
+        return string.Equals(NormalizeModuleKey(left), NormalizeModuleKey(right), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeModuleKey(string? moduleKey)
+    {
+        var normalized = moduleKey?.Trim().ToLowerInvariant() ?? string.Empty;
+
+        return normalized switch
+        {
+            "vehicle" => "vehicles",
+            "vehicles" => "vehicles",
+            "device" => "devices",
+            "devices" => "devices",
+            "driver" => "drivers",
+            "drivers" => "drivers",
+            "geofence" => "geofence",
+            "geofences" => "geofence",
+            "geofence-master" => "geofence",
+            _ => normalized
+        };
     }
 
     private sealed class RowCandidate

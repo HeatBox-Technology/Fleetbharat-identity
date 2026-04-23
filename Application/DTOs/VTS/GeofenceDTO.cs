@@ -13,6 +13,9 @@ public class CreateGeofenceDto
     public string GeometryType { get; set; } = string.Empty;   // CIRCLE / POLYGON
     public int? RadiusM { get; set; }
     public string CoordinatesJson { get; set; } = string.Empty;
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    public string? GeoPoint { get; set; }
 
     public List<CoordinateDto> Coordinates { get; set; } = new();
 

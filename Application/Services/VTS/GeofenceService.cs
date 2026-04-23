@@ -30,38 +30,7 @@ public class GeofenceService : IGeofenceService
 
     public async Task<int> CreateAsync(CreateGeofenceDto dto)
     {
-        dto.Coordinates = NormalizeCoordinates(dto.Coordinates, dto.CoordinatesJson);
-
-        var code = dto.UniqueCode?.Trim().ToUpper();
-
-        if (string.IsNullOrWhiteSpace(code))
-            throw new Exception("Unique code is required");
-
-        var exists = await _db.GeofenceZones
-            .ApplyAccountHierarchyFilter(_currentUser)
-            .AnyAsync(x => x.UniqueCode == code &&
-                           x.AccountId == dto.AccountId &&
-                           !x.IsDeleted);
-
-        if (exists)
-            throw new InvalidOperationException("Geofence already exists.");
-
-        var geom = BuildGeometry(dto.GeometryType, dto.Coordinates);
-
-        var entity = new mst_Geofence
-        {
-            AccountId = dto.AccountId,
-            UniqueCode = code,
-            DisplayName = dto.DisplayName?.Trim(),
-            GeometryType = dto.GeometryType,
-            RadiusM = dto.GeometryType == "CIRCLE" ? dto.RadiusM : null,
-            Geom = geom,
-            CoordinatesJson = JsonDocument.Parse(JsonSerializer.Serialize(dto.Coordinates)),
-            Status = dto.IsEnabled ? "ENABLED" : "DISABLED",
-            IsActive = dto.IsEnabled,
-            CreatedBy = dto.CreatedBy,
-            CreatedAt = DateTime.UtcNow
-        };
+        var entity = await BuildGeofenceEntityAsync(dto);
 
         _db.GeofenceZones.Add(entity);
         await _db.SaveChangesAsync();
@@ -424,41 +393,11 @@ public class GeofenceService : IGeofenceService
             return new List<GeofenceDto>();
 
         var entities = new List<mst_Geofence>();
+        var batchKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var dto in items)
         {
-            dto.Coordinates = NormalizeCoordinates(dto.Coordinates, dto.CoordinatesJson);
-
-            var code = dto.UniqueCode.Trim().ToUpper();
-
-            var exists = await _db.GeofenceZones
-                .ApplyAccountHierarchyFilter(_currentUser)
-                .AnyAsync(x => x.UniqueCode == code &&
-                               x.AccountId == dto.AccountId &&
-                               !x.IsDeleted);
-
-            if (exists)
-                continue; // skip duplicates
-
-            var entity = new mst_Geofence
-            {
-                AccountId = dto.AccountId,
-                UniqueCode = code,
-                DisplayName = dto.DisplayName.Trim(),
-                Description = dto.Description,
-                ClassificationCode = dto.ClassificationCode,
-                ClassificationLabel = dto.ClassificationLabel,
-                GeometryType = dto.GeometryType,
-                RadiusM = dto.RadiusM,
-                Geom = BuildGeometry(dto.GeometryType, dto.Coordinates),
-                ColorTheme = dto.ColorTheme,
-                Opacity = dto.Opacity,
-                Status = dto.IsEnabled ? "ENABLED" : "DISABLED",
-                CreatedBy = dto.CreatedBy,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            entities.Add(entity);
+            entities.Add(await BuildGeofenceEntityAsync(dto, batchKeys));
         }
 
         _db.GeofenceZones.AddRange(entities);
@@ -477,6 +416,54 @@ public class GeofenceService : IGeofenceService
             ColorTheme = x.ColorTheme,
             CreatedAt = x.CreatedAt
         }).ToList();
+    }
+
+    private async Task<mst_Geofence> BuildGeofenceEntityAsync(
+        CreateGeofenceDto dto,
+        ISet<string>? batchKeys = null)
+    {
+        dto.Coordinates = NormalizeCoordinates(dto.Coordinates, dto.CoordinatesJson);
+
+        var code = dto.UniqueCode?.Trim().ToUpperInvariant();
+
+        if (string.IsNullOrWhiteSpace(code))
+            throw new Exception("Unique code is required");
+
+        var duplicateKey = $"{dto.AccountId}:{code}";
+        if (batchKeys != null && !batchKeys.Add(duplicateKey))
+            throw new InvalidOperationException("Geofence already exists.");
+
+        var exists = await _db.GeofenceZones
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .AnyAsync(x => x.UniqueCode == code &&
+                           x.AccountId == dto.AccountId &&
+                           !x.IsDeleted);
+
+        if (exists)
+            throw new InvalidOperationException("Geofence already exists.");
+
+        var normalizedGeometryType = dto.GeometryType?.Trim().ToUpperInvariant() ?? string.Empty;
+        var geom = BuildGeometry(normalizedGeometryType, dto.Coordinates);
+
+        return new mst_Geofence
+        {
+            AccountId = dto.AccountId,
+            UniqueCode = code,
+            DisplayName = dto.DisplayName?.Trim(),
+            Description = dto.Description?.Trim(),
+            ClassificationCode = dto.ClassificationCode?.Trim(),
+            ClassificationLabel = dto.ClassificationLabel?.Trim(),
+            GeometryType = normalizedGeometryType,
+            RadiusM = normalizedGeometryType == "CIRCLE" ? dto.RadiusM : null,
+            Geom = geom,
+            CoordinatesJson = JsonDocument.Parse(JsonSerializer.Serialize(dto.Coordinates)),
+            ColorTheme = dto.ColorTheme?.Trim(),
+            Opacity = dto.Opacity,
+            Status = dto.IsEnabled ? "ENABLED" : "DISABLED",
+            IsActive = dto.IsEnabled,
+            CreatedBy = dto.CreatedBy,
+            CreatedAt = DateTime.UtcNow
+        };
     }
     private ExternalGeofenceRequest BuildExternalPayload(
     mst_Geofence entity,

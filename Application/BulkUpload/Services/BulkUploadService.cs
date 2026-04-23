@@ -40,9 +40,7 @@ public class BulkUploadService : IBulkUploadService
 
     public async Task<BulkUploadStartResultDto> EnqueueUploadAsync(string moduleKey, IFormFile file, CancellationToken ct = default)
     {
-        var config = await _db.BulkUploadConfigs
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.ModuleKey == moduleKey && x.IsActive, ct);
+        var config = await ResolveConfigAsync(moduleKey, ct);
 
         if (config == null)
             throw new KeyNotFoundException($"Bulk upload config not found for module '{moduleKey}'.");
@@ -85,7 +83,7 @@ public class BulkUploadService : IBulkUploadService
         await _queue.EnqueueAsync(new BulkUploadWorkItem
         {
             JobId = job.Id,
-            ModuleKey = moduleKey,
+            ModuleKey = config.ModuleKey,
             Rows = rows,
             CreatedBy = job.CreatedBy,
             UserId = _currentUser.UserId,
@@ -101,7 +99,7 @@ public class BulkUploadService : IBulkUploadService
         return new BulkUploadStartResultDto
         {
             JobId = job.Id,
-            ModuleKey = moduleKey,
+            ModuleKey = config.ModuleKey,
             TotalRows = rows.Count,
             Status = "PENDING"
         };
@@ -244,7 +242,7 @@ public class BulkUploadService : IBulkUploadService
         string moduleKey,
         List<Dictionary<string, string>> rows)
     {
-        if (!string.Equals(moduleKey, "geofence-master", StringComparison.OrdinalIgnoreCase))
+        if (!IsGeofenceBulkModule(moduleKey))
             return rows;
 
         return rows
@@ -396,5 +394,34 @@ public class BulkUploadService : IBulkUploadService
         };
 
         return candidates.FirstOrDefault(File.Exists);
+    }
+
+    private static bool IsGeofenceBulkModule(string? moduleKey)
+    {
+        return string.Equals(moduleKey, "geofence-master", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(moduleKey, "geofence", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<BulkUploadConfig?> ResolveConfigAsync(string moduleKey, CancellationToken ct)
+    {
+        var candidateKeys = GetConfigLookupKeys(moduleKey);
+
+        return await _db.BulkUploadConfigs
+            .AsNoTracking()
+            .Where(x => x.IsActive && candidateKeys.Contains(x.ModuleKey))
+            .OrderBy(x => x.ModuleKey == moduleKey ? 0 : 1)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    private static List<string> GetConfigLookupKeys(string moduleKey)
+    {
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { moduleKey };
+
+        if (string.Equals(moduleKey, "geofence", StringComparison.OrdinalIgnoreCase))
+            keys.Add("geofence-master");
+        else if (string.Equals(moduleKey, "geofence-master", StringComparison.OrdinalIgnoreCase))
+            keys.Add("geofence");
+
+        return keys.ToList();
     }
 }

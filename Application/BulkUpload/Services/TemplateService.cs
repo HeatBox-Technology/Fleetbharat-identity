@@ -18,9 +18,7 @@ public class TemplateService : ITemplateService
 
     public async Task<(byte[] Content, string ContentType, string FileName)> GenerateTemplateAsync(string moduleKey, string format, CancellationToken ct = default)
     {
-        var config = await _db.BulkUploadConfigs
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.ModuleKey == moduleKey && x.IsActive, ct);
+        var config = await ResolveConfigAsync(moduleKey, ct);
 
         if (config == null)
             throw new KeyNotFoundException($"Bulk upload config not found for module '{moduleKey}'.");
@@ -30,7 +28,7 @@ public class TemplateService : ITemplateService
             .Where(x => !BulkUploadColumnDefinitionParser.IsSystemManagedFieldName(x.PropertyName))
             .ToList();
 
-        if (string.Equals(moduleKey, "geofence-master", System.StringComparison.OrdinalIgnoreCase))
+        if (IsGeofenceBulkModule(moduleKey))
             return GenerateGeofenceTemplate(format);
 
         if (columns.Count == 0)
@@ -98,5 +96,34 @@ public class TemplateService : ITemplateService
             return $"\"{v}\"";
 
         return v;
+    }
+
+    private static bool IsGeofenceBulkModule(string? moduleKey)
+    {
+        return string.Equals(moduleKey, "geofence-master", System.StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(moduleKey, "geofence", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<BulkUploadConfig?> ResolveConfigAsync(string moduleKey, CancellationToken ct)
+    {
+        var candidateKeys = GetConfigLookupKeys(moduleKey);
+
+        return await _db.BulkUploadConfigs
+            .AsNoTracking()
+            .Where(x => x.IsActive && candidateKeys.Contains(x.ModuleKey))
+            .OrderBy(x => x.ModuleKey == moduleKey ? 0 : 1)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    private static List<string> GetConfigLookupKeys(string moduleKey)
+    {
+        var keys = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase) { moduleKey };
+
+        if (string.Equals(moduleKey, "geofence", System.StringComparison.OrdinalIgnoreCase))
+            keys.Add("geofence-master");
+        else if (string.Equals(moduleKey, "geofence-master", System.StringComparison.OrdinalIgnoreCase))
+            keys.Add("geofence");
+
+        return keys.ToList();
     }
 }

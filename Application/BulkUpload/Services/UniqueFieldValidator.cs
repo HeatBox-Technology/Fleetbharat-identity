@@ -23,9 +23,30 @@ public class UniqueFieldValidator : IUniqueFieldValidator
         if (string.IsNullOrWhiteSpace(moduleKey))
             return (false, "Module key is required for uniqueness validation.");
 
-        if (!_rules.TryGetValue(moduleKey, out var rule))
+        var normalizedModuleKey = NormalizeModuleKey(moduleKey);
+
+        if (!_rules.TryGetValue(normalizedModuleKey, out var rule))
             return (false, $"No uniqueness validator is registered for module '{moduleKey}'.");
 
         return await rule.ValidateAsync(propertyName, value, scopeValues, cancellationToken);
+    }
+
+    private static string NormalizeModuleKey(string moduleKey)
+    {
+        var normalized = moduleKey.Trim().ToLowerInvariant();
+
+        return normalized switch
+        {
+            "vehicle" => "vehicles",
+            "vehicles" => "vehicles",
+            "device" => "devices",
+            "devices" => "devices",
+            "driver" => "drivers",
+            "drivers" => "drivers",
+            "geofence" => "geofence",
+            "geofences" => "geofence",
+            "geofence-master" => "geofence",
+            _ => normalized
+        };
     }
 }

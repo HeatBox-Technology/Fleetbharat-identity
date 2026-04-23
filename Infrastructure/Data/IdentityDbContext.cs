@@ -66,6 +66,7 @@ public class IdentityDbContext : DbContext
        public DbSet<map_device_sim> DeviceSimMaps { get; set; }
        public DbSet<map_vehicle_sensor> VehicleSensorMaps { get; set; }
        public DbSet<mst_driver> Drivers { get; set; }
+       public DbSet<map_driver_vehicle_assignment> DriverVehicleAssignments { get; set; }
 
        public DbSet<OemManufacturer> OemManufacturers { get; set; }
        public DbSet<DeviceCategory> DeviceCategories { get; set; }
@@ -652,6 +653,47 @@ public class IdentityDbContext : DbContext
              entity.Property(x => x.LastTriedAt)
              .HasColumnName("last_tried_at");
       });
+
+              modelBuilder.Entity<map_driver_vehicle_assignment>(entity =>
+              {
+                     entity.ToTable("map_driver_vehicle_assignment");
+
+                     entity.HasKey(x => x.Id);
+                     entity.Property(x => x.Id).HasColumnName("id");
+                     entity.Property(x => x.AccountId).HasColumnName("account_id");
+                     entity.Property(x => x.DriverId).HasColumnName("driver_id");
+                     entity.Property(x => x.VehicleId).HasColumnName("vehicle_id");
+                     entity.Property(x => x.AssignmentLogic).HasColumnName("assignment_logic").HasMaxLength(50).IsRequired();
+                     entity.Property(x => x.StartTime).HasColumnName("start_time");
+                     entity.Property(x => x.ExpectedEnd).HasColumnName("expected_end");
+                     entity.Property(x => x.DispatcherNotes).HasColumnName("dispatcher_notes").HasMaxLength(1000);
+                     entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+                     entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+                     entity.Property(x => x.UpdatedBy).HasColumnName("updated_by");
+                     entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+                     entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+                     entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+                     entity.Property(x => x.CreatedByUser).HasColumnName("created_by_user");
+                     entity.Property(x => x.CreatedAtUser).HasColumnName("created_at_user");
+                     entity.Property(x => x.UpdatedByUser).HasColumnName("updated_by_user");
+                     entity.Property(x => x.UpdatedAtUser).HasColumnName("updated_at_user");
+                     entity.Property(x => x.DeletedByUser).HasColumnName("deleted_by_user");
+                     entity.Property(x => x.DeletedAtUser).HasColumnName("deleted_at_user");
+                     entity.Property(x => x.IsDeleted).HasColumnName("is_deleted").HasDefaultValue(false);
+
+                     entity.HasIndex(x => new { x.AccountId, x.DriverId });
+                     entity.HasIndex(x => new { x.AccountId, x.VehicleId });
+
+                     entity.HasOne(x => x.Driver)
+                           .WithMany()
+                           .HasForeignKey(x => x.DriverId)
+                           .OnDelete(DeleteBehavior.Restrict);
+
+                     entity.HasOne(x => x.Vehicle)
+                           .WithMany()
+                           .HasForeignKey(x => x.VehicleId)
+                           .OnDelete(DeleteBehavior.Restrict);
+              });
 
               modelBuilder.Entity<external_sync_config>(entity =>
               {

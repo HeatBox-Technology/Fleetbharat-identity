@@ -126,6 +126,8 @@ builder.Services.AddScoped<IBulkUniqueRule, VehicleBulkUniqueRule>();
 builder.Services.AddScoped<IBulkUniqueRule, DeviceBulkUniqueRule>();
 builder.Services.AddScoped<IBulkUniqueRule, DriverBulkUniqueRule>();
 builder.Services.AddScoped<IBulkUniqueRule, GeofenceBulkUniqueRule>();
+builder.Services.AddScoped<IBulkCustomValidator, VehicleBulkCustomValidator>();
+builder.Services.AddScoped<IBulkCustomValidator, GeofenceBulkCustomValidator>();
 builder.Services.AddScoped<IBulkProcessor, ConfigurableBulkProcessor>();
 builder.Services.AddHttpClient<IExternalBulkSyncService, ExternalBulkSyncService>();
 builder.Services.AddScoped<DbLogger>();
