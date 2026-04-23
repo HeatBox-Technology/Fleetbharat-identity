@@ -24,9 +24,10 @@ public class VehicleBulkCustomValidator : IBulkCustomValidator
             errors.Add("Vehicle number cannot exceed 20 characters.");
 
         var vinOrChassisNumber = GetTrimmedString(dto, "VinOrChassisNumber");
-        if (!string.IsNullOrWhiteSpace(vinOrChassisNumber) && !VinRegex.IsMatch(vinOrChassisNumber))
+        if (!string.IsNullOrWhiteSpace(vinOrChassisNumber))
         {
-            errors.Add("VIN/Chassis number must be exactly 17 characters and can contain only A-H, J-N, P, R-Z, and digits.");
+            if (vinOrChassisNumber.Length != 17)
+                errors.Add("VIN/Chassis number must be exactly 17 characters.");
         }
 
         return Task.FromResult(errors);
