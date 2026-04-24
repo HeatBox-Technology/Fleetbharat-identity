@@ -75,23 +75,38 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
             .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x =>
                 vehicleIds.Contains(x.VehicleId) &&
-                geofenceIds.Contains(x.GeofenceId) &&
-                !x.IsDeleted)
-            .Select(x => new { x.VehicleId, x.GeofenceId })
+                geofenceIds.Contains(x.GeofenceId))
             .ToListAsync();
 
-        var existingPairKeys = existingMappings
-            .Select(x => BuildPairKey(x.VehicleId, x.GeofenceId))
-            .ToHashSet(StringComparer.Ordinal);
+        var existingByPair = existingMappings.ToDictionary(
+            x => BuildPairKey(x.VehicleId, x.GeofenceId),
+            x => x,
+            StringComparer.Ordinal);
 
-        var newEntities = new List<map_vehicle_geofence>();
+        var syncEntities = new List<map_vehicle_geofence>();
+        var affectedEntities = new List<map_vehicle_geofence>();
 
         foreach (var pair in requestedPairs)
         {
-            if (existingPairKeys.Contains(BuildPairKey(pair.VehicleId, pair.GeofenceId)))
-                continue;
+            var pairKey = BuildPairKey(pair.VehicleId, pair.GeofenceId);
+            if (existingByPair.TryGetValue(pairKey, out var existingEntity))
+            {
+                if (!existingEntity.IsDeleted)
+                    continue;
 
-            newEntities.Add(new map_vehicle_geofence
+                existingEntity.IsDeleted = false;
+                existingEntity.IsActive = true;
+                existingEntity.Remarks = dto.Remarks;
+                existingEntity.UpdatedBy = dto.CreatedBy;
+                existingEntity.UpdatedByUserId = dto.CreatedByUserId;
+                existingEntity.UpdatedAt = DateTime.UtcNow;
+                existingEntity.SyncStatus = "PENDING";
+                affectedEntities.Add(existingEntity);
+                syncEntities.Add(existingEntity);
+                continue;
+            }
+
+            var newEntity = new map_vehicle_geofence
             {
                 AccountId = dto.AccountId,
                 VehicleId = pair.VehicleId,
@@ -103,18 +118,21 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
                 IsActive = true,
                 IsDeleted = false,
                 SyncStatus = "PENDING"
-            });
+            };
+
+            _db.VehicleGeofenceMaps.Add(newEntity);
+            affectedEntities.Add(newEntity);
+            syncEntities.Add(newEntity);
         }
 
-        if (!newEntities.Any())
+        if (!affectedEntities.Any())
             throw new InvalidOperationException("All mappings already exist.");
 
-        _db.VehicleGeofenceMaps.AddRange(newEntities);
         await _db.SaveChangesAsync();
 
         _ = Task.Run(async () =>
  {
-     var tasks = newEntities.Select(async entity =>
+     var tasks = syncEntities.Select(async entity =>
      {
          try
          {
@@ -128,7 +146,7 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
      await Task.WhenAll(tasks);
  });
 
-        return newEntities.Select(x => x.Id).ToList();
+        return affectedEntities.Select(x => x.Id).ToList();
     }
     #endregion
 
@@ -181,8 +199,7 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
             .ApplyAccountHierarchyFilter(_currentUser)
             .Where(x =>
                 vehicleIds.Contains(x.VehicleId) &&
-                geofenceIds.Contains(x.GeofenceId) &&
-                !x.IsDeleted)
+                geofenceIds.Contains(x.GeofenceId))
             .ToListAsync();
 
         var existingByPair = existingTargetMappings.ToDictionary(
@@ -191,6 +208,17 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
             StringComparer.Ordinal);
 
         var primaryPair = requestedPairs[0];
+        var deletedDuplicate = await _db.VehicleGeofenceMaps
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x =>
+                x.VehicleId == primaryPair.VehicleId &&
+                x.GeofenceId == primaryPair.GeofenceId &&
+                x.Id != id &&
+                x.IsDeleted);
+
+        if (deletedDuplicate != null)
+            _db.VehicleGeofenceMaps.Remove(deletedDuplicate);
+
         var duplicate = await _db.VehicleGeofenceMaps
             .ApplyAccountHierarchyFilter(_currentUser)
             .AnyAsync(x =>
@@ -221,6 +249,14 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
             {
                 if (existingEntity.Id == entity.Id)
                     continue;
+
+                if (existingEntity.IsDeleted)
+                {
+                    existingEntity.IsDeleted = false;
+                    existingEntity.CreatedBy = existingEntity.CreatedBy ?? entity.CreatedBy;
+                    existingEntity.CreatedByUserId ??= entity.CreatedByUserId;
+                    existingEntity.CreatedAt = existingEntity.CreatedAt == default ? DateTime.UtcNow : existingEntity.CreatedAt;
+                }
 
                 existingEntity.Remarks = dto.Remarks;
                 existingEntity.IsActive = dto.IsActive;
@@ -301,6 +337,7 @@ public class VehicleGeofenceMapService : IVehicleGeofenceMapService
         entity.IsDeleted = true;
         entity.IsActive = false;
         entity.UpdatedBy = _currentUser.AccountId;
+        entity.DeletedByUserId = _currentUser.UserId;
         entity.UpdatedByUserId = _currentUser.UserId;
         entity.UpdatedAt = DateTime.UtcNow;
         entity.SyncStatus = "PENDING";
