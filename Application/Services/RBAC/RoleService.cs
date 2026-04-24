@@ -209,20 +209,39 @@ public class RoleService : IRoleService
         if (accountId.HasValue)
             roleQuery = roleQuery.Where(x => x.AccountId == accountId.Value);
 
+        var tableQuery =
+            from r in roleQuery
+            join a in _db.Accounts.AsNoTracking()
+                .ApplyAccountHierarchyFilter(_currentUser)
+                on r.AccountId equals a.AccountId
+            select new
+            {
+                Role = r,
+                AccountName = a.AccountName
+            };
+
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
-            roleQuery = roleQuery.Where(x =>
-                (x.RoleName != null && x.RoleName.ToLower().Contains(s)) ||
-                (x.Description != null && x.Description.ToLower().Contains(s)));
+            var hasCreatedOnSearch = DateTime.TryParse(search.Trim(), out var createdOnSearch);
+            var createdOnStart = hasCreatedOnSearch ? createdOnSearch.Date : DateTime.MinValue;
+            var createdOnEnd = createdOnStart.AddDays(1);
+
+            tableQuery = tableQuery.Where(x =>
+                (x.Role.RoleName != null && x.Role.RoleName.ToLower().Contains(s)) ||
+                (x.Role.Description != null && x.Role.Description.ToLower().Contains(s)) ||
+                (x.AccountName != null && x.AccountName.ToLower().Contains(s)) ||
+                (hasCreatedOnSearch &&
+                    x.Role.CreatedOn >= createdOnStart &&
+                    x.Role.CreatedOn < createdOnEnd));
         }
 
-        var summaryData = await roleQuery
+        var summaryData = await tableQuery
             .GroupBy(x => 1)
             .Select(g => new
             {
                 Total = g.Count(),
-                SystemRoles = g.Count(x => x.IsSystemRole)
+                SystemRoles = g.Count(x => x.Role.IsSystemRole)
             })
             .FirstOrDefaultAsync();
 
@@ -235,17 +254,6 @@ public class RoleService : IRoleService
             SystemRoles = systemRoles,
             CustomRoles = totalRoles - systemRoles
         };
-
-        var tableQuery =
-            from r in roleQuery
-            join a in _db.Accounts.AsNoTracking()
-                .ApplyAccountHierarchyFilter(_currentUser)
-                on r.AccountId equals a.AccountId
-            select new
-            {
-                Role = r,
-                AccountName = a.AccountName
-            };
 
         var totalRecords = await tableQuery.CountAsync();
 
@@ -370,10 +378,21 @@ public class RoleService : IRoleService
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
+            var hasCreatedOnSearch = DateTime.TryParse(search.Trim(), out var createdOnSearch);
+            var createdOnStart = hasCreatedOnSearch ? createdOnSearch.Date : DateTime.MinValue;
+            var createdOnEnd = createdOnStart.AddDays(1);
 
             roleQuery = roleQuery.Where(r =>
                 r.RoleName.ToLower().Contains(s) ||
-                (r.Description != null && r.Description.ToLower().Contains(s))
+                (r.Description != null && r.Description.ToLower().Contains(s)) ||
+                _db.Accounts.AsNoTracking()
+                    .ApplyAccountHierarchyFilter(_currentUser)
+                    .Any(a => a.AccountId == r.AccountId &&
+                        !a.IsDeleted &&
+                        a.AccountName.ToLower().Contains(s)) ||
+                (hasCreatedOnSearch &&
+                    r.CreatedOn >= createdOnStart &&
+                    r.CreatedOn < createdOnEnd)
             );
         }
 
@@ -440,10 +459,21 @@ public class RoleService : IRoleService
         if (!string.IsNullOrWhiteSpace(search))
         {
             var s = search.Trim().ToLower();
+            var hasCreatedOnSearch = DateTime.TryParse(search.Trim(), out var createdOnSearch);
+            var createdOnStart = hasCreatedOnSearch ? createdOnSearch.Date : DateTime.MinValue;
+            var createdOnEnd = createdOnStart.AddDays(1);
 
             roleQuery = roleQuery.Where(r =>
                 r.RoleName.ToLower().Contains(s) ||
-                (r.Description != null && r.Description.ToLower().Contains(s))
+                (r.Description != null && r.Description.ToLower().Contains(s)) ||
+                _db.Accounts.AsNoTracking()
+                    .ApplyAccountHierarchyFilter(_currentUser)
+                    .Any(a => a.AccountId == r.AccountId &&
+                        !a.IsDeleted &&
+                        a.AccountName.ToLower().Contains(s)) ||
+                (hasCreatedOnSearch &&
+                    r.CreatedOn >= createdOnStart &&
+                    r.CreatedOn < createdOnEnd)
             );
         }
 
