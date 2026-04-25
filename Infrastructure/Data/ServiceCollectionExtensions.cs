@@ -21,6 +21,8 @@ namespace Infrastructure.Data
             services.AddScoped<IDeviceService, DeviceService>();
             services.AddScoped<IDeviceTransferService, DeviceTransferService>();
             services.AddScoped<IDeviceTypeService, DeviceTypeService>();
+            services.AddScoped<IMstDeviceTypeRepository, MstDeviceTypeRepository>();
+            services.AddScoped<IMstDeviceTypeService, MstDeviceTypeService>();
             services.AddScoped<IVehicleService, VehicleService>();
             services.AddScoped<IVehicleComplianceService, VehicleComplianceService>();
             services.AddScoped<IVehicleTypeService, VehicleTypeService>();
