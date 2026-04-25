@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Configuration;
@@ -16,6 +17,7 @@ using StackExchange.Redis;
 using System;
 using System.IO;
 using System.Text;
+using System.Text.Json;
 using NetTopologySuite.Geometries;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -83,6 +85,7 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ICountryService, CountryService>();
 builder.Services.AddScoped<IStateService, StateService>();
 builder.Services.AddScoped<ICityService, CityService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IFormRoleRightService, FormRoleRightService>();
 builder.Services.AddScoped<IPlanService, PlanService>();
 builder.Services.AddScoped<IFeatureService, FeatureService>();
@@ -234,6 +237,37 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = jwtIssuer,
             ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = async context =>
+            {
+                if (context.Response.HasStarted)
+                    return;
+
+                context.HandleResponse();
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/json";
+
+                var message = context.Request.Headers.ContainsKey("Authorization")
+                    ? "Authorization token is invalid or expired."
+                    : "Authorization token is required.";
+
+                var response = ApiResponse<object>.Fail(message, StatusCodes.Status401Unauthorized);
+                await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+            },
+            OnForbidden = async context =>
+            {
+                if (context.Response.HasStarted)
+                    return;
+
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                context.Response.ContentType = "application/json";
+
+                var response = ApiResponse<object>.Fail("Forbidden", StatusCodes.Status403Forbidden);
+                await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+            }
         };
     });
 
