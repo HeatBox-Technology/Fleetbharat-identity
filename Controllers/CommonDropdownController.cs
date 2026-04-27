@@ -135,6 +135,13 @@ public class CommonDropdownController : ControllerBase
         return Ok(ApiResponse<object>.Ok(data, "Success", 200));
     }
 
+    [HttpGet("~/api/common/Getusers/{accountId}")]
+    public async Task<IActionResult> GetUsersByAccount(int accountId)
+    {
+        var data = await _service.GetAccountUsersAsync(accountId);
+        return Ok(ApiResponse<object>.Ok(data, "Success", 200));
+    }
+
     [HttpGet("~/api/common/filter-config")]
     public async Task<IActionResult> GetFilterConfig([FromQuery] string formName)
     {

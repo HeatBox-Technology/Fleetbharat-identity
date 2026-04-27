@@ -24,6 +24,7 @@ namespace Infrastructure.Data
             services.AddScoped<IMstDeviceTypeRepository, MstDeviceTypeRepository>();
             services.AddScoped<IMstDeviceTypeService, MstDeviceTypeService>();
             services.AddScoped<IVehicleService, VehicleService>();
+            services.AddScoped<IVehicleAccessService, VehicleAccessService>();
             services.AddScoped<IVehicleComplianceService, VehicleComplianceService>();
             services.AddScoped<IVehicleTypeService, VehicleTypeService>();
             services.AddScoped<ISimService, SimService>();
@@ -44,6 +45,7 @@ namespace Infrastructure.Data
             services.AddScoped<IVehicleGeofenceMapService, VehicleGeofenceMapService>();
             services.AddScoped<IVtsExternalApiEnqueueService, VtsExternalApiEnqueueService>();
             services.AddScoped<IVtsExternalApiSyncDispatcher, VtsExternalApiSyncDispatcher>();
+            services.AddScoped<IFormBuilderService, FormBuilderService>();
 
 
             // ✅ Redis

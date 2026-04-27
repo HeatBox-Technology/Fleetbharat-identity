@@ -85,6 +85,8 @@ public class IdentityDbContext : DbContext
        public DbSet<BulkUploadConfig> BulkUploadConfigs { get; set; }
        public DbSet<map_vehicle_geofence> VehicleGeofenceMaps { get; set; }
        public DbSet<map_vehicle_geofence_sync_log> map_vehicle_geofence_sync_logs { get; set; }
+       public DbSet<VehicleAccess> VehicleAccesses { get; set; }
+       public DbSet<VehicleAccessForm> VehicleAccessForms { get; set; }
        public DbSet<ErrorLog> ErrorLogs { get; set; }
        public DbSet<AuditLog> AuditLogs { get; set; }
        public DbSet<external_sync_config> external_sync_configs { get; set; }
@@ -97,6 +99,7 @@ public class IdentityDbContext : DbContext
        public DbSet<AccountSubscription> AccountSubscriptions { get; set; }
        public DbSet<UsageRecord> UsageRecords { get; set; }
        public DbSet<BillingInvoice> BillingInvoices { get; set; }
+       public DbSet<FormBuilder> FormBuilders { get; set; }
 
 
 
@@ -355,6 +358,38 @@ public class IdentityDbContext : DbContext
                       .OnDelete(DeleteBehavior.Restrict);
 
                      e.HasIndex(x => x.SolutionId);
+              });
+
+              modelBuilder.Entity<FormBuilder>(entity =>
+              {
+                     entity.ToTable("fr_mst_form_builder");
+                     entity.HasKey(x => x.pk_form_builder_id);
+
+                     entity.Property(x => x.pk_form_builder_id).HasColumnName("pk_form_builder_id");
+                     entity.Property(x => x.AccountId).HasColumnName("AccountId");
+                     entity.Property(x => x.FkFormId).HasColumnName("fk_form_id");
+                     entity.Property(x => x.FormTitle).HasColumnName("FormTitle").HasMaxLength(250);
+                     entity.Property(x => x.FormCode).HasColumnName("FormCode").HasMaxLength(250);
+                     entity.Property(x => x.Description).HasColumnName("Description").HasMaxLength(1000);
+                     entity.Property(x => x.RawData).HasColumnName("RawData");
+                     entity.Property(x => x.IsActive).HasColumnName("IsActive").HasDefaultValue(true);
+                     entity.Property(x => x.IsDeleted).HasColumnName("IsDeleted").HasDefaultValue(false);
+                     entity.Property(x => x.CreatedByUser).HasColumnName("CreatedByUser");
+                     entity.Property(x => x.CreatedDate).HasColumnName("CreatedDate").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                     entity.Property(x => x.UpdatedByUser).HasColumnName("UpdatedByUser");
+                     entity.Property(x => x.UpdatedDate).HasColumnName("UpdatedDate");
+                     entity.Property(x => x.DeletedByUser).HasColumnName("DeletedByUser");
+                     entity.Property(x => x.DeletedDate).HasColumnName("DeletedDate");
+                     entity.Property(x => x.ProjectName).HasColumnName("ProjectName").HasMaxLength(250);
+                     entity.Property(x => x.AccountName).HasColumnName("AccountName").HasMaxLength(250);
+                     entity.Property(x => x.FormName).HasColumnName("FormName").HasMaxLength(250);
+
+                     entity.HasIndex(x => x.AccountId).HasDatabaseName("IX_fr_mst_form_builder_AccountId");
+                     entity.HasIndex(x => x.FkFormId).HasDatabaseName("IX_fr_mst_form_builder_FkFormId");
+                     entity.HasIndex(x => new { x.AccountId, x.FkFormId, x.FormCode })
+                           .IsUnique()
+                           .HasDatabaseName("UX_fr_mst_form_builder_FormCode")
+                           .HasFilter("\"IsDeleted\" = false AND \"FormCode\" IS NOT NULL");
               });
 
               modelBuilder.Entity<mst_device>(entity =>
@@ -652,7 +687,52 @@ public class IdentityDbContext : DbContext
 
              entity.Property(x => x.LastTriedAt)
              .HasColumnName("last_tried_at");
-      });
+             });
+
+              modelBuilder.Entity<VehicleAccess>(entity =>
+              {
+                     entity.ToTable("VehicleAccess");
+                     entity.HasKey(x => x.Id);
+
+                     entity.Property(x => x.UserId).HasMaxLength(450).IsRequired();
+                     entity.Property(x => x.CreatedBy).HasMaxLength(450).IsRequired();
+                     entity.Property(x => x.UpdatedBy).HasMaxLength(450);
+                     entity.Property(x => x.DeletedBy).HasMaxLength(450);
+                     entity.Property(x => x.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                     entity.Property(x => x.IsActive).HasDefaultValue(true);
+                     entity.Property(x => x.IsDeleted).HasDefaultValue(false);
+
+                     entity.HasIndex(x => x.AccountId);
+                     entity.HasIndex(x => x.UserId);
+                     entity.HasIndex(x => x.VehicleId);
+                     entity.HasIndex(x => new { x.AccountId, x.UserId, x.VehicleId })
+                           .IsUnique()
+                           .HasFilter("\"IsDeleted\" = false");
+              });
+
+              modelBuilder.Entity<VehicleAccessForm>(entity =>
+              {
+                     entity.ToTable("VehicleAccessForm");
+                     entity.HasKey(x => x.Id);
+
+                     entity.Property(x => x.CreatedBy).HasMaxLength(450).IsRequired();
+                     entity.Property(x => x.UpdatedBy).HasMaxLength(450);
+                     entity.Property(x => x.DeletedBy).HasMaxLength(450);
+                     entity.Property(x => x.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                     entity.Property(x => x.IsActive).HasDefaultValue(true);
+                     entity.Property(x => x.IsDeleted).HasDefaultValue(false);
+
+                     entity.HasIndex(x => x.VehicleAccessId);
+                     entity.HasIndex(x => x.FormId);
+                     entity.HasIndex(x => new { x.VehicleAccessId, x.FormId })
+                           .IsUnique()
+                           .HasFilter("\"IsDeleted\" = false");
+
+                     entity.HasOne(x => x.VehicleAccess)
+                           .WithMany(x => x.Forms)
+                           .HasForeignKey(x => x.VehicleAccessId)
+                           .OnDelete(DeleteBehavior.Restrict);
+              });
 
               modelBuilder.Entity<map_driver_vehicle_assignment>(entity =>
               {

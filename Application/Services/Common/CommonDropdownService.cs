@@ -146,6 +146,27 @@ public class CommonDropdownService : ICommonDropdownService
             })
             .ToListAsync();
     }
+
+    public async Task<List<AccountUserOptionDto>> GetAccountUsersAsync(int accountId)
+    {
+        return await (
+            from user in _db.Users.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser)
+            join role in _db.Roles.AsNoTracking().ApplyAccountHierarchyFilter(_currentUser)
+                on user.roleId equals role.RoleId into roleJoin
+            from role in roleJoin.DefaultIfEmpty()
+            where user.AccountId == accountId &&
+                  user.Status &&
+                  !user.IsDeleted
+            orderby user.FirstName, user.LastName
+            select new AccountUserOptionDto
+            {
+                Id = user.UserId.ToString(),
+                Name = (user.FirstName + " " + user.LastName).Trim(),
+                Email = user.Email,
+                RoleName = role != null ? role.RoleName : user.Role
+            }).ToListAsync();
+    }
+
     public async Task<List<DriverDropdownDto>> GetDriversDropdownAsync(
         int? driverId,
         int? accountId,
