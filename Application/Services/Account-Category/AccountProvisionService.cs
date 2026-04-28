@@ -768,6 +768,27 @@ public class AccountProvisionService : IAccountProvisionService
     }
 
 
+    public async Task<List<AccountOptionDto>> GetDropdownAsync()
+    {
+        var query = _db.Accounts
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && x.Status);
+
+        if (_currentUser.IsAuthenticated && !_currentUser.IsSystem)
+        {
+            query = query.ApplyAccountHierarchyFilter(_currentUser);
+        }
+
+        return await query
+            .OrderBy(x => x.AccountName)
+            .Select(x => new AccountOptionDto
+            {
+                Id = x.AccountId,
+                Name = x.AccountName
+            })
+            .ToListAsync();
+    }
+
     public async Task<List<AccountHierarchyDto>> GetHierarchyAsync()
     {
         var accounts = await (

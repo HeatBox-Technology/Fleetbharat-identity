@@ -100,6 +100,9 @@ public class IdentityDbContext : DbContext
        public DbSet<UsageRecord> UsageRecords { get; set; }
        public DbSet<BillingInvoice> BillingInvoices { get; set; }
        public DbSet<FormBuilder> FormBuilders { get; set; }
+       public DbSet<FormPage> FormPages { get; set; }
+       public DbSet<FormField> FormFields { get; set; }
+       public DbSet<AccountFormConfiguration> AccountFormConfigurations { get; set; }
 
 
 
@@ -390,6 +393,77 @@ public class IdentityDbContext : DbContext
                            .IsUnique()
                            .HasDatabaseName("UX_fr_mst_form_builder_FormCode")
                            .HasFilter("\"IsDeleted\" = false AND \"FormCode\" IS NOT NULL");
+              });
+
+              modelBuilder.Entity<FormPage>(entity =>
+              {
+                     entity.ToTable("form_pages");
+                     entity.HasKey(x => x.Id);
+
+                     entity.Property(x => x.Id).HasColumnName("id");
+                     entity.Property(x => x.PageKey).HasColumnName("page_key").HasMaxLength(100).IsRequired();
+                     entity.Property(x => x.PageName).HasColumnName("page_name").HasMaxLength(150).IsRequired();
+                     entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+                     entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                     entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+
+                     entity.HasIndex(x => x.PageKey).IsUnique();
+              });
+
+              modelBuilder.Entity<FormField>(entity =>
+              {
+                     entity.ToTable("form_fields");
+                     entity.HasKey(x => x.Id);
+
+                     entity.Property(x => x.Id).HasColumnName("id");
+                     entity.Property(x => x.PageKey).HasColumnName("page_key").HasMaxLength(100).IsRequired();
+                     entity.Property(x => x.FieldKey).HasColumnName("field_key").HasMaxLength(100).IsRequired();
+                     entity.Property(x => x.FieldLabel).HasColumnName("field_label").HasMaxLength(150).IsRequired();
+                     entity.Property(x => x.FieldType).HasColumnName("field_type").HasMaxLength(50).IsRequired();
+                     entity.Property(x => x.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+                     entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                     entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+
+                     entity.HasIndex(x => new { x.PageKey, x.FieldKey }).IsUnique();
+
+                     entity.HasOne<FormPage>()
+                           .WithMany()
+                           .HasForeignKey(x => x.PageKey)
+                           .HasPrincipalKey(x => x.PageKey)
+                           .OnDelete(DeleteBehavior.Restrict);
+              });
+
+              modelBuilder.Entity<AccountFormConfiguration>(entity =>
+              {
+                     entity.ToTable("account_form_configurations");
+                     entity.HasKey(x => x.Id);
+
+                     entity.Property(x => x.Id).HasColumnName("id");
+                     entity.Property(x => x.AccountId).HasColumnName("account_id");
+                     entity.Property(x => x.PageKey).HasColumnName("page_key").HasMaxLength(100).IsRequired();
+                     entity.Property(x => x.FieldId).HasColumnName("field_id");
+                     entity.Property(x => x.Visible).HasColumnName("visible").HasDefaultValue(false);
+                     entity.Property(x => x.Required).HasColumnName("required").HasDefaultValue(false);
+                     entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("CURRENT_TIMESTAMP");
+                     entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
+
+                     entity.HasIndex(x => new { x.AccountId, x.PageKey, x.FieldId }).IsUnique();
+
+                     entity.HasOne<mst_account>()
+                           .WithMany()
+                           .HasForeignKey(x => x.AccountId)
+                           .OnDelete(DeleteBehavior.Restrict);
+
+                     entity.HasOne<FormPage>()
+                           .WithMany()
+                           .HasForeignKey(x => x.PageKey)
+                           .HasPrincipalKey(x => x.PageKey)
+                           .OnDelete(DeleteBehavior.Restrict);
+
+                     entity.HasOne<FormField>()
+                           .WithMany()
+                           .HasForeignKey(x => x.FieldId)
+                           .OnDelete(DeleteBehavior.Restrict);
               });
 
               modelBuilder.Entity<mst_device>(entity =>

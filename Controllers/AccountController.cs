@@ -21,12 +21,42 @@ public class AccountController : ControllerBase
 
     [HttpGet]
     public async Task<IActionResult> GetAll(
+        [FromQuery] int? page = null,
+        [FromQuery] int? pageSize = null,
+        [FromQuery] string? search = null,
+        [FromQuery] bool? status = null)
+    {
+        var isListRequest =
+            Request.Query.ContainsKey("page") ||
+            Request.Query.ContainsKey("pageSize") ||
+            Request.Query.ContainsKey("search") ||
+            Request.Query.ContainsKey("status");
+
+        if (!isListRequest)
+        {
+            var dropdown = await _service.GetDropdownAsync();
+            return Ok(ApiResponse<object>.Ok(dropdown, "Success", 200));
+        }
+
+        var result = await _service.GetAllAsync(page ?? 1, pageSize ?? 10, search, status);
+        return Ok(ApiResponse<object>.Ok(result, "Success", 200));
+    }
+
+    [HttpGet("list")]
+    public async Task<IActionResult> GetList(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
         [FromQuery] string? search = null,
         [FromQuery] bool? status = null)
     {
         var result = await _service.GetAllAsync(page, pageSize, search, status);
+        return Ok(ApiResponse<object>.Ok(result, "Success", 200));
+    }
+
+    [HttpGet("dropdown")]
+    public async Task<IActionResult> GetDropdown()
+    {
+        var result = await _service.GetDropdownAsync();
         return Ok(ApiResponse<object>.Ok(result, "Success", 200));
     }
 

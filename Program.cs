@@ -107,6 +107,8 @@ builder.Services.AddScoped<ITaxTypeService, TaxTypeService>();
 builder.Services.AddScoped<IAccountConfigurationService, AccountConfigurationService>();
 builder.Services.AddScoped<IWhiteLabelService, WhiteLabelService>();
 builder.Services.AddScoped<ICommonDropdownService, CommonDropdownService>();
+builder.Services.AddScoped<IFormConfigurationRepository, FormConfigurationRepository>();
+builder.Services.AddScoped<IFormConfigurationService, FormConfigurationService>();
 builder.Services.AddScoped<IHierarchyRepository, HierarchyRepository>();
 builder.Services.AddScoped<IHierarchyService, HierarchyService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();

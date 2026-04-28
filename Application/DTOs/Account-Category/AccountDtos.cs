@@ -171,3 +171,9 @@ public class AccountHierarchyDto
 
     public List<AccountHierarchyDto> Children { get; set; } = new();
 }
+
+public class AccountOptionDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}

@@ -13,6 +13,7 @@ public interface IAccountProvisionService
 
     Task<AccountResponseDto?> GetByIdAsync(int accountId);
     Task<List<AccountHierarchyDto>> GetHierarchyAsync();
+    Task<List<AccountOptionDto>> GetDropdownAsync();
 
     Task<bool> UpdateAsync(int accountId, UpdateAccountRequest req);
 
