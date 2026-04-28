@@ -104,6 +104,11 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
         if (vehicle == null || device == null || account == null)
             return; // safety guard
 
+        var vehicleType = await _db.VehicleTypes
+            .AsNoTracking()
+            .ApplyAccountHierarchyFilter(_currentUser)
+            .FirstOrDefaultAsync(x => x.Id == vehicle.VehicleTypeId);
+
         var request = new ExternalVehicleMappingRequest
         {
             VehicleId = vehicle.Id.ToString(),
@@ -112,7 +117,11 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
             Imei = device.DeviceImeiOrSerial,
             DeviceType = entity.fk_devicetypeid.ToString(),
             OrgName = account.AccountName,
-            OrgId = entity.AccountId
+            OrgId = entity.AccountId,
+            MovingIcon = vehicleType?.MovingIcon,
+            ParkedIcon = vehicleType?.ParkedIcon,
+            IdleIcon = vehicleType?.IdleIcon,
+            BreakdownIcon = vehicleType?.BreakdownIcon
         };
         var payload = new List<ExternalVehicleMappingRequest> { request };
 
@@ -182,6 +191,18 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
         entity.updatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await SendExternalMapping(entity);
+            }
+            catch
+            {
+            }
+        });
+
         return true;
     }
 

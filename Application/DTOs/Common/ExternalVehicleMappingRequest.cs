@@ -24,6 +24,18 @@ public class ExternalVehicleMappingRequest
     [JsonPropertyName("orgId")]
     public int OrgId { get; set; }
 
+    [JsonPropertyName("movingIcon")]
+    public string? MovingIcon { get; set; }
+
+    [JsonPropertyName("parkedIcon")]
+    public string? ParkedIcon { get; set; }
+
+    [JsonPropertyName("idleIcon")]
+    public string? IdleIcon { get; set; }
+
+    [JsonPropertyName("breakdownIcon")]
+    public string? BreakdownIcon { get; set; }
+
     [JsonPropertyName("speedLimit")]
     public int SpeedLimit { get; set; } = 0;
 
