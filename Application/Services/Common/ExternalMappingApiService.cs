@@ -18,7 +18,12 @@ public class ExternalMappingApiService : IExternalMappingApiService
             "/api/v1/mapping/vehicle-mapping",
             payload);
 
-        return response.IsSuccessStatusCode;
+        if (response.IsSuccessStatusCode)
+            return true;
+
+        var body = await response.Content.ReadAsStringAsync();
+        throw new HttpRequestException(
+            $"External vehicle mapping API failed. StatusCode={(int)response.StatusCode} ({response.StatusCode}). Response={body}");
     }
     public async Task<bool> SendGeofenceAsync(
     List<ExternalGeofenceRequest> payload,

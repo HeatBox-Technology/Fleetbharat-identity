@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 public class VehicleDeviceMapService : IVehicleDeviceMapService
 {
@@ -13,15 +14,18 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
     //private readonly IVtsExternalApiEnqueueService _externalSyncEnqueueService;
     private readonly IExternalMappingApiService _externalApi;
     private readonly ICurrentUserService _currentUser;
+    private readonly ILogger<VehicleDeviceMapService> _logger;
 
     public VehicleDeviceMapService(
         IdentityDbContext db,
         IExternalMappingApiService externalApi,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        ILogger<VehicleDeviceMapService> logger)
     {
         _db = db;
         _externalApi = externalApi;
         _currentUser = currentUser;
+        _logger = logger;
     }
     public async Task<int> CreateAsync(CreateVehicleDeviceMapDto dto)
     {
@@ -73,18 +77,21 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
         await _db.SaveChangesAsync();
 
         //await _externalSyncEnqueueService.EnqueueVehicleDeviceMappingAsync(entity);
-        _ = Task.Run(async () =>
-{
-    try
-    {
-        await SendExternalMapping(entity);
-    }
-    catch
-    {
-    }
-});
+        await TrySendExternalMappingAsync(entity);
 
         return entity.Id;
+    }
+
+    private async Task TrySendExternalMappingAsync(map_vehicle_device entity)
+    {
+        try
+        {
+            await SendExternalMapping(entity);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Vehicle device external sync failed before sync log could be saved. MappingId={MappingId}", entity.Id);
+        }
     }
 
     private async Task SendExternalMapping(map_vehicle_device entity)
@@ -192,16 +199,7 @@ public class VehicleDeviceMapService : IVehicleDeviceMapService
 
         await _db.SaveChangesAsync();
 
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await SendExternalMapping(entity);
-            }
-            catch
-            {
-            }
-        });
+        await TrySendExternalMappingAsync(entity);
 
         return true;
     }
