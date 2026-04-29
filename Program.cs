@@ -62,6 +62,8 @@ builder.Services.AddDataProtection()
 
 builder.Services.Configure<AuditLoggingOptions>(
     builder.Configuration.GetSection("AuditLogging"));
+builder.Services.Configure<KafkaRealtimeOptions>(
+    builder.Configuration.GetSection(KafkaRealtimeOptions.SectionName));
 
 builder.Services.AddDbContext<IdentityDbContext>((sp, opt) =>
     opt.UseNpgsql(defaultConnection, x => x.UseNetTopologySuite())
@@ -206,6 +208,8 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<IRealtimeNotificationBroadcaster, SignalRRealtimeNotificationBroadcaster>();
+builder.Services.AddSingleton<IKafkaAlertPublisher, KafkaAlertPublisher>();
 
 var redisConn = builder.Configuration["Redis:ConnectionString"];
 if (string.IsNullOrWhiteSpace(redisConn))
@@ -341,6 +345,11 @@ builder.Services.AddSwaggerGen(options =>
 if (IsHostedServiceEnabled("RedisGpsSubscriber"))
 {
     builder.Services.AddHostedService<RedisGpsSubscriberHostedService>();
+}
+
+if (IsHostedServiceEnabled("KafkaRealtimeConsumer"))
+{
+    builder.Services.AddHostedService<KafkaRealtimeConsumerWorker>();
 }
 // builder.Services.AddHostedService<Infrastructure.LiveTracking.LiveTrackingSimulatorService>();
 
