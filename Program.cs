@@ -73,7 +73,7 @@ builder.Services.AddDbContext<IdentityDbContext>((sp, opt) =>
 builder.Services.AddHttpClient<IExternalMappingApiService, ExternalMappingApiService>(client =>
 {
     //client.BaseAddress = new Uri("http://47.131.171.150:5000/api/v1/"); // external base url
-    client.BaseAddress = new Uri("http://92.4.76.230:8083/api/v1/"); // local for testing
+    client.BaseAddress = new Uri("http://fleetbharat.com:8083/api/v1/"); // local for testing
 });
 builder.Services.AddHttpClient<IWhatsAppService, WhatsAppService>();
 
