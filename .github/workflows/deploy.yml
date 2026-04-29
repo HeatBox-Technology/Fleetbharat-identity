@@ -35,6 +35,8 @@ jobs:
           username: ${{ secrets.FB_USER }}
           key: ${{ secrets.FB_SSH_KEY }}
           script: |
+            docker network inspect fleetbharat-net >/dev/null 2>&1 || docker network create fleetbharat-net
+
             docker pull ${{ secrets.DOCKER_IMAGE_NAME }}:latest
 
             docker rm -f fleetbharat-identity || true
@@ -43,7 +45,8 @@ jobs:
               --name fleetbharat-identity \
               --network fleetbharat-net \
               -p 8080:8080 \
-              -v /var/www/fleetbharat/uploads:/app/uploads \
+              -v /srv/fleetbharat-apps/uploads:/app/uploads \
+              -v /srv/fleetbharat-apps/storage:/app/storage \
               -e ASPNETCORE_ENVIRONMENT=Production \
               -e ASPNETCORE_URLS=http://+:8080 \
               -e ConnectionStrings__Default="${{ secrets.PROD_CONN_FB }}" \
