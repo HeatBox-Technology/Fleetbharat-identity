@@ -11,9 +11,9 @@ namespace Application.DTOs
         /// <summary>Unique mapping ID</summary>
         public long DeviceSimId { get; set; }
         /// <summary>Device ID (FK to mst_device)</summary>
-        public long DeviceId { get; set; }
+        public int DeviceId { get; set; }
         /// <summary>SIM ID (FK to mst_sim)</summary>
-        public long SimId { get; set; }
+        public int SimId { get; set; }
         /// <summary>Mapping start timestamp</summary>
         public DateTime FromTs { get; set; }
         /// <summary>Mapping end timestamp (null = active)</summary>

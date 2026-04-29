@@ -9,7 +9,7 @@ namespace Application.DTOs
     public class VehicleSensorMapDto
     {
         public long VehicleSensorId { get; set; }
-        public long VehicleId { get; set; }
+        public int VehicleId { get; set; }
         public long SensorId { get; set; }
         public string MountPoint { get; set; } = "default";
         public DateTime FromTs { get; set; }

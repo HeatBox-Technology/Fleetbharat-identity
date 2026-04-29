@@ -11,53 +11,21 @@ namespace FleetBharat.IdentityService.Migrations
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "DefaultVehicleIcon",
-                table: "mst_vehicle_type");
+            migrationBuilder.Sql(
+                """
+                ALTER TABLE public."mst_vehicle_type"
+                    ADD COLUMN IF NOT EXISTS "BreakdownIcon" text,
+                    ADD COLUMN IF NOT EXISTS "IdleIcon" text,
+                    ADD COLUMN IF NOT EXISTS "MovingIcon" text,
+                    ADD COLUMN IF NOT EXISTS "OfflineIcon" text,
+                    ADD COLUMN IF NOT EXISTS "ParkedIcon" text,
+                    ADD COLUMN IF NOT EXISTS "StoppedIcon" text;
 
-            migrationBuilder.DropColumn(
-                name: "DefaultAlarmIcon",
-                table: "mst_vehicle_type");
-
-            migrationBuilder.DropColumn(
-                name: "DefaultIconColor",
-                table: "mst_vehicle_type");
-
-            migrationBuilder.AddColumn<string>(
-                name: "BreakdownIcon",
-                table: "mst_vehicle_type",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "IdleIcon",
-                table: "mst_vehicle_type",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "MovingIcon",
-                table: "mst_vehicle_type",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "OfflineIcon",
-                table: "mst_vehicle_type",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "ParkedIcon",
-                table: "mst_vehicle_type",
-                type: "text",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "StoppedIcon",
-                table: "mst_vehicle_type",
-                type: "text",
-                nullable: true);
+                ALTER TABLE public."mst_vehicle_type"
+                    DROP COLUMN IF EXISTS "DefaultVehicleIcon",
+                    DROP COLUMN IF EXISTS "DefaultAlarmIcon",
+                    DROP COLUMN IF EXISTS "DefaultIconColor";
+                """);
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)

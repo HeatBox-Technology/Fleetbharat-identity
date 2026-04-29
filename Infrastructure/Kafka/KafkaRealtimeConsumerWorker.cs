@@ -44,6 +44,10 @@ public class KafkaRealtimeConsumerWorker : BackgroundService
             return;
         }
 
+        // Yield once so the generic host can finish startup and bind HTTP endpoints
+        // before this worker enters the blocking Kafka consume loop.
+        await Task.Yield();
+
         var consumerConfig = BuildConsumerConfig();
 
         using var consumer = new ConsumerBuilder<string, string>(consumerConfig)

@@ -11,12 +11,11 @@ namespace FleetBharat.IdentityService.Migrations
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<int>(
-                name: "AccountId",
-                table: "mst_vehicle_type",
-                type: "integer",
-                nullable: false,
-                defaultValue: 0);
+            migrationBuilder.Sql(
+                """
+                ALTER TABLE public."mst_vehicle_type"
+                    ADD COLUMN IF NOT EXISTS "AccountId" integer NOT NULL DEFAULT 0;
+                """);
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)

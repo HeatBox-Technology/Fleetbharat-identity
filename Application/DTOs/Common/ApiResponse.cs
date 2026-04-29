@@ -5,7 +5,7 @@ public class ApiResponse<T>
     public string message { get; set; } = "";
     public T? data { get; set; }
 
-    public static ApiResponse<T> Ok(T data, string message = "Success", int statusCode = 200)
+    public static ApiResponse<T> Ok(T? data, string message = "Success", int statusCode = 200)
     {
         return new ApiResponse<T>
         {

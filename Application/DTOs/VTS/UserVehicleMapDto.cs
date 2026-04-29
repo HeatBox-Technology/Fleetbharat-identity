@@ -13,7 +13,7 @@ namespace Application.DTOs
         /// <summary>User ID (FK to mst_user)</summary>
         public long UserId { get; set; }
         /// <summary>Vehicle ID (FK to mst_vehicle)</summary>
-        public long VehicleId { get; set; }
+        public int VehicleId { get; set; }
         /// <summary>Mapping start timestamp</summary>
         public DateTime FromTs { get; set; }
         /// <summary>Mapping end timestamp (null = active)</summary>

@@ -19,7 +19,7 @@ namespace Domain.Entities
         /// Vehicle ID (FK to mst_vehicle)
         /// </summary>
         [Required]
-        public long VehicleId { get; set; }
+        public int VehicleId { get; set; }
         public mst_vehicle? Vehicle { get; set; }
 
         /// <summary>

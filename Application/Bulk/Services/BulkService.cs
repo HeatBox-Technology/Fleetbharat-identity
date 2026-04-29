@@ -68,6 +68,11 @@ public class BulkService : IBulkService
         }
 
         var job = await _db.bulk_jobs.FindAsync(jobId);
+        if (job == null)
+        {
+            throw new InvalidOperationException($"Bulk job {jobId} was not found after creation.");
+        }
+
         job.TotalRows = rows.Count;
 
         await _db.SaveChangesAsync();
@@ -76,6 +81,10 @@ public class BulkService : IBulkService
     public async Task ProcessJobAsync(int jobId)
     {
         var job = await _db.bulk_jobs.FindAsync(jobId);
+        if (job == null)
+        {
+            throw new InvalidOperationException($"Bulk job {jobId} was not found.");
+        }
 
         job.Status = "PROCESSING";
         await _db.SaveChangesAsync();
@@ -129,7 +138,7 @@ public class BulkService : IBulkService
         await _queue.EnqueueAsync(jobId);
     }
 
-    public async Task<object> GetStatusAsync(int jobId)
+    public async Task<object?> GetStatusAsync(int jobId)
     {
         return await _db.bulk_jobs
             .Where(x => x.Id == jobId)

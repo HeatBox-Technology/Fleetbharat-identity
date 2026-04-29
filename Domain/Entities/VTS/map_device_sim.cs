@@ -19,14 +19,14 @@ namespace Domain.Entities
         /// Device ID (FK to mst_device)
         /// </summary>
         [Required]
-        public long DeviceId { get; set; }
+        public int DeviceId { get; set; }
         public mst_device? Device { get; set; }
 
         /// <summary>
         /// SIM ID (FK to mst_sim)
         /// </summary>
         [Required]
-        public long SimId { get; set; }
+        public int SimId { get; set; }
         public mst_sim? Sim { get; set; }
 
         /// <summary>
