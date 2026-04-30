@@ -1,45 +1,43 @@
 using System;
 
-public class DeviceModelDto
+public class DeviceModelResponseDto
 {
     public int Id { get; set; }
-    public string Code { get; set; } = string.Empty;
-    public string DisplayName { get; set; } = string.Empty;
-    public string? Description { get; set; }
     public int ManufacturerId { get; set; }
     public string ManufacturerName { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
     public int DeviceCategoryId { get; set; }
     public string DeviceCategoryName { get; set; } = string.Empty;
-    public string ProtocolType { get; set; } = string.Empty;
-    public bool IsEnabled { get; set; } = true;
+    public bool UseIMEIAsPrimaryId { get; set; }
+    public string? DeviceNo { get; set; }
+    public string? IMEISerialNumber { get; set; }
+    public bool IsEnabled { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }
 
-public class CreateDeviceModelDto
+public class CreateDeviceModelRequestDto
 {
-    public string Code { get; set; } = string.Empty;
-    public string DisplayName { get; set; } = string.Empty;
-    public string? Description { get; set; }
     public int ManufacturerId { get; set; }
+    public string Name { get; set; } = string.Empty;
     public int DeviceCategoryId { get; set; }
-    public string ProtocolType { get; set; } = string.Empty;
+    public bool UseIMEIAsPrimaryId { get; set; }
+    public string? DeviceNo { get; set; }
+    public string? IMEISerialNumber { get; set; }
     public bool IsEnabled { get; set; } = true;
 }
 
-public class UpdateDeviceModelDto : CreateDeviceModelDto
+public class UpdateDeviceModelRequestDto : CreateDeviceModelRequestDto
 {
+    public int Id { get; set; }
 }
 
-public class DeviceModelSummaryDto
+public class DeviceModelGetAllRequestDto
 {
-    public int TotalEntities { get; set; }
-    public int Enabled { get; set; }
-    public int Disabled { get; set; }
-}
-
-public class DeviceModelListUiResponseDto
-{
-    public DeviceModelSummaryDto Summary { get; set; } = new();
-    public PagedResultDto<DeviceModelDto> Models { get; set; } = new();
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 10;
+    public string? Search { get; set; }
+    public int? ManufacturerId { get; set; }
+    public int? DeviceCategoryId { get; set; }
+    public bool? IsEnabled { get; set; }
 }

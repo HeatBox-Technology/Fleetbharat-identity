@@ -1,255 +1,270 @@
 using System;
-using System.Linq;
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
 
 public class DeviceModelService : IDeviceModelService
 {
-    private readonly IdentityDbContext _db;
+    private const string DefaultProtocolType = "UNKNOWN";
+    private readonly IDeviceModelRepository _repository;
 
-    public DeviceModelService(IdentityDbContext db)
+    public DeviceModelService(IDeviceModelRepository repository)
     {
-        _db = db;
+        _repository = repository;
     }
 
-    public async Task<int> CreateAsync(CreateDeviceModelDto dto)
+    public async Task<PagedResultDto<DeviceModelResponseDto>> GetAllAsync(
+        DeviceModelGetAllRequestDto request,
+        CancellationToken cancellationToken = default)
     {
-        var code = dto.Code.Trim().ToUpperInvariant();
-        var name = dto.DisplayName.Trim();
-        var protocolType = dto.ProtocolType.Trim().ToUpperInvariant();
+        request ??= new DeviceModelGetAllRequestDto();
 
-        var exists = await _db.DeviceModels
-            .AnyAsync(x => x.Code == code && !x.IsDeleted);
+        if (request.ManufacturerId.HasValue && request.ManufacturerId.Value <= 0)
+            throw new BadHttpRequestException("ManufacturerId filter is invalid.");
 
-        if (exists)
-            throw new InvalidOperationException("Device model already exists.");
+        if (request.DeviceCategoryId.HasValue && request.DeviceCategoryId.Value <= 0)
+            throw new BadHttpRequestException("DeviceCategoryId filter is invalid.");
 
-        await ValidateReferences(dto.ManufacturerId, dto.DeviceCategoryId);
+        request.Page = request.Page <= 0 ? 1 : request.Page;
+        request.PageSize = request.PageSize <= 0 ? 10 : Math.Min(request.PageSize, 200);
+        request.Search = NormalizeOptionalText(
+            request.Search,
+            150,
+            "Search text cannot exceed 150 characters.");
+
+        return await _repository.GetAllAsync(request, cancellationToken);
+    }
+
+    public async Task<DeviceModelResponseDto?> GetByIdAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateId(id);
+        return await _repository.GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<int> AddAsync(
+        CreateDeviceModelRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request == null)
+            throw new BadHttpRequestException("Request payload is required.");
+
+        var validated = await ValidateWriteRequestAsync(
+            request.ManufacturerId,
+            request.Name,
+            request.DeviceCategoryId,
+            request.UseIMEIAsPrimaryId,
+            request.DeviceNo,
+            request.IMEISerialNumber,
+            null,
+            cancellationToken);
 
         var entity = new DeviceModel
         {
-            Code = code,
-            Name = name,
-            Description = dto.Description,
-            ManufacturerId = dto.ManufacturerId,
-            DeviceCategoryId = dto.DeviceCategoryId,
-            ProtocolType = protocolType,
-            IsEnabled = dto.IsEnabled,
-            CreatedAt = DateTime.UtcNow
+            Code = await GenerateCodeAsync(validated.Name, cancellationToken),
+            Name = validated.Name,
+            ManufacturerId = validated.ManufacturerId,
+            DeviceCategoryId = validated.DeviceCategoryId,
+            ProtocolType = DefaultProtocolType,
+            UseIMEIAsPrimaryId = validated.UseIMEIAsPrimaryId,
+            DeviceNo = validated.DeviceNo,
+            IMEISerialNumber = validated.IMEISerialNumber,
+            IsEnabled = request.IsEnabled,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = null,
+            IsDeleted = false
         };
 
-        _db.DeviceModels.Add(entity);
-        await _db.SaveChangesAsync();
-
-        return entity.Id;
+        return await _repository.AddAsync(entity, cancellationToken);
     }
 
-    public async Task<DeviceModelListUiResponseDto> GetModels(
-        int page,
-        int pageSize,
-        string? search)
+    public async Task<bool> UpdateAsync(
+        UpdateDeviceModelRequestDto request,
+        CancellationToken cancellationToken = default)
     {
-        if (page <= 0) page = 1;
-        if (pageSize <= 0) pageSize = 10;
+        if (request == null)
+            throw new BadHttpRequestException("Request payload is required.");
 
-        var query =
-            from model in _db.DeviceModels.AsNoTracking()
-            join manufacturer in _db.OemManufacturers.AsNoTracking()
-                on model.ManufacturerId equals manufacturer.Id into manufacturers
-            from manufacturer in manufacturers.DefaultIfEmpty()
-            join category in _db.DeviceTypes.AsNoTracking()
-                on model.DeviceCategoryId equals category.Id into categories
-            from category in categories.DefaultIfEmpty()
-            where !model.IsDeleted
-            select new DeviceModelProjection
-            {
-                Id = model.Id,
-                Code = model.Code,
-                Name = model.Name,
-                Description = model.Description,
-                ManufacturerId = model.ManufacturerId,
-                ManufacturerName = manufacturer != null ? manufacturer.Name : string.Empty,
-                DeviceCategoryId = model.DeviceCategoryId,
-                DeviceCategoryName = category != null ? category.Name : string.Empty,
-                ProtocolType = model.ProtocolType,
-                IsEnabled = model.IsEnabled,
-                CreatedAt = model.CreatedAt,
-                UpdatedAt = model.UpdatedAt
-            };
+        ValidateId(request.Id);
 
-        if (!string.IsNullOrWhiteSpace(search))
+        var validated = await ValidateWriteRequestAsync(
+            request.ManufacturerId,
+            request.Name,
+            request.DeviceCategoryId,
+            request.UseIMEIAsPrimaryId,
+            request.DeviceNo,
+            request.IMEISerialNumber,
+            request.Id,
+            cancellationToken);
+
+        var entity = new DeviceModel
         {
-            var s = search.Trim().ToLower();
-            query = query.Where(x =>
-                x.Code.ToLower().Contains(s) ||
-                x.Name.ToLower().Contains(s) ||
-                (x.Description ?? string.Empty).ToLower().Contains(s) ||
-                x.ManufacturerName.ToLower().Contains(s) ||
-                x.DeviceCategoryName.ToLower().Contains(s) ||
-                x.ProtocolType.ToLower().Contains(s));
-        }
-
-        var total = await query.CountAsync();
-        var enabled = await query.CountAsync(x => x.IsEnabled);
-        var disabled = total - enabled;
-
-        var items = await query
-            .OrderByDescending(x => x.UpdatedAt ?? x.CreatedAt)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(x => new DeviceModelDto
-            {
-                Id = x.Id,
-                Code = x.Code,
-                DisplayName = x.Name,
-                Description = x.Description,
-                ManufacturerId = x.ManufacturerId,
-                ManufacturerName = x.ManufacturerName,
-                DeviceCategoryId = x.DeviceCategoryId,
-                DeviceCategoryName = x.DeviceCategoryName,
-                ProtocolType = x.ProtocolType,
-                IsEnabled = x.IsEnabled,
-                CreatedAt = x.CreatedAt,
-                UpdatedAt = x.UpdatedAt
-            })
-            .ToListAsync();
-
-        return new DeviceModelListUiResponseDto
-        {
-            Summary = new DeviceModelSummaryDto
-            {
-                TotalEntities = total,
-                Enabled = enabled,
-                Disabled = disabled
-            },
-            Models = new PagedResultDto<DeviceModelDto>
-            {
-                Items = items,
-                TotalRecords = total,
-                Page = page,
-                PageSize = pageSize,
-                TotalPages = (int)Math.Ceiling((double)total / pageSize)
-            }
+            Id = request.Id,
+            Name = validated.Name,
+            ManufacturerId = validated.ManufacturerId,
+            DeviceCategoryId = validated.DeviceCategoryId,
+            UseIMEIAsPrimaryId = validated.UseIMEIAsPrimaryId,
+            DeviceNo = validated.DeviceNo,
+            IMEISerialNumber = validated.IMEISerialNumber,
+            IsEnabled = request.IsEnabled,
+            UpdatedAt = DateTime.UtcNow
         };
+
+        return await _repository.UpdateAsync(entity, cancellationToken);
     }
 
-    public async Task<DeviceModelDto?> GetByIdAsync(int id)
+    public async Task<bool> DeleteAsync(
+        int id,
+        CancellationToken cancellationToken = default)
     {
-        return await (
-            from model in _db.DeviceModels.AsNoTracking()
-            join manufacturer in _db.OemManufacturers.AsNoTracking()
-                on model.ManufacturerId equals manufacturer.Id into manufacturers
-            from manufacturer in manufacturers.DefaultIfEmpty()
-            join category in _db.DeviceTypes.AsNoTracking()
-                on model.DeviceCategoryId equals category.Id into categories
-            from category in categories.DefaultIfEmpty()
-            where model.Id == id && !model.IsDeleted
-            select new DeviceModelDto
-            {
-                Id = model.Id,
-                Code = model.Code,
-                DisplayName = model.Name,
-                Description = model.Description,
-                ManufacturerId = model.ManufacturerId,
-                ManufacturerName = manufacturer != null ? manufacturer.Name : string.Empty,
-                DeviceCategoryId = model.DeviceCategoryId,
-                DeviceCategoryName = category != null ? category.Name : string.Empty,
-                ProtocolType = model.ProtocolType,
-                IsEnabled = model.IsEnabled,
-                CreatedAt = model.CreatedAt,
-                UpdatedAt = model.UpdatedAt
-            })
-            .FirstOrDefaultAsync();
+        ValidateId(id);
+        return await _repository.SoftDeleteAsync(id, DateTime.UtcNow, cancellationToken);
     }
 
-    public async Task<bool> UpdateAsync(int id, UpdateDeviceModelDto dto)
+    public Task<IReadOnlyList<DropdownDto>> GetManufacturerDropdownAsync(
+        CancellationToken cancellationToken = default)
     {
-        var entity = await _db.DeviceModels
-            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
-
-        if (entity == null)
-            return false;
-
-        var code = dto.Code.Trim().ToUpperInvariant();
-        var exists = await _db.DeviceModels
-            .AnyAsync(x => x.Code == code && x.Id != id && !x.IsDeleted);
-
-        if (exists)
-            throw new InvalidOperationException("Device model already exists.");
-
-        await ValidateReferences(dto.ManufacturerId, dto.DeviceCategoryId);
-
-        entity.Code = code;
-        entity.Name = dto.DisplayName.Trim();
-        entity.Description = dto.Description;
-        entity.ManufacturerId = dto.ManufacturerId;
-        entity.DeviceCategoryId = dto.DeviceCategoryId;
-        entity.ProtocolType = dto.ProtocolType.Trim().ToUpperInvariant();
-        entity.IsEnabled = dto.IsEnabled;
-        entity.UpdatedAt = DateTime.UtcNow;
-
-        await _db.SaveChangesAsync();
-        return true;
+        return _repository.GetManufacturerDropdownAsync(cancellationToken);
     }
 
-    public async Task<bool> UpdateStatusAsync(int id, bool isEnabled)
+    public Task<IReadOnlyList<DropdownDto>> GetDeviceTypeDropdownAsync(
+        CancellationToken cancellationToken = default)
     {
-        var entity = await _db.DeviceModels
-            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
-
-        if (entity == null)
-            return false;
-
-        entity.IsEnabled = isEnabled;
-        entity.UpdatedAt = DateTime.UtcNow;
-
-        await _db.SaveChangesAsync();
-        return true;
+        return _repository.GetDeviceTypeDropdownAsync(cancellationToken);
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    private async Task<ValidatedDeviceModelValues> ValidateWriteRequestAsync(
+        int manufacturerId,
+        string? name,
+        int deviceCategoryId,
+        bool useImeiAsPrimaryId,
+        string? deviceNo,
+        string? imeiSerialNumber,
+        int? excludeId,
+        CancellationToken cancellationToken)
     {
-        var entity = await _db.DeviceModels
-            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+        if (manufacturerId <= 0)
+            throw new BadHttpRequestException("ManufacturerId is required.");
 
-        if (entity == null)
-            return false;
+        if (deviceCategoryId <= 0)
+            throw new BadHttpRequestException("DeviceCategoryId is required.");
 
-        entity.IsDeleted = true;
-        entity.UpdatedAt = DateTime.UtcNow;
+        var normalizedName = NormalizeRequiredText(
+            name,
+            150,
+            "Device model is required.",
+            "Device model cannot exceed 150 characters.");
 
-        await _db.SaveChangesAsync();
-        return true;
-    }
+        var normalizedDeviceNo = NormalizeOptionalText(
+            deviceNo,
+            100,
+            "DeviceNo cannot exceed 100 characters.");
 
-    private async Task ValidateReferences(int manufacturerId, int deviceCategoryId)
-    {
-        var manufacturerExists = await _db.OemManufacturers
-            .AnyAsync(x => x.Id == manufacturerId && !x.IsDeleted && x.IsEnabled);
+        var normalizedImeiSerialNumber = NormalizeOptionalText(
+            imeiSerialNumber,
+            100,
+            "IMEISerialNumber cannot exceed 100 characters.");
 
-        if (!manufacturerExists)
+        if (useImeiAsPrimaryId && string.IsNullOrWhiteSpace(normalizedImeiSerialNumber))
+            throw new BadHttpRequestException("IMEISerialNumber is required when UseIMEIAsPrimaryId is true.");
+
+        if (!await _repository.ManufacturerExistsAsync(manufacturerId, cancellationToken))
             throw new InvalidOperationException("Manufacturer not found or disabled.");
 
-        var categoryExists = await _db.DeviceTypes
-            .AnyAsync(x => x.Id == deviceCategoryId && !x.IsDeleted && x.IsEnabled);
+        if (!await _repository.DeviceTypeExistsAsync(deviceCategoryId, cancellationToken))
+            throw new InvalidOperationException("Device type not found or disabled.");
 
-        if (!categoryExists)
-            throw new InvalidOperationException("Device category not found or disabled.");
+        if (!string.IsNullOrWhiteSpace(normalizedDeviceNo) &&
+            await _repository.DeviceNoExistsAsync(normalizedDeviceNo, excludeId, cancellationToken))
+        {
+            throw new InvalidOperationException("DeviceNo already exists.");
+        }
+
+        return new ValidatedDeviceModelValues(
+            manufacturerId,
+            normalizedName,
+            deviceCategoryId,
+            useImeiAsPrimaryId,
+            normalizedDeviceNo,
+            normalizedImeiSerialNumber);
     }
 
-    private class DeviceModelProjection
+    private async Task<string> GenerateCodeAsync(string name, CancellationToken cancellationToken)
     {
-        public int Id { get; set; }
-        public string Code { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
-        public string? Description { get; set; }
-        public int ManufacturerId { get; set; }
-        public string ManufacturerName { get; set; } = string.Empty;
-        public int DeviceCategoryId { get; set; }
-        public string DeviceCategoryName { get; set; } = string.Empty;
-        public string ProtocolType { get; set; } = string.Empty;
-        public bool IsEnabled { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public DateTime? UpdatedAt { get; set; }
+        var normalizedBase = Regex.Replace(
+            name.Trim().ToUpperInvariant(),
+            "[^A-Z0-9]+",
+            "-").Trim('-');
+
+        if (string.IsNullOrWhiteSpace(normalizedBase))
+            normalizedBase = "MODEL";
+
+        normalizedBase = normalizedBase.Length > 24
+            ? normalizedBase[..24]
+            : normalizedBase;
+
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            var suffix = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+            var candidate = $"DM-{normalizedBase}-{suffix}";
+
+            if (candidate.Length > 50)
+                candidate = candidate[..50];
+
+            if (!await _repository.CodeExistsAsync(candidate, cancellationToken))
+                return candidate;
+        }
+
+        throw new InvalidOperationException("Unable to generate a unique device model code.");
     }
+
+    private static void ValidateId(int id)
+    {
+        if (id <= 0)
+            throw new BadHttpRequestException("Id is invalid.");
+    }
+
+    private static string NormalizeRequiredText(
+        string? value,
+        int maxLength,
+        string requiredMessage,
+        string maxLengthMessage)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new BadHttpRequestException(requiredMessage);
+
+        var normalized = value.Trim();
+
+        if (normalized.Length > maxLength)
+            throw new BadHttpRequestException(maxLengthMessage);
+
+        return normalized;
+    }
+
+    private static string? NormalizeOptionalText(
+        string? value,
+        int maxLength,
+        string maxLengthMessage)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var normalized = value.Trim();
+
+        if (normalized.Length > maxLength)
+            throw new BadHttpRequestException(maxLengthMessage);
+
+        return normalized;
+    }
+
+    private sealed record ValidatedDeviceModelValues(
+        int ManufacturerId,
+        string Name,
+        int DeviceCategoryId,
+        bool UseIMEIAsPrimaryId,
+        string? DeviceNo,
+        string? IMEISerialNumber);
 }

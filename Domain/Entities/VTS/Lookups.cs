@@ -170,6 +170,14 @@ public class DeviceModel
     [MaxLength(50)]
     public string ProtocolType { get; set; } = string.Empty;
 
+    public bool UseIMEIAsPrimaryId { get; set; } = false;
+
+    [MaxLength(100)]
+    public string? DeviceNo { get; set; }
+
+    [MaxLength(100)]
+    public string? IMEISerialNumber { get; set; }
+
     public bool IsEnabled { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

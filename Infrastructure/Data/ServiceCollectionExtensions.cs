@@ -4,6 +4,7 @@ using Infrastructure.Redis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using StackExchange.Redis;
 
 namespace Infrastructure.Data
@@ -17,6 +18,9 @@ namespace Infrastructure.Data
         {
             services.AddDbContext<IdentityDbContext>(options =>
                 options.UseNpgsql(connectionString));
+
+            services.AddSingleton<NpgsqlDataSource>(_ =>
+                NpgsqlDataSource.Create(connectionString));
 
             services.AddScoped<IDeviceService, DeviceService>();
             services.AddScoped<IDeviceTransferService, DeviceTransferService>();
@@ -37,6 +41,7 @@ namespace Infrastructure.Data
             services.AddScoped<IOemManufacturerService, OemManufacturerService>();
             services.AddScoped<INetworkProviderService, NetworkProviderService>();
             services.AddScoped<IServiceVendorService, ServiceVendorService>();
+            services.AddScoped<IDeviceModelRepository, DeviceModelRepository>();
             services.AddScoped<IDeviceModelService, DeviceModelService>();
             services.AddScoped<IVehicleBrandService, VehicleBrandService>();
             services.AddScoped<IDriverService, DriverService>();
